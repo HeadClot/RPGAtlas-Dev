@@ -23,9 +23,11 @@ Because browsers restrict `localStorage`/file access on `file://` pages, serve t
 ```
 cd RPGAtlas
 python -m http.server 8080
+or 
+python -m http.server 8777
 ```
 
-Then open **http://localhost:8080/** — that's the editor. Hit **▶ Playtest** to play your game
+Then open **http://localhost:8080/** or **http://localhost:8777/**— that's the editor. Hit **▶ Playtest** to play your game
 (or open `play.html` directly to play the bundled sample, *Atlas Quest*).
 
 ## The editor (`index.html`)
