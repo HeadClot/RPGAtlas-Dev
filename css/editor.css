@@ -166,6 +166,34 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--gold-edge);
 .tabs button.sel { background: var(--accent); color: #fff; }
 
 /* ---------- database ---------- */
+.modal.db-modal { width: 1040px; }
+.dbwrap { display: flex; gap: 12px; align-items: stretch; min-height: 440px; }
+.dbtabs-vert {
+  display: flex; flex-direction: column; gap: 3px;
+  width: 138px; flex: 0 0 auto; max-height: 560px; overflow-y: auto;
+  border-right: 1px solid #30334a; padding-right: 10px;
+}
+.dbtabs-vert button { text-align: left; border-radius: 5px; padding: 5px 11px; }
+.dbtabs-vert button.sel { background: var(--accent); color: #fff; border-color: var(--accent-edge); }
+.dbbody { flex: 1; min-width: 0; }
+
+/* Types tab — element / skill / weapon / armor / equipment categories */
+.types-cols { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; align-items: flex-start; }
+.types-col {
+  flex: 1 1 0; min-width: 158px;
+  background: #1a1c28; border: 1px solid #2c2f44; border-radius: 6px;
+  padding: 8px; display: flex; flex-direction: column; gap: 6px;
+}
+.types-col-head { font-weight: 600; color: #aeb2c8; }
+.types-rows { display: flex; flex-direction: column; gap: 4px; max-height: 420px; overflow-y: auto; }
+.types-row { display: flex; align-items: center; gap: 5px; }
+.types-num { color: #8a8da4; font-size: 11px; min-width: 20px; text-align: right; flex: 0 0 auto; }
+.types-row input { flex: 1; min-width: 0; }
+.types-row .danger { color: #f2a0a0; flex: 0 0 auto; }
+.types-add { align-self: flex-start; }
+@media (max-width: 1080px) {
+  .types-col { flex: 0 0 168px; }
+}
 .dbtab { display: flex; gap: 12px; min-height: 380px; }
 .dbside { width: 190px; flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
 .dbbtns { display: flex; gap: 5px; }

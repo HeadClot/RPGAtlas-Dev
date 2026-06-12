@@ -299,8 +299,8 @@
     const value = Number(t.value) || 0;
     if (t.type === "param") return String(t.key).toUpperCase() + " " + value + "%";
     if (t.type === "element") {
-      const e = RA.TRAIT_ELEMENTS.find((x) => x.v === t.key);
-      return (e ? e.l : t.key) + " damage " + value + "%";
+      const e = RA.typeList(proj, "elements").find((x) => x.key === t.key);
+      return (e ? e.name : t.key) + " damage " + value + "%";
     }
     if (t.type === "state") {
       const state = RA.byId(proj.states || [], Number(t.key));

@@ -119,11 +119,37 @@
   const SE_NAMES = ["cursor", "ok", "cancel", "buzzer", "hit", "crit", "magic", "heal", "item", "chest", "door", "levelup", "save", "escape", "miss", "encounter", "gameover"];
   const MUSIC_OPTS = () => [{ v: "none", l: "(none)" }].concat(Sfx.THEMES.map((t) => ({ v: t, l: t })));
 
+  // Type-list options (sourced from Database ▸ Types) ---------------------
+  function elementSelOpts() {
+    const o = RA.typeList(proj, "elements").map((e) => ({ v: e.key, l: e.name }));
+    o.stringValues = true;
+    return o;
+  }
+  function skillTypeSelOpts() {
+    const st = RA.typeList(proj, "skillTypes");
+    const base = [{ v: "phys", l: "Physical" }, { v: "magic", l: "Magical" }, { v: "heal", l: "Heal" }];
+    return base.map((b) => { const f = st.find((s) => s.key === b.v); return { v: b.v, l: f ? f.name : b.l }; });
+  }
+  function skillTypeTraitOpts() {
+    const st = RA.typeList(proj, "skillTypes");
+    const o = TRAIT_SKILL_TYPES.map((d) => {
+      const f = st.find((s) => s.key === d.v);
+      return { v: d.v, l: f ? f.name + " skills" : d.l };
+    });
+    o.stringValues = true;
+    return o;
+  }
+  function typeSelOpts(kind, noneLabel) {
+    const o = RA.typeList(proj, kind).map((t) => ({ v: t.id, l: t.name }));
+    if (noneLabel != null) o.unshift({ v: 0, l: noneLabel });
+    return o;
+  }
+
   // ============================ modal framework ============================
   const modalRoot = () => $("modal-root");
   function modal(opts) {
     const overlay = h("div", { class: "overlay" });
-    const win = h("div", { class: "modal " + (opts.wide ? "wide" : "") });
+    const win = h("div", { class: "modal " + (opts.wide ? "wide " : "") + (opts.class || "") });
     win.appendChild(h("div", { class: "modal-title" }, opts.title || ""));
     const body = h("div", { class: "modal-body" });
     if (opts.content) body.appendChild(opts.content);
@@ -2092,7 +2118,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
     { v: "heal", l: "Healing skills" },
   ];
   function traitDefault(type) {
-    if (type === "element") return { type, key: "physical", value: 100 };
+    if (type === "element") return { type, key: (RA.typeList(proj, "elements")[0] || { key: "physical" }).key, value: 100 };
     if (type === "state") return { type, key: String(proj.states[0] ? proj.states[0].id : 1), value: 100 };
     if (type === "skill") return { type, key: "phys", value: 100 };
     if (type === "equip") return { type, key: "weapon", value: proj.weapons[0] ? proj.weapons[0].id : 0 };
@@ -2272,9 +2298,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
               return opts;
             }
             if (t.type === "element") {
-              const opts = RA.TRAIT_ELEMENTS.slice();
-              opts.stringValues = true;
-              return opts;
+              return elementSelOpts();
             }
             if (t.type === "state") {
               const opts = dbOpts(proj.states);
@@ -2282,9 +2306,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
               return opts;
             }
             if (t.type === "skill") {
-              const opts = TRAIT_SKILL_TYPES.slice();
-              opts.stringValues = true;
-              return opts;
+              return skillTypeTraitOpts();
             }
             if (t.type === "equip") {
               const opts = [{ v: "weapon", l: "Weapon" }, { v: "armor", l: "Armor" }];
@@ -2391,11 +2413,9 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
         blank: () => ({ id: 0, name: "Skill", icon: 8, type: "magic", power: 20, mp: 5, scope: "enemy", color: "#f07030", stateId: 0, stateOp: "add", stateChance: 100 }),
         form(e, box, redrawList) {
           if (!e.element) e.element = RA.elementOfSkill(e);
-          const elementOpts = RA.TRAIT_ELEMENTS.slice();
-          elementOpts.stringValues = true;
           box.appendChild(row(field("Name", nameRefresher(e, redrawList)), iconPickerField(e, redrawList),
-            field("Type", sel(e, "type", [{ v: "phys", l: "Physical" }, { v: "magic", l: "Magical" }, { v: "heal", l: "Heal" }])),
-            field("Element", sel(e, "element", elementOpts)),
+            field("Type", sel(e, "type", skillTypeSelOpts())),
+            field("Element", sel(e, "element", elementSelOpts())),
             field("Power", nIn(e, "power", 0, 9999)), field("MP cost", nIn(e, "mp", 0, 999))));
           box.appendChild(field("Scope", sel(e, "scope", [
             { v: "enemy", l: "One enemy" }, { v: "enemies", l: "All enemies" },
@@ -2421,10 +2441,11 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
       }) },
       { label: "Weapons", build: () => listFormTab({
         list: () => proj.weapons,
-        blank: () => ({ id: 0, name: "Weapon", icon: 48, price: 100, params: { atk: 5 } }),
+        blank: () => ({ id: 0, name: "Weapon", icon: 48, price: 100, wtypeId: 1, params: { atk: 5 } }),
         form(e, box, redrawList) {
           e.params = e.params || {};
-          box.appendChild(row(field("Name", nameRefresher(e, redrawList)), iconPickerField(e, redrawList), field("Price", nIn(e, "price", 0))));
+          box.appendChild(row(field("Name", nameRefresher(e, redrawList)), iconPickerField(e, redrawList),
+            field("Type", sel(e, "wtypeId", typeSelOpts("weaponTypes"))), field("Price", nIn(e, "price", 0))));
           const pr = h("div", { class: "frow" });
           for (const k of PARAM_KEYS) { if (e.params[k] == null) e.params[k] = 0; pr.appendChild(field(k.toUpperCase() + " +", nIn(e.params, k, -999, 999))); }
           box.appendChild(pr);
@@ -2432,10 +2453,12 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
       }) },
       { label: "Armors", build: () => listFormTab({
         list: () => proj.armors,
-        blank: () => ({ id: 0, name: "Armor", icon: 56, price: 80, params: { def: 4 } }),
+        blank: () => ({ id: 0, name: "Armor", icon: 56, price: 80, atypeId: 1, etypeId: 4, params: { def: 4 } }),
         form(e, box, redrawList) {
           e.params = e.params || {};
           box.appendChild(row(field("Name", nameRefresher(e, redrawList)), iconPickerField(e, redrawList), field("Price", nIn(e, "price", 0))));
+          box.appendChild(row(field("Type", sel(e, "atypeId", typeSelOpts("armorTypes"))),
+            field("Equip slot", sel(e, "etypeId", typeSelOpts("equipTypes")))));
           const pr = h("div", { class: "frow" });
           for (const k of PARAM_KEYS) { if (e.params[k] == null) e.params[k] = 0; pr.appendChild(field(k.toUpperCase() + " +", nIn(e.params, k, -999, 999))); }
           box.appendChild(pr);
@@ -2517,9 +2540,69 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
           box.appendChild(h("div", { class: "dim" }, "Negative HP per turn deals damage each round (poison); positive restores (regen). “Cannot act” makes the battler skip its turns (stun). States are inflicted or cured by skills — set that on the Skills tab. Full recovery cures all states."));
         },
       }) },
+      { label: "Types", build: () => typesTab() },
       { label: "Switches", build: () => nameListTab("switches", "S", RA.MAX_SWITCHES) },
       { label: "Variables", build: () => nameListTab("variables", "V", RA.MAX_VARIABLES) },
     ];
+  }
+
+  // A unique string key for a new element / skill type, kept stable so that
+  // renaming or reordering never breaks references stored on skills & traits.
+  function uniqueTypeKey(prefix, list) {
+    let n = list.length + 1, key;
+    do { key = prefix + n; n++; } while (list.some((e) => e.key === key));
+    return key;
+  }
+
+  function typeColumn(list, label, blank, lockedNote) {
+    const col = h("div", { class: "types-col" });
+    col.appendChild(h("div", { class: "types-col-head" }, label));
+    const rows = h("div", { class: "types-rows" });
+    function redraw() {
+      rows.innerHTML = "";
+      list.forEach((entry, i) => {
+        const num = h("span", { class: "types-num" }, String(i + 1).padStart(2, "0"));
+        const input = h("input", { type: "text", value: entry.name || "",
+          oninput(ev) { entry.name = ev.target.value; touch(); } });
+        const del = h("button", {
+          class: "mini danger", title: "Delete", "aria-label": "Delete " + (entry.name || "entry"),
+          onclick() {
+            if (list.length <= 1) { alert("Keep at least one entry."); return; }
+            list.splice(i, 1); touch(); redraw();
+          },
+        }, "✕");
+        rows.appendChild(h("div", { class: "types-row" }, num, input, del));
+      });
+    }
+    redraw();
+    col.appendChild(rows);
+    col.appendChild(h("button", { class: "mini types-add",
+      onclick() { list.push(blank()); touch(); redraw(); } }, "+ Add"));
+    if (lockedNote) col.appendChild(h("div", { class: "dim" }, lockedNote));
+    return col;
+  }
+
+  function typesTab() {
+    const t = proj.system.types;
+    const box = h("div", { class: "dbform single" });
+    box.appendChild(h("div", { class: "dim", style: "margin-bottom:10px" },
+      "Define the categories your game uses. Elements drive resistances (set them on Classes ▸ Traits and pick one per skill). " +
+      "Skill types label the three combat classes — only Physical, Magical and Heal affect the damage formula. " +
+      "Weapon, armor and equipment types tag equipment for organisation. Renaming or reordering is always safe."));
+    const cols = h("div", { class: "types-cols" });
+    cols.appendChild(typeColumn(t.elements, "Elements",
+      () => ({ key: uniqueTypeKey("elem", t.elements), name: "New Element" })));
+    cols.appendChild(typeColumn(t.skillTypes, "Skill Types",
+      () => ({ key: uniqueTypeKey("stype", t.skillTypes), name: "New Type" }),
+      "Extra skill types beyond the first three are labels only."));
+    cols.appendChild(typeColumn(t.weaponTypes, "Weapon Types",
+      () => ({ id: RA.nextId(t.weaponTypes), name: "New Weapon Type" })));
+    cols.appendChild(typeColumn(t.armorTypes, "Armor Types",
+      () => ({ id: RA.nextId(t.armorTypes), name: "New Armor Type" })));
+    cols.appendChild(typeColumn(t.equipTypes, "Equipment Types",
+      () => ({ id: RA.nextId(t.equipTypes), name: "New Slot" })));
+    box.appendChild(cols);
+    return box;
   }
 
   function nameListTab(key, prefix, maxEntries) {
@@ -2562,7 +2645,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
 
   function openDatabase() {
     const tabs = dbTabs();
-    const tabBar = h("div", { class: "tabs" });
+    const tabBar = h("div", { class: "dbtabs-vert" });
     const body = h("div", { class: "dbbody" });
     let cur = 0;
     function show(i) {
@@ -2572,8 +2655,8 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
       body.appendChild(tabs[i].build());
     }
     tabs.forEach((t, i) => tabBar.appendChild(h("button", { onclick: () => show(i) }, t.label)));
-    const content = h("div", null, tabBar, body);
-    modal({ title: "Database", content, wide: true, dismissable: false,
+    const content = h("div", { class: "dbwrap" }, tabBar, body);
+    modal({ title: "Database", content, wide: true, class: "db-modal", dismissable: false,
       buttons: [{ label: "Close", primary: true, onClick(c) { c(); rebuildMapList(); renderMap(); } }] });
     show(0);
   }
@@ -3011,7 +3094,7 @@ atlas.onMapLoad((map) => {
 </ul>
 <h3>Tools</h3>
 <ul>
-<li><b>Database</b>: actors, classes, skills, items, equipment, enemies, troops, states, switches, variables, system.</li>
+<li><b>Database</b>: actors, classes, skills, items, equipment, enemies, troops, states, types, switches, variables, system.</li>
 <li><b>System tab</b>: screen size, UI area, screen scale, fonts &amp; font size, window opacity, system sounds &amp; music, side-view or front-view battles, start-transparent player.</li>
 <li><b>States</b>: poison / stun / regen-style battle effects, inflicted or cured by skills.</li>
 <li><b>Plugin Manager</b>: project-embedded JavaScript that runs at game boot, with map-load and per-frame hooks.</li>

@@ -28,6 +28,33 @@ const RA = {
     { v: "guardDamage", l: "Damage while guarding %" },
     { v: "damageTaken", l: "All damage taken %" },
   ],
+  // Default category names seeded into proj.system.types (the Database ▸ Types tab).
+  WEAPON_TYPE_NAMES: ["Dagger", "Sword", "Axe", "Spear", "Bow", "Staff", "Wand", "Claw"],
+  ARMOR_TYPE_NAMES: ["General Armor", "Magic Armor", "Light Armor", "Heavy Armor", "Shield"],
+  EQUIP_TYPE_NAMES: ["Weapon", "Shield", "Head", "Body", "Accessory"],
+  // Elements and skill types keep a stable string key (referenced by skills,
+  // class traits and the combat engine) plus an editable display name. Weapon,
+  // armor and equipment types are referenced by numeric id like the other lists.
+  defaultTypes() {
+    return {
+      elements: this.TRAIT_ELEMENTS.map((e) => ({ key: e.v, name: e.l })),
+      skillTypes: [
+        { key: "phys", name: "Physical" },
+        { key: "magic", name: "Magical" },
+        { key: "heal", name: "Heal" },
+      ],
+      weaponTypes: this.WEAPON_TYPE_NAMES.map((n, i) => ({ id: i + 1, name: n })),
+      armorTypes: this.ARMOR_TYPE_NAMES.map((n, i) => ({ id: i + 1, name: n })),
+      equipTypes: this.EQUIP_TYPE_NAMES.map((n, i) => ({ id: i + 1, name: n })),
+    };
+  },
+  // Read one type list from a project, falling back to the defaults so older
+  // saves (and the combat engine) keep working before a migration runs.
+  typeList(p, kind) {
+    const types = p && p.system && p.system.types;
+    if (types && Array.isArray(types[kind]) && types[kind].length) return types[kind];
+    return this.defaultTypes()[kind];
+  },
   byId(arr, id) { return arr ? arr.find((e) => e && e.id === id) || null : null; },
   nextId(arr) { return arr.reduce((m, e) => Math.max(m, e.id), 0) + 1; },
   clone(o) { return JSON.parse(JSON.stringify(o)); },
@@ -126,6 +153,12 @@ const RA = {
     if (sys.windowOpacity == null) sys.windowOpacity = 93;
     sys.sounds = Object.assign(RA.defaultSounds(), sys.sounds || {});
     sys.music = Object.assign(RA.defaultMusic(), sys.music || {});
+    // v3 element/skill/weapon/armor/equipment type lists (Database ▸ Types)
+    const defTypes = RA.defaultTypes();
+    sys.types = sys.types || {};
+    for (const k of Object.keys(defTypes)) {
+      if (!Array.isArray(sys.types[k]) || !sys.types[k].length) sys.types[k] = defTypes[k];
+    }
     if (!Array.isArray(p.states)) p.states = RA.defaultStates();
     for (const c of p.classes || []) {
       if (!Array.isArray(c.traits)) c.traits = [];
@@ -488,6 +521,7 @@ const DataDefaults = (() => {
         fontSize: 15, windowOpacity: 93,
         sounds: RA.defaultSounds(),
         music: RA.defaultMusic(),
+        types: RA.defaultTypes(),
       },
       actors: [
         { id: 1, name: "Ardan", classId: 1, level: 1, charset: "hero",    weaponId: 1, armorId: 1 },
@@ -535,16 +569,16 @@ const DataDefaults = (() => {
         { id: 4, name: "Elixir",    icon: 31, price: 600, hp: 9999, mp: 9999, desc: "Fully restores HP and MP." },
       ],
       weapons: [
-        { id: 1, name: "Bronze Sword", icon: 48, price: 100, params: { atk: 5 } },
-        { id: 2, name: "Iron Sword",   icon: 49, price: 350, params: { atk: 10 } },
-        { id: 3, name: "Oak Staff",    icon: 51, price: 90,  params: { atk: 3, mat: 4 } },
-        { id: 4, name: "Crystal Rod",  icon: 52, price: 420, params: { atk: 5, mat: 10 } },
+        { id: 1, name: "Bronze Sword", icon: 48, price: 100, wtypeId: 2, params: { atk: 5 } },
+        { id: 2, name: "Iron Sword",   icon: 49, price: 350, wtypeId: 2, params: { atk: 10 } },
+        { id: 3, name: "Oak Staff",    icon: 51, price: 90,  wtypeId: 6, params: { atk: 3, mat: 4 } },
+        { id: 4, name: "Crystal Rod",  icon: 52, price: 420, wtypeId: 7, params: { atk: 5, mat: 10 } },
       ],
       armors: [
-        { id: 1, name: "Leather Vest", icon: 56, price: 80,  params: { def: 4 } },
-        { id: 2, name: "Chainmail",    icon: 57, price: 320, params: { def: 9 } },
-        { id: 3, name: "Cloth Robe",   icon: 58, price: 60,  params: { def: 2, mdf: 3 } },
-        { id: 4, name: "Mage Cloak",   icon: 61, price: 280, params: { def: 4, mdf: 8 } },
+        { id: 1, name: "Leather Vest", icon: 56, price: 80,  atypeId: 3, etypeId: 4, params: { def: 4 } },
+        { id: 2, name: "Chainmail",    icon: 57, price: 320, atypeId: 4, etypeId: 4, params: { def: 9 } },
+        { id: 3, name: "Cloth Robe",   icon: 58, price: 60,  atypeId: 2, etypeId: 4, params: { def: 2, mdf: 3 } },
+        { id: 4, name: "Mage Cloak",   icon: 61, price: 280, atypeId: 2, etypeId: 4, params: { def: 4, mdf: 8 } },
       ],
       enemies: [
         { id: 1, name: "Slime", sprite: "slime", color: "#5aa84f",
