@@ -5,6 +5,17 @@
 export const PATCH_NOTES = [
   {
     date: "June 13, 2026",
+    title: "Cinematic and Control Event Command Expansion",
+    summary: "Added new visual effects commands and advanced branching controls to map events.",
+    items: [
+      "Shake Screen - shakes the game viewport horizontally and vertically in both 2D and HD-2D modes.",
+      "Flash Screen - overlays a fading color overlay for thunder strikes, hit impacts, or magical bursts.",
+      "Change Weather - triggers map weather changes visually without requiring JavaScript Script blocks.",
+      "Actor Conditional Branch - checks party membership and specific weapon/armor equipment in event branches.",
+    ],
+  },
+  {
+    date: "June 13, 2026",
     title: "Faster Event Command Navigation",
     summary: "Increased the Add Command menu from 12 to 24 buttons per page and added direct numbered page tabs.",
     items: [

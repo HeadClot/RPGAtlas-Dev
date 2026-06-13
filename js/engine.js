@@ -18,6 +18,16 @@ const { Assets, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
   let menuOpen = false;
   let cameraZoom = 1;
 
+  let shakePower = 0;
+  let shakeSpeed = 0;
+  let shakeDuration = 0;
+  let shakeTimer = 0;
+
+  let flashColor = "#ffffff";
+  let flashOpacity = 0.5;
+  let flashDuration = 0;
+  let flashTimer = 0;
+
   // ============================ utils ============================
   function el(tag, cls, html) {
     const e = document.createElement(tag);
@@ -556,6 +566,32 @@ const { Assets, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
           cameraZoom = target;
           break;
         }
+        case "shake": {
+          shakePower = clamp(c.power || 5, 1, 9);
+          shakeSpeed = clamp(c.speed || 5, 1, 9);
+          shakeTimer = clamp(c.duration || 30, 1, 600);
+          shakeDuration = shakeTimer;
+          if (c.wait) {
+            while (shakeTimer > 0) await frameWait();
+          }
+          break;
+        }
+        case "weather": {
+          if (window.Atlas && typeof window.Atlas.weather === "function") {
+            window.Atlas.weather(c.kind, c.power);
+          }
+          break;
+        }
+        case "flash": {
+          flashColor = c.color || "#ffffff";
+          flashOpacity = clamp(Number(c.opacity) || 0.5, 0.01, 1.0);
+          flashTimer = clamp(c.duration || 15, 1, 300);
+          flashDuration = flashTimer;
+          if (c.wait) {
+            while (flashTimer > 0) await frameWait();
+          }
+          break;
+        }
         case "transparency": if (G.player) G.player.transparent = !!c.val; break;
         case "erase": if (this.evRT) this.evRT.erased = true; break;
         case "save": await saveLoadMenu("save"); break;
@@ -582,6 +618,14 @@ const { Assets, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
         case "selfsw": return !!G.selfSw[this.selfKey(cond.key)];
         case "item": return invCount(cond.itemKind || "item", cond.id) > 0;
         case "gold": return cmp(G.gold, cond.val, cond.cmp || ">=");
+        case "actor": {
+          const actor = G.party.find((a) => a.actorId === cond.actorId);
+          if (!actor) return false;
+          if (cond.check === "inParty") return true;
+          if (cond.check === "weapon") return actor.weaponId === cond.itemId;
+          if (cond.check === "armor") return actor.armorId === cond.itemId;
+          return true;
+        }
         default: return true;
       }
     }
@@ -706,6 +750,8 @@ const { Assets, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
 
   function update() {
     globalT++;
+    if (shakeTimer > 0) shakeTimer--;
+    if (flashTimer > 0) flashTimer--;
     const waiters = frameWaiters; frameWaiters = [];
     waiters.forEach((r) => r());
     if (scene === "map") Plugins.fire("update");
@@ -812,6 +858,14 @@ const { Assets, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
     if (scene !== "map" && scene !== "battle") return;
     if (!map || !G.player) return;
     const p = G.player;
+    let shakeX = 0, shakeY = 0;
+    if (shakeTimer > 0) {
+      const freq = shakeSpeed * 0.5;
+      const decay = shakeTimer / (shakeDuration || 30);
+      const amp = shakePower * 2.5 * decay;
+      shakeX = Math.sin(globalT * freq) * amp;
+      shakeY = Math.cos(globalT * freq * 0.85) * amp;
+    }
     const viewW = SCREEN_W / cameraZoom, viewH = SCREEN_H / cameraZoom;
     const camX = clamp(p.rx * TILE + TILE / 2 - viewW / 2, 0, Math.max(0, map.width * TILE - viewW));
     const camY = clamp(p.ry * TILE + TILE / 2 - viewH / 2, 0, Math.max(0, map.height * TILE - viewH));
@@ -848,11 +902,12 @@ const { Assets, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
       }
       const frame = GLRender.renderFrame(SCREEN_W, SCREEN_H, camX, camY, sprites,
         { focus: { rx: p.rx, ry: p.ry }, lights: lights, zoom: cameraZoom });
-      if (frame) ctx.drawImage(frame, 0, 0);
+      if (frame) ctx.drawImage(frame, Math.round(shakeX), Math.round(shakeY));
       else hdActive = false; // GL context lost mid-game — finish on Canvas 2D
     }
     if (!hdActive) {
       ctx.save();
+      ctx.translate(Math.round(shakeX), Math.round(shakeY));
       ctx.scale(cameraZoom, cameraZoom);
       ctx.drawImage(lowerBuf, -camX, -camY);
       for (const d of drawables) {
@@ -860,6 +915,14 @@ const { Assets, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
         Assets.drawChar(ctx, idx, d.dir, walkFrame(d), Math.round(d.rx * TILE - camX), Math.round(d.ry * TILE - 8 - camY));
       }
       ctx.drawImage(upperBuf, -camX, -camY);
+      ctx.restore();
+    }
+    if (flashTimer > 0) {
+      const decay = flashTimer / (flashDuration || 15);
+      ctx.save();
+      ctx.fillStyle = flashColor;
+      ctx.globalAlpha = flashOpacity * decay;
+      ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
       ctx.restore();
     }
     if (scene === "map") Plugins.fireRender(ctx, {

@@ -1864,13 +1864,40 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
               span.innerHTML = "";
               span.appendChild(sel(w, "id", dbOpts(arr)));
             }
+          } else if (w.kind === "actor") {
+            if (!w.actorId) w.actorId = proj.actors[0] ? proj.actors[0].id : 1;
+            if (!w.check) w.check = "inParty";
+            if (w.itemId == null) w.itemId = 0;
+            const checkSel = sel(w, "check", [
+              { v: "inParty", l: "Is in Party" },
+              { v: "weapon", l: "Has Weapon Equipped" },
+              { v: "armor", l: "Has Armor Equipped" }
+            ], redrawActorCheck);
+            const itemSpan = h("span", { id: "actoritem" });
+            sub.appendChild(row(
+              field("Actor", sel(w, "actorId", dbOpts(proj.actors))),
+              field("Check", checkSel),
+              field("Equipment", itemSpan)
+            ));
+            redrawActorCheck();
+            function redrawActorCheck() {
+              const span = sub.querySelector("#actoritem") || itemSpan;
+              span.innerHTML = "";
+              if (w.check === "weapon") {
+                span.appendChild(sel(w, "itemId", dbOpts(proj.weapons, "(none)")));
+              } else if (w.check === "armor") {
+                span.appendChild(sel(w, "itemId", dbOpts(proj.armors, "(none)")));
+              } else {
+                span.appendChild(h("span", { class: "dim" }, "N/A"));
+              }
+            }
           } else {
             sub.appendChild(row(field("Gold", sel(w, "cmp", [{ v: ">=", l: "≥" }, { v: "<=", l: "≤" }])), field("Value", nIn(w, "val"))));
           }
         }
         box.appendChild(field("Condition type", sel(w, "kind", [
           { v: "switch", l: "Switch" }, { v: "var", l: "Variable" }, { v: "selfsw", l: "Self-Switch" },
-          { v: "item", l: "Has item" }, { v: "gold", l: "Gold" },
+          { v: "item", l: "Has item" }, { v: "gold", l: "Gold" }, { v: "actor", l: "Actor" }
         ], redraw)));
         if (w.kind === "item" && !w.itemKind) w.itemKind = "item";
         if (w.kind === "selfsw" && !w.key) w.key = "A";
@@ -2048,6 +2075,57 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
         box.appendChild(field("Player becomes", sel(w, "val", [{ v: "true", l: "Transparent (hidden)" }, { v: "false", l: "Visible" }])));
         box.appendChild(h("div", { class: "dim" }, "A transparent player still moves and triggers events — only the sprite is hidden. Pair with “Start transparent” in Database ▸ System for cutscene intros."));
         return () => { c.val = w.val === "true"; };
+      } },
+    { t: "shake", label: "Shake Screen", make: () => ({ t: "shake", power: 5, speed: 5, duration: 30, wait: true }),
+      form(c, box) {
+        const w = { power: c.power || 5, speed: c.speed || 5, duration: c.duration || 30, wait: c.wait !== false };
+        box.appendChild(row(
+          field("Power (1-9)", nIn(w, "power", 1, 9)),
+          field("Speed (1-9)", nIn(w, "speed", 1, 9)),
+          field("Duration (frames)", nIn(w, "duration", 1, 600)),
+          field("Wait for completion", chk(w, "wait"))
+        ));
+        return () => {
+          c.power = Number(w.power);
+          c.speed = Number(w.speed);
+          c.duration = Number(w.duration);
+          c.wait = w.wait;
+        };
+      } },
+    { t: "weather", label: "Change Weather", make: () => ({ t: "weather", kind: "none", power: 5 }),
+      form(c, box) {
+        const w = { kind: c.kind || "none", power: c.power || 5 };
+        box.appendChild(row(
+          field("Type", sel(w, "kind", [
+            { v: "none", l: "None (clear)" },
+            { v: "rain", l: "Rain" },
+            { v: "storm", l: "Storm" },
+            { v: "snow", l: "Snow" },
+            { v: "fog", l: "Fog" }
+          ])),
+          field("Power (1-9)", nIn(w, "power", 1, 9))
+        ));
+        return () => {
+          c.kind = w.kind;
+          c.power = Number(w.power);
+        };
+      } },
+    { t: "flash", label: "Flash Screen", make: () => ({ t: "flash", color: "#ffffff", opacity: 0.5, duration: 15, wait: false }),
+      form(c, box) {
+        const w = { color: c.color || "#ffffff", opacity: c.opacity || 0.5, duration: c.duration || 15, wait: !!c.wait };
+        const colorIn = h("input", { type: "color", value: w.color, oninput(e) { w.color = e.target.value; } });
+        box.appendChild(row(
+          field("Color", colorIn),
+          field("Opacity (0.1-1.0)", nIn(w, "opacity", 0.1, 1.0, 0.1)),
+          field("Duration (frames)", nIn(w, "duration", 1, 300)),
+          field("Wait for completion", chk(w, "wait"))
+        ));
+        return () => {
+          c.color = w.color;
+          c.opacity = Number(w.opacity);
+          c.duration = Number(w.duration);
+          c.wait = w.wait;
+        };
       } },
     { t: "erase", label: "Erase This Event", make: () => ({ t: "erase" }), form: () => () => {} },
     { t: "save", label: "Open Save Screen", make: () => ({ t: "save" }), form: () => () => {} },
