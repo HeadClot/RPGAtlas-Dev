@@ -280,3 +280,4 @@ const AtlasBuiltins = (() => {
 
   return { list: LIST, make, seed, missingFor, bodyOf, specByKey };
 })();
+if (typeof window !== "undefined") window.AtlasBuiltins = AtlasBuiltins;

@@ -644,3 +644,7 @@ const DataDefaults = (() => {
 
   return { newProject, newMap, newEvent, newPage };
 })();
+if (typeof window !== "undefined") {
+  window.RA = RA;
+  window.DataDefaults = DataDefaults;
+}

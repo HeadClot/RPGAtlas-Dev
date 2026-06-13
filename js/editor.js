@@ -3,6 +3,16 @@
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 "use strict";
 
+import {
+  exportProjectFile,
+  exportStandaloneHtml as writeStandaloneHtml,
+  exportWindowsExecutable as writeWindowsExecutable,
+  loadStoredProject,
+  saveProject,
+} from "./editor/project-io.js";
+
+const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
+
 (() => {
   const TILE = Assets.TILE;
   const LAYER_ORDER = ["ground", "decor", "decor2", "over"];
@@ -193,7 +203,7 @@
   }
   function saveNow() {
     try {
-      localStorage.setItem("rpgatlas_project", JSON.stringify(proj));
+      saveProject(localStorage, proj);
       $("save-ind").textContent = "✓ saved";
     } catch (e) {
       $("save-ind").textContent = "⚠ save failed";
@@ -201,120 +211,10 @@
     }
   }
   function loadStored() {
-    try {
-      const legacy = !localStorage.getItem("rpgatlas_project");
-      const raw = localStorage.getItem("rpgatlas_project") || localStorage.getItem("driftwood_project");
-      if (raw) {
-        const p = JSON.parse(raw);
-        if (p && p.meta && (p.meta.engine === "rpgatlas" || p.meta.engine === "driftwood")) {
-          const migrated = RA.migrateProject(p);
-          if (legacy) { // adopt a pre-rebrand autosave under the new key
-            try {
-              localStorage.setItem("rpgatlas_project", JSON.stringify(migrated));
-              localStorage.removeItem("driftwood_project");
-            } catch (e2) { console.warn(e2); }
-          }
-          return migrated;
-        }
-      }
-    } catch (e) { console.warn(e); }
-    return null;
+    return loadStoredProject(localStorage, (project) => RA.migrateProject(project));
   }
   function exportProject() {
-    const blob = new Blob([JSON.stringify(proj, null, 1)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = (proj.system.title || "rpgatlas-project").replace(/[^\w\- ]+/g, "").trim().replace(/ +/g, "_") + ".json";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  }
-  function safeFileName(name, fallback) {
-    return (name || fallback).replace(/[^\w\- ]+/g, "").trim().replace(/ +/g, "_") || fallback;
-  }
-  function htmlText(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  function scriptText(s) {
-    return String(s).replace(/<\/script/gi, "<\\/script");
-  }
-  async function fetchBuildSource(path) {
-    const res = await fetch(path);
-    if (!res.ok) throw new Error("Could not load " + path + " (" + res.status + ").");
-    return res.text();
-  }
-  function blobDataUrl(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(blob);
-    });
-  }
-  async function fetchDataUrl(path) {
-    const res = await fetch(path, { cache: "no-store" });
-    if (!res.ok) throw new Error("Could not load " + path + " (" + res.status + ").");
-    return blobDataUrl(await res.blob());
-  }
-  function downloadBlob(blob, fileName) {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = fileName;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  }
-  async function buildStandaloneGame() {
-    const paths = ["css/play.css", "js/assets.js", "js/sfx.js", "js/data.js", "js/engine.js"];
-    const [files, usedAssets, iconSet] = await Promise.all([
-      Promise.all(paths.map(fetchBuildSource)),
-      Assets.exportUsedExternalAssets(proj),
-      fetchDataUrl("img/system/icon_set.png"),
-    ]);
-    const title = proj.system.title || "RPGAtlas Game";
-    const baseName = safeFileName(title, "RPGAtlas_Game");
-    const gameId = safeFileName(title, "rpgatlas-game").toLowerCase();
-    const projectJson = JSON.stringify(proj).replace(/</g, "\\u003c");
-    const assetsJson = JSON.stringify(usedAssets).replace(/</g, "\\u003c");
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${htmlText(title)}</title>
-<style>${scriptText(files[0])}</style>
-</head>
-<body>
-  <div id="stage"><canvas id="gamecanvas"></canvas></div>
-  <script id="rpgatlas-project" type="application/json">${projectJson}</script>
-  <script id="rpgatlas-assets" type="application/json">${assetsJson}</script>
-  <script>
-window.RPGATLAS_PROJECT = JSON.parse(document.getElementById("rpgatlas-project").textContent);
-window.RPGATLAS_ASSETS = JSON.parse(document.getElementById("rpgatlas-assets").textContent);
-window.RPGATLAS_ICON_SET = ${JSON.stringify(iconSet)};
-window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
-  <\/script>
-  <script>${scriptText(files[1])}<\/script>
-  <script>${scriptText(files[2])}<\/script>
-  <script>${scriptText(files[3])}<\/script>
-  <script>${scriptText(files[4])}<\/script>
-</body>
-</html>
-`;
-    return { html, baseName };
-  }
-  async function exportStandaloneHtml() {
-    const game = await buildStandaloneGame();
-    downloadBlob(new Blob([game.html], { type: "text/html;charset=utf-8" }), game.baseName + ".html");
-  }
-  async function exportWindowsExecutable() {
-    const [game, launcherRes] = await Promise.all([
-      buildStandaloneGame(),
-      fetch("bin/RPGAtlasLauncher.exe"),
-    ]);
-    if (!launcherRes.ok) throw new Error("Could not load the Windows launcher (" + launcherRes.status + ").");
-    const marker = new TextEncoder().encode("RPGATLAS_GAME_PAYLOAD_V1\n");
-    const payload = new TextEncoder().encode(game.html);
-    downloadBlob(new Blob([await launcherRes.arrayBuffer(), marker, payload],
-      { type: "application/vnd.microsoft.portable-executable" }), game.baseName + ".exe");
+    exportProjectFile(proj);
   }
   function openStandaloneExport() {
     const content = h("div", null,
@@ -328,7 +228,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
       buttons: [
         { label: "Windows EXE", primary: true, async onClick(close) {
           try {
-            await exportWindowsExecutable();
+            await writeWindowsExecutable(proj, Assets);
             close();
             flashStatus("Windows game executable exported");
           } catch (e) {
@@ -337,7 +237,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
         } },
         { label: "Standalone HTML", async onClick(close) {
           try {
-            await exportStandaloneHtml();
+            await writeStandaloneHtml(proj, Assets);
             close();
             flashStatus("Standalone HTML game exported");
           } catch (e) {
@@ -3640,7 +3540,7 @@ atlas.onMapLoad((map) => {
     setStatus();
   }
 
-  window.addEventListener("DOMContentLoaded", async () => {
+  async function boot() {
     proj = loadStored() || DataDefaults.newProject();
     Assets.registerCustomChars(proj.customChars);
     await Promise.all([Assets.loadIconSet(), Assets.loadExternalAssets(proj)]);
@@ -3747,5 +3647,10 @@ atlas.onMapLoad((map) => {
     setMode("map");
     rebuildAll();
     saveNow();
-  });
+  }
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
 })();

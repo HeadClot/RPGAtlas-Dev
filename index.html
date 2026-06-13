@@ -48,11 +48,14 @@
   <input id="import-file" type="file" accept=".json,application/json" hidden>
   <div id="modal-root"></div>
 
-  <script src="js/assets.js?v=9"></script>
-  <script src="js/gl.js?v=3"></script>
-  <script src="js/sfx.js?v=7"></script>
-  <script src="js/plugins.js?v=7"></script>
-  <script src="js/data.js?v=13"></script>
-  <script src="js/editor.js?v=13"></script>
+  <script src="js/assets.js?v=10"></script>
+  <script src="js/gl.js?v=4"></script>
+  <script src="js/sfx.js?v=8"></script>
+  <script src="js/plugins.js?v=8"></script>
+  <script src="js/data.js?v=14"></script>
+  <script>
+    window.RPGAtlasDeps = { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx };
+  </script>
+  <script type="module" src="js/editor.js?v=17"></script>
 </body>
 </html>

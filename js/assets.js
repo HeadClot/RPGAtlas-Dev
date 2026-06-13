@@ -1254,3 +1254,4 @@ const Assets = (() => {
     ICON_SIZE, ICON_COUNT, loadIconSet, iconSpan, iconHtml, iconCanvas,
   };
 })();
+if (typeof window !== "undefined") window.Assets = Assets;

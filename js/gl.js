@@ -625,3 +625,4 @@ const GLRender = (() => {
 
   return { available, setMap, renderFrame };
 })();
+if (typeof window !== "undefined") window.GLRender = GLRender;

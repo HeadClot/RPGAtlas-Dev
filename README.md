@@ -139,6 +139,17 @@ every new project:
 - **Atlas_Transitions** — transfer effects: fade, iris, curtain, slide (`Atlas.transition = 'iris'`)
 - **Atlas_Weather** — rain, storm, snow and fog overlays, per-map or scripted (`Atlas.weather('rain', 6)`)
 
+## Code structure
+
+The editor and player use native JavaScript module entry points. Cohesive systems live
+under focused folders instead of accumulating in the entry files:
+
+- `js/editor/project-io.js` - project persistence and standalone build/export
+- `js/runtime/messages.js` - message conversion, rich text, typewriter behavior, faces and icons
+
+Shared engine services such as `Assets`, `RA`, and the plugin bridge remain stable globals
+for compatibility while additional systems are migrated incrementally.
+
 ## Publishing a game
 
 Choose **File > Export Standalone Game** to build the current project as either:
@@ -180,8 +191,10 @@ automatically — autosaves, save slots, and bundled plugins are all carried for
 index.html        editor shell          js/assets.js   procedural tiles/sprites/battlers
 play.html         player shell          js/sfx.js      procedural SFX + generative music
 css/editor.css    editor theme          js/data.js     schema, defaults, sample game
-css/play.css      game windows          js/engine.js   game runtime
-                                        js/editor.js   editor logic
+css/play.css      game windows          js/engine.js              player module entry
+                                        js/runtime/messages.js    message subsystem
+                                        js/editor.js              editor module entry
+                                        js/editor/project-io.js   persistence and export
 ```
 
 ## License

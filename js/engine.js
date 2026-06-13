@@ -3,6 +3,10 @@
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 "use strict";
 
+import { createMessageSystem } from "./runtime/messages.js";
+
+const { Assets, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
+
 (() => {
   const TILE = Assets.TILE;
   // defaults (overridden at boot from system.screenWidth/Height)
@@ -74,6 +78,8 @@
     if (i >= 0) UIStack.splice(i, 1);
     if (ui.el && ui.el.parentNode) ui.el.parentNode.removeChild(ui.el);
   }
+  let richText;
+  let showMessage;
 
   // generic selectable list. items: [{label|html, disabled, help}]
   function showList(items, opts) {
@@ -134,90 +140,10 @@
   }
 
   // ============================ message window ============================
-  function convertText(s) {
-    return String(s)
-      .replace(/\\v\[(\d+)\]/gi, (_, n) => String(G.vars[+n] || 0))
-      .replace(/\\n\[(\d+)\]/gi, (_, n) => {
-        const a = RA.byId(proj.actors, +n); return a ? a.name : "";
-      })
-      .replace(/\\g/gi, () => G.gold + " " + proj.system.currency);
-  }
   // Substitute control codes, HTML-escape, then let text-code plugins add markup.
   // With no plugins this returns the escaped plain text — identical to before.
-  function richText(s) {
-    let html = esc(convertText(s));
-    for (const fn of Plugins.textProcessors) {
-      try { html = fn(html); } catch (e) { console.error("Text processor failed:", e); }
-    }
-    return html;
-  }
   // Typewriter that reveals an HTML string one visible character at a time by
   // walking its text nodes — so plugin markup (colour spans, bold) stays intact.
-  function makeTypewriter(container, html) {
-    container.innerHTML = html;
-    const nodes = [];
-    (function walk(n) {
-      for (const c of n.childNodes) {
-        if (c.nodeType === 3) { nodes.push({ node: c, full: c.nodeValue }); c.nodeValue = ""; }
-        else if (c.nodeType === 1 && c.classList.contains("msg-icon")) {
-          nodes.push({ node: c, icon: true });
-          c.style.visibility = "hidden";
-        }
-        else walk(c);
-      }
-    })(container);
-    const total = nodes.reduce((s, x) => s + (x.icon ? 1 : x.full.length), 0);
-    return {
-      total,
-      reveal(pos) {
-        let p = pos;
-        for (const x of nodes) {
-          if (x.icon) {
-            x.node.style.visibility = p > 0 ? "" : "hidden";
-            if (p > 0) p--;
-            continue;
-          }
-          if (p <= 0) { x.node.nodeValue = ""; }
-          else if (p >= x.full.length) { x.node.nodeValue = x.full; p -= x.full.length; }
-          else { x.node.nodeValue = x.full.slice(0, p); p = 0; }
-        }
-      },
-    };
-  }
-  function showMessage(name, text, face) {
-    return new Promise((resolve) => {
-      const win = el("div", "win msgwin");
-      if (name) { const nm = el("div", "msg-name"); nm.innerHTML = richText(name); win.appendChild(nm); }
-      const faceIndex = face ? Assets.charsetIndex(face) : -1;
-      if (faceIndex >= 0) {
-        const portrait = el("div", "msg-face");
-        portrait.appendChild(Assets.faceCanvas(faceIndex));
-        win.appendChild(portrait);
-        win.classList.add("has-face");
-      }
-      const body = el("div", "msg-text");
-      win.appendChild(body);
-      const tw = makeTypewriter(body, richText(text));
-      let pos = 0, typing = true;
-      const timer = setInterval(() => {
-        pos = Math.min(tw.total, pos + 2);
-        tw.reveal(pos);
-        if (pos >= tw.total) { typing = false; clearInterval(timer); win.classList.add("msg-done"); }
-      }, 16);
-      function advance() {
-        if (typing) {
-          typing = false; clearInterval(timer);
-          tw.reveal(tw.total); win.classList.add("msg-done");
-        } else {
-          removeUI(ui); resolve();
-        }
-      }
-      win.addEventListener("click", advance);
-      const ui = { el: win, onKey(k) { if (k === "ok" || k === "cancel") advance(); } };
-      uiLayer.appendChild(win);
-      pushUI(ui);
-    });
-  }
 
   async function fadeTo(opacity, ms) {
     fader.style.transitionDuration = ms + "ms";
@@ -707,6 +633,18 @@
       }
     },
   };
+
+  ({ richText, showMessage } = createMessageSystem({
+    Assets,
+    el,
+    esc,
+    getPlugins: () => Plugins,
+    getProject: () => proj,
+    getState: () => G,
+    getUiLayer: () => uiLayer,
+    pushUI,
+    removeUI,
+  }));
 
   let frameWaiters = [];
   function frameWait() { return new Promise((r) => frameWaiters.push(r)); }
@@ -1972,7 +1910,7 @@
     stage.style.setProperty("--win-op", clamp(s.windowOpacity == null ? 93 : Number(s.windowOpacity), 0, 100) / 100);
   }
 
-  window.addEventListener("DOMContentLoaded", async () => {
+  async function boot() {
     stage = document.getElementById("stage");
     canvas = document.getElementById("gamecanvas");
     ctx = canvas.getContext("2d");
@@ -2002,5 +1940,10 @@
     // unlock audio on first interaction
     const unlock = () => { Sfx.play("cursor"); document.removeEventListener("pointerdown", unlock); };
     document.addEventListener("pointerdown", unlock);
-  });
+  }
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
 })();
