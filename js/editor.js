@@ -1805,7 +1805,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
     const varName = (id) => id + (proj.system.variables[id - 1] ? " (" + proj.system.variables[id - 1] + ")" : "");
     const dbName = (arr, id) => { const e = RA.byId(arr, id); return e ? e.name : "#" + id; };
     switch (c.t) {
-      case "text": return "Text" + (c.name ? " [" + c.name + "]" : "") + ": " + c.text.split("\n")[0].slice(0, 42);
+      case "text": return "Text" + (c.name ? " [" + c.name + "]" : "") + (c.face ? " (face)" : "") + ": " + c.text.split("\n")[0].slice(0, 42);
       case "choices": return "Show Choices: " + c.options.join(" / ");
       case "switch": return "Switch " + swName(c.id) + " = " + (c.val ? "ON" : "OFF");
       case "selfsw": return "Self-Switch " + c.key + " = " + (c.val ? "ON" : "OFF");
@@ -1910,13 +1910,21 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
 
   // each entry: label, make(), form(c, box) -> apply()
   const CMD_DEFS = [
-    { t: "text", label: "Show Text", make: () => ({ t: "text", name: "", text: "" }),
+    { t: "text", label: "Show Text", make: () => ({ t: "text", name: "", face: "", text: "" }),
       form(c, box) {
-        const w = { name: c.name, text: c.text };
+        const w = { name: c.name, face: c.face || "", text: c.text };
+        const preview = h("span", { class: "char-preview" });
+        function redrawFace() {
+          preview.innerHTML = "";
+          const ci = Assets.charsetIndex(w.face);
+          if (ci >= 0) preview.appendChild(Assets.faceCanvas(ci));
+        }
         const ta = h("textarea", { rows: 4, oninput(e) { w.text = e.target.value; } }, c.text);
-        box.appendChild(field("Speaker name (optional)", tIn(w, "name")));
-        box.appendChild(field("Text  (\\v[n]=variable, \\n[id]=actor name, \\g=gold)", ta));
-        return () => { c.name = w.name; c.text = w.text; };
+        box.appendChild(row(field("Speaker name (optional)", tIn(w, "name")),
+          field("Face (optional)", sel(w, "face", charsetOpts(true), redrawFace)), preview));
+        box.appendChild(field("Text  (\\v[n]=variable, \\n[id]=actor name, \\g=gold, \\i[n]=icon)", ta));
+        redrawFace();
+        return () => { c.name = w.name; c.face = w.face; c.text = w.text; };
       } },
     { t: "choices", label: "Show Choices", make: () => ({ t: "choices", options: ["Yes", "No"], branches: [[], []] }),
       form(c, box) {

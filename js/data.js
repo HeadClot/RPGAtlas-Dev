@@ -334,7 +334,7 @@ const DataDefaults = (() => {
     });
     ev(m, 10, 11, "Villager", (e) => {
       e.pages[0] = page({ charset: "villager_m", moveType: "random", trigger: "action" }, [
-        { t: "text", name: "Villager", text: "The pond is lovely this time of year.\nJust don't fall in!" },
+        { t: "text", name: "Villager", face: "villager_m", text: "The pond is lovely this time of year.\nJust don't fall in \\i[15]!" },
       ]);
     });
     ev(m, 11, 8, "Sign", (e) => {

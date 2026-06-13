@@ -18,17 +18,29 @@ tiles, sprites, monsters, sound effects, even the music) is generated procedural
 
 ## Quick start
 
-Because browsers restrict `localStorage`/file access on `file://` pages, serve the folder and open it:
+**Windows — just double-click `RPGAtlas.exe`.** It starts a tiny local server, opens the editor in your
+browser, and needs no Python, Node, install, or admin rights. Keep the little black window open while you
+work; close it to stop. (Windows may show an "unknown publisher" warning the first time — the launcher is
+unsigned; choose *More info → Run anyway*.)
+
+Want it on your Desktop? Double-click **`Create Desktop Shortcut.cmd`** once and an RPGAtlas icon appears
+on your Desktop — launch from there any time.
+
+Why a launcher at all? Browsers block `localStorage`/file access on `file://` pages, so the engine has to be
+served over `http://`. The `.exe` does exactly that for you.
+
+**Other platforms (or no `.exe`)** — serve the folder yourself and open it:
 
 ```
 cd RPGAtlas
 python -m http.server 8080
-or 
-python -m http.server 8777
 ```
 
-Then open **http://localhost:8080/** or **http://localhost:8777/**— that's the editor. Hit **▶ Playtest** to play your game
+Then open **http://localhost:8080/** — that's the editor. Either way, hit **▶ Playtest** to play your game
 (or open `play.html` directly to play the bundled sample, *Atlas Quest*).
+
+> Building the launcher from source: run `tools/build-engine-launcher.ps1` (uses the .NET Framework C#
+> compiler already present on Windows). This produces `RPGAtlas.exe` in the project root.
 
 ## The editor (`index.html`)
 
@@ -103,7 +115,7 @@ Return to Title · Script (JS)
 
 - Grid movement with smooth scrolling camera (Arrows/WASD, **Shift** to dash)
 - **Z/Enter** confirm/interact · **X/Esc** menu/cancel — mouse works everywhere too
-- Message windows with typewriter text (`\v[n]`, `\n[id]`, `\g` codes), choices
+- Message windows with typewriter text, optional speaker faces, inline `\i[n]` icons, and choices
 - Full pause menu: Items, Skills, Equip, Status, Save/Load (3 slots), Return to Title
 - Turn-based battles in **side view** (animated party sprites) or classic front view:
   Attack / Skills / Items / Guard / Escape, agility turn order, multi-target spells,
@@ -123,7 +135,7 @@ engine bridge (`atlas.onMapLoad`, `atlas.onRender`, `atlas.onMessageText`, `atla
 every new project:
 
 - **Atlas_Core** — shared plugin registry and helpers (colors, easing, tweens, RNG)
-- **Atlas_TextCodes** — `\c[n]` color codes and BBCode (`[b]`, `[i]`, `[color]`, `[size]`) in messages
+- **Atlas_TextCodes** — inline icons with `\i[n]`, `\c[n]` color codes, and BBCode (`[b]`, `[i]`, `[color]`, `[size]`) in messages
 - **Atlas_Transitions** — transfer effects: fade, iris, curtain, slide (`Atlas.transition = 'iris'`)
 - **Atlas_Weather** — rain, storm, snow and fog overlays, per-map or scripted (`Atlas.weather('rain', 6)`)
 

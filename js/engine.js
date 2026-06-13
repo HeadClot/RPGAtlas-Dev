@@ -159,15 +159,24 @@
     (function walk(n) {
       for (const c of n.childNodes) {
         if (c.nodeType === 3) { nodes.push({ node: c, full: c.nodeValue }); c.nodeValue = ""; }
+        else if (c.nodeType === 1 && c.classList.contains("msg-icon")) {
+          nodes.push({ node: c, icon: true });
+          c.style.visibility = "hidden";
+        }
         else walk(c);
       }
     })(container);
-    const total = nodes.reduce((s, x) => s + x.full.length, 0);
+    const total = nodes.reduce((s, x) => s + (x.icon ? 1 : x.full.length), 0);
     return {
       total,
       reveal(pos) {
         let p = pos;
         for (const x of nodes) {
+          if (x.icon) {
+            x.node.style.visibility = p > 0 ? "" : "hidden";
+            if (p > 0) p--;
+            continue;
+          }
           if (p <= 0) { x.node.nodeValue = ""; }
           else if (p >= x.full.length) { x.node.nodeValue = x.full; p -= x.full.length; }
           else { x.node.nodeValue = x.full.slice(0, p); p = 0; }
@@ -175,10 +184,17 @@
       },
     };
   }
-  function showMessage(name, text) {
+  function showMessage(name, text, face) {
     return new Promise((resolve) => {
       const win = el("div", "win msgwin");
       if (name) { const nm = el("div", "msg-name"); nm.innerHTML = richText(name); win.appendChild(nm); }
+      const faceIndex = face ? Assets.charsetIndex(face) : -1;
+      if (faceIndex >= 0) {
+        const portrait = el("div", "msg-face");
+        portrait.appendChild(Assets.faceCanvas(faceIndex));
+        win.appendChild(portrait);
+        win.classList.add("has-face");
+      }
       const body = el("div", "msg-text");
       win.appendChild(body);
       const tw = makeTypewriter(body, richText(text));
@@ -529,7 +545,7 @@
     }
     async exec(c) {
       switch (c.t) {
-        case "text": await showMessage(c.name, c.text); break;
+        case "text": await showMessage(c.name, c.text, c.face); break;
         case "choices": {
           const i = await showList(c.options.map((o) => ({ html: richText(o) })), { className: "choicewin", cancellable: false });
           await this.runList(c.branches[i] || []);
