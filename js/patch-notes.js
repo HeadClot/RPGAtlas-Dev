@@ -5,6 +5,38 @@
 export const PATCH_NOTES = [
   {
     date: "June 13, 2026",
+    title: "Select Multiple Event Commands",
+    summary: "Shift+click a range of commands in the event editor and copy, cut, paste, delete, move, or drag them as one block.",
+    items: [
+      "Click a command, then Shift+click another to select the whole run between them.",
+      "Copy/Cut/Paste/Delete and the ↑/↓ buttons act on the entire selection at once.",
+      "Drag a selected block to a new spot, including into another branch.",
+      "Selection stays within one branch level; selecting across an If/Choices carries the whole block along.",
+    ],
+  },
+  {
+    date: "June 13, 2026",
+    title: "Copy & Paste Event Commands",
+    summary: "Copy, cut, and paste commands in the event editor — within an event or from one event to another.",
+    items: [
+      "Select a command and use Ctrl+C / Ctrl+X / Ctrl+V (or the Copy/Cut/Paste buttons) in the Commands list.",
+      "Paste works across events, so you can copy a command in one event and paste it into another.",
+      "Container commands (If / Choices) copy with everything nested inside them.",
+      "Right-click a command for a menu with all the list actions (add, edit, cut, copy, paste, move, delete).",
+    ],
+  },
+  {
+    date: "June 13, 2026",
+    title: "Drag-to-Reorder Event Commands",
+    summary: "Reorder commands in the event editor by dragging them, not just the ↑/↓ buttons.",
+    items: [
+      "Click and drag a command in the Commands list to move it anywhere in the event.",
+      "Drag commands into or out of If/Choices branches, not just within a single list.",
+      "A drop line shows where the command will land; the ↑/↓ buttons still work too, and now keep the command selected so you can tap them repeatedly.",
+    ],
+  },
+  {
+    date: "June 13, 2026",
     title: "Cinematic and Control Event Command Expansion",
     summary: "Added new visual effects commands and advanced branching controls to map events.",
     items: [

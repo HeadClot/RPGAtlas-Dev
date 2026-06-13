@@ -42,6 +42,7 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
   let selection = null;      // {x1,y1,x2,y2} inclusive (map mode)
   let clipTiles = null;      // tile clipboard {w,h,layers,shadows}
   let clipEvent = null;      // event clipboard (cloned event)
+  let clipCmd = null;        // event-command clipboard (array of cloned commands) — shared across event editors
   let pasteMode = null;      // null | "tiles" | "event"
   const undoStack = [];
   const redoStack = [];
@@ -2262,24 +2263,114 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
   }
   function cmdListWidget(getList) {
     const wrap = h("div", { class: "cmdlist-wrap" });
-    const listEl = h("div", { class: "cmdlist" });
-    let selRow = null, rows = [];
-    function redraw() {
+    const listEl = h("div", { class: "cmdlist", tabindex: "0" });
+    let selRow = null, anchorRow = null, rows = [], dragFromIdx = null, cmdMenuEl = null;
+    let dragBlock = null, dragFromArr = null, dragFrom = 0, dragCount = 0;
+    function clearDropMarks() {
+      listEl.querySelectorAll(".drop-before, .drop-after").forEach((d) => d.classList.remove("drop-before", "drop-after"));
+    }
+    // True when `arr` is one of cmd's own branch arrays, or nested inside one —
+    // so a container command (if/choices) is never dropped into its own subtree.
+    function ownsArray(cmd, arr) {
+      if (!cmd) return false;
+      const branches = cmd.t === "if" ? [cmd.then, cmd.else]
+        : cmd.t === "choices" ? (cmd.branches || []) : [];
+      for (const b of branches) {
+        if (b === arr) return true;
+        for (const c of b) if (ownsArray(c, arr)) return true;
+      }
+      return false;
+    }
+    // A command may be dropped onto any command row or end-of-branch slot, at any
+    // nesting level in this event — except onto itself or inside its own subtree.
+    function dropOk(target) {
+      if (!dragBlock) return false;
+      if (!target.arr || !(target.cmd || target.slot)) return false;
+      if (dragBlock.includes(target.cmd)) return false;            // not onto a member of the dragged block
+      return !dragBlock.some((c) => ownsArray(c, target.arr));     // not into any block member's own subtree
+    }
+    function redraw(reselect) {
       rows = [];
       buildCmdRows(getList(), 0, rows);
       rows.push({ arr: getList(), idx: getList().length, depth: 0, slot: true });
+      if (reselect) { // re-find the moved/pasted command(s) by identity so the selection follows them
+        const cmds = Array.isArray(reselect) ? reselect : [reselect];
+        let first = -1, last = -1;
+        rows.forEach((r3, i) => { if (r3.cmd && cmds.indexOf(r3.cmd) >= 0) { if (first < 0) first = i; last = i; } });
+        if (first >= 0) { anchorRow = first; selRow = last; } // focus = last → repeated paste/move stacks
+      }
       listEl.innerHTML = "";
+      const blk = selBlock(); // the contiguous multi-selection (or the single focused command)
       rows.forEach((r2, i) => {
+        const inBlk = blk && r2.cmd && r2.arr === blk.arr && r2.idx >= blk.lo && r2.idx <= blk.hi;
         const div = h("div", {
-          class: "cmdrow" + (r2.label ? " branch" : "") + (r2.slot ? " slot" : "") + (selRow === i ? " sel" : ""),
+          class: "cmdrow" + (r2.label ? " branch" : "") + (r2.slot ? " slot" : "")
+            + (i === selRow ? " sel" : (inBlk ? " cmd-selected" : "")),
           style: "padding-left:" + (8 + r2.depth * 18) + "px",
-          onclick() { selRow = i; redraw(); },
-          ondblclick() { selRow = i; if (r2.slot) addAt(r2); else if (r2.cmd) editAt(r2); },
+          onclick(e) {
+            if (e.shiftKey && anchorRow != null && rows[anchorRow] && r2.cmd && r2.arr === rows[anchorRow].arr)
+              selRow = i;                    // extend the range within one sibling list
+            else anchorRow = selRow = i;     // plain click / re-anchor (foreign branch, label, slot, ctrl)
+            redraw(); listEl.focus({ preventScroll: true });
+          },
+          ondblclick() { anchorRow = selRow = i; if (r2.slot) addAt(r2); else if (r2.cmd) editAt(r2); },
+          oncontextmenu(e) { openCmdMenu(e, i); },
         }, r2.label ? r2.label : r2.slot ? "◇ …" : "◆ " + cmdSummary(r2.cmd));
+        if (r2.cmd) {
+          div.draggable = true;
+          div.addEventListener("dragstart", (e) => {
+            const b = selBlock();
+            const inB = b && r2.arr === b.arr && r2.idx >= b.lo && r2.idx <= b.hi;
+            if (inB) { dragBlock = b.cmds; dragFromArr = b.arr; dragFrom = b.lo; dragCount = b.count; }
+            else { anchorRow = selRow = i; dragBlock = [r2.cmd]; dragFromArr = r2.arr; dragFrom = r2.idx; dragCount = 1; }
+            dragFromIdx = i;
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", "cmd"); // Firefox needs data to start a drag
+            div.classList.add("dragging");
+          });
+          div.addEventListener("dragend", () => { div.classList.remove("dragging"); clearDropMarks(); dragFromIdx = null; dragBlock = null; });
+        }
+        div.addEventListener("dragover", (e) => {
+          if (!dropOk(r2)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          clearDropMarks();
+          if (r2.slot) { div.classList.add("drop-before"); return; } // slot = drop at end of level
+          const rect = div.getBoundingClientRect();
+          div.classList.add(e.clientY - rect.top < rect.height / 2 ? "drop-before" : "drop-after");
+        });
+        div.addEventListener("dragleave", () => div.classList.remove("drop-before", "drop-after"));
+        div.addEventListener("drop", (e) => {
+          if (!dropOk(r2)) return;
+          e.preventDefault();
+          const toArr = r2.arr;
+          let to = r2.idx; // slot => end of branch (idx == length)
+          if (!r2.slot) {
+            const rect = div.getBoundingClientRect();
+            to = e.clientY - rect.top < rect.height / 2 ? r2.idx : r2.idx + 1;
+          }
+          clearDropMarks();
+          if (dragFromArr === toArr && to >= dragFrom && to <= dragFrom + dragCount) { dragBlock = null; dragFromIdx = null; return; } // lands inside itself
+          dragFromArr.splice(dragFrom, dragCount);
+          if (dragFromArr === toArr && to > dragFrom) to -= dragCount; // adjust for the gap we just removed
+          toArr.splice(to, 0, ...dragBlock);
+          const moved = dragBlock; dragBlock = null; dragFromIdx = null;
+          touch(); redraw(moved); // keep the moved block selected
+        });
         listEl.appendChild(div);
       });
     }
     function cur() { return selRow != null ? rows[selRow] : null; }
+    // The current selection as a contiguous block within ONE sibling array: the run between
+    // anchorRow and the focused row, or just the focused command. Null if nothing usable is selected.
+    function selBlock() {
+      const a = rows[anchorRow], f = cur();
+      if (a && f && a.cmd && f.cmd && a.arr === f.arr) {
+        const arr = a.arr, lo = Math.min(a.idx, f.idx), hi = Math.max(a.idx, f.idx);
+        return { arr, lo, hi, count: hi - lo + 1, cmds: arr.slice(lo, hi + 1) };
+      }
+      return (f && f.cmd) ? { arr: f.arr, lo: f.idx, hi: f.idx, count: 1, cmds: [f.cmd] } : null;
+    }
     function addAt(r2) {
       let target = r2 || cur();
       if (!target || (!target.slot && !target.cmd)) target = { arr: getList(), idx: getList().length };
@@ -2287,7 +2378,7 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
         target.arr.splice(target.idx, 0, nc);
         touch();
         editCommand(nc, redraw);
-        redraw();
+        redraw(nc);
       });
     }
     function editAt(r2) {
@@ -2296,29 +2387,112 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
       editCommand(target.cmd, redraw);
     }
     function delAt() {
-      const target = cur();
-      if (!target || !target.cmd) return;
-      target.arr.splice(target.idx, 1);
-      touch(); redraw();
+      const b = selBlock();
+      if (!b) return;
+      b.arr.splice(b.lo, b.count);
+      touch();
+      const survivor = b.arr.length ? b.arr[Math.min(b.lo, b.arr.length - 1)] : null;
+      anchorRow = selRow = null;
+      redraw(survivor || undefined);
     }
     function moveSel(d) {
-      const target = cur();
-      if (!target || !target.cmd) return;
-      const ni = target.idx + d;
-      if (ni < 0 || ni >= target.arr.length) return;
-      const [c] = target.arr.splice(target.idx, 1);
-      target.arr.splice(ni, 0, c);
+      const b = selBlock();
+      if (!b) return;
+      if (d < 0 && b.lo <= 0) return;
+      if (d > 0 && b.hi >= b.arr.length - 1) return;
+      const blk = b.arr.splice(b.lo, b.count);
+      b.arr.splice(b.lo + d, 0, ...blk);
       touch();
-      selRow += 0; // selection follows roughly; rebuild
-      redraw();
+      redraw(blk); // the whole block follows so ↑/↓ can be tapped repeatedly
+    }
+    function copySel(cut) {
+      const b = selBlock();
+      if (!b) return;
+      clipCmd = b.cmds.map((c) => RA.clone(c));
+      flashStatus((cut ? "Cut " : "Copied ") + b.count + (b.count > 1 ? " commands" : " command"));
+      if (cut) {
+        b.arr.splice(b.lo, b.count);
+        touch();
+        const survivor = b.arr.length ? b.arr[Math.min(b.lo, b.arr.length - 1)] : null;
+        anchorRow = selRow = null;
+        redraw(survivor || undefined);
+      }
+    }
+    function pasteSel() {
+      const block = Array.isArray(clipCmd) ? clipCmd : (clipCmd ? [clipCmd] : null);
+      if (!block || !block.length) { flashStatus("Clipboard is empty — copy a command first"); return; }
+      const target = cur();
+      let arr, idx;
+      if (target && target.cmd) { arr = target.arr; idx = target.idx + 1; }   // after the focused command
+      else if (target && target.slot) { arr = target.arr; idx = target.idx; } // at the insertion slot
+      else { arr = getList(); idx = getList().length; }                       // nothing selected → end of list
+      const clones = block.map((c) => RA.clone(c));
+      arr.splice(idx, 0, ...clones);
+      touch(); redraw(clones); // select the pasted block so repeated Ctrl+V stacks
+    }
+    function closeCmdMenu() {
+      if (!cmdMenuEl) return;
+      cmdMenuEl.remove(); cmdMenuEl = null;
+      document.removeEventListener("mousedown", onCmdMenuOutside, true);
+      document.removeEventListener("keydown", onCmdMenuKey, true);
+    }
+    function onCmdMenuOutside(ev) { if (cmdMenuEl && !cmdMenuEl.contains(ev.target)) closeCmdMenu(); }
+    function onCmdMenuKey(ev) { if (ev.key === "Escape") { ev.preventDefault(); closeCmdMenu(); } }
+    // Right-click a command (or insertion slot) for the same actions as the toolbar buttons.
+    function openCmdMenu(e, i) {
+      e.preventDefault();
+      if (!rows[i] || (!rows[i].cmd && !rows[i].slot)) return; // labels: just suppress the native menu
+      const x = e.clientX, y = e.clientY;
+      const b0 = selBlock(); // keep an existing multi-selection if the right-click lands inside it
+      const inBlk = b0 && rows[i].cmd && rows[i].arr === b0.arr && rows[i].idx >= b0.lo && rows[i].idx <= b0.hi;
+      if (!inBlk) anchorRow = selRow = i;
+      redraw(); listEl.focus({ preventScroll: true });
+      closeCmdMenu();
+      const b = selBlock(), isCmd = !!b, n = b ? b.count : 0, sfx = n > 1 ? " " + n : "";
+      const canPaste = Array.isArray(clipCmd) ? clipCmd.length > 0 : !!clipCmd;
+      const canUp = !!b && b.lo > 0, canDown = !!b && b.hi < b.arr.length - 1;
+      const menu = h("div", { class: "menu-drop" });
+      const item = (label, key, on, fn) => menu.appendChild(h("div", {
+        class: "menu-item" + (on ? "" : " disabled"),
+        onclick() { if (!on) return; closeCmdMenu(); fn(); },
+      }, h("span", { class: "mi-label" }, label), key ? h("span", { class: "mi-key" }, key) : null));
+      const sep = () => menu.appendChild(h("div", { class: "menu-sep" }));
+      item("Add…", "", true, () => addAt());
+      item("Edit", "", isCmd, () => editAt());
+      sep();
+      item("Cut" + sfx, "Ctrl+X", isCmd, () => copySel(true));
+      item("Copy" + sfx, "Ctrl+C", isCmd, () => copySel(false));
+      item("Paste", "Ctrl+V", canPaste, () => pasteSel());
+      item("Delete" + sfx, "", isCmd, () => delAt());
+      sep();
+      item("Move Up", "", canUp, () => moveSel(-1));
+      item("Move Down", "", canDown, () => moveSel(1));
+      menu.style.left = x + "px"; menu.style.top = y + "px";
+      document.body.appendChild(menu);
+      menu.style.left = Math.max(4, Math.min(x, window.innerWidth - menu.offsetWidth - 4)) + "px";
+      menu.style.top = Math.max(4, Math.min(y, window.innerHeight - menu.offsetHeight - 4)) + "px";
+      cmdMenuEl = menu;
+      document.addEventListener("mousedown", onCmdMenuOutside, true);
+      document.addEventListener("keydown", onCmdMenuKey, true);
     }
     const btns = h("div", { class: "cmdbtns" },
       h("button", { onclick: () => addAt() }, "+ Add"),
       h("button", { onclick: () => editAt() }, "Edit"),
       h("button", { onclick: delAt }, "Delete"),
+      h("button", { title: "Copy command (Ctrl+C)", onclick: () => copySel(false) }, "Copy"),
+      h("button", { title: "Cut command (Ctrl+X)", onclick: () => copySel(true) }, "Cut"),
+      h("button", { title: "Paste command (Ctrl+V)", onclick: () => pasteSel() }, "Paste"),
       h("button", { onclick: () => moveSel(-1) }, "↑"),
       h("button", { onclick: () => moveSel(1) }, "↓"),
     );
+    // Ctrl+C/X/V work when the command list has focus. The global editor shortcuts are
+    // suppressed while a modal is open, so there's no collision with map copy/paste.
+    listEl.addEventListener("keydown", (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.code === "KeyC") { e.preventDefault(); copySel(false); }
+      else if (e.code === "KeyX") { e.preventDefault(); copySel(true); }
+      else if (e.code === "KeyV") { e.preventDefault(); pasteSel(); }
+    });
     wrap.appendChild(btns);
     wrap.appendChild(listEl);
     redraw();
