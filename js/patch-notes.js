@@ -9,6 +9,7 @@ export const PATCH_NOTES = [
     summary: "RPGAtlas can now be packaged as a lightweight cross-platform desktop application using the system WebView, alongside the existing local-server build.",
     items: [
       "Added a Tauri wrapper (src-tauri/) that runs the editor in a native window on Windows, macOS, and Linux.",
+      "RPGAtlas-Desktop.exe opens the editor directly in the desktop app; the original RPGAtlas.exe still opens it in your browser.",
       "Playtest opens in its own dedicated desktop window instead of a browser tab.",
       "Project export uses a native Save dialog when running as a desktop app.",
       "Build with: npm install, then npm run dev (live) or npm run build (installer). Requires the Rust toolchain.",

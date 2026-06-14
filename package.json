@@ -8,7 +8,8 @@
     "stage": "node scripts/stage-frontend.mjs",
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "package:exe": "node scripts/package-exe.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
