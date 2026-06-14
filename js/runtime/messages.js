@@ -2,7 +2,7 @@
    Message text conversion, rich text, typewriter behavior, and message windows.
    GPL-3.0-or-later (see LICENSE). */
 
-export function createMessageSystem(deps) {
+function createMessageSystem(deps) {
   const {
     Assets,
     el,
@@ -137,3 +137,5 @@ export function createMessageSystem(deps) {
 
   return { convertText, richText, makeTypewriter, showMessage };
 }
+
+window.createMessageSystem = createMessageSystem;

@@ -48,13 +48,15 @@
   <input id="import-file" type="file" accept=".json,application/json" hidden>
   <div id="modal-root"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.x/dist/pixi.min.js"></script>
   <script src="js/assets.js?v=10"></script>
-  <script src="js/gl.js?v=4"></script>
+  <script src="js/renderer.js?v=1"></script>
+  <script src="js/runtime/messages.js?v=1"></script>
   <script src="js/sfx.js?v=8"></script>
   <script src="js/plugins.js?v=8"></script>
   <script src="js/data.js?v=14"></script>
   <script>
-    window.RPGAtlasDeps = { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx };
+    window.RPGAtlasDeps = { Assets, AtlasBuiltins: window.AtlasBuiltins, DataDefaults: window.DataDefaults, Renderer, GLRender: Renderer, Music: window.Music, RA: window.RA, Sfx: window.Sfx };
   </script>
   <script type="module" src="js/editor.js?v=17"></script>
 </body>

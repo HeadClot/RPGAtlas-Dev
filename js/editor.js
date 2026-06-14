@@ -1643,8 +1643,10 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
         if (ci >= 0) sprites.push({ canvas: Assets.charFrameCanvas(ci, pg.dir || 0, 1), rx: ev.x, ry: ev.y, pr: 1 });
       }
     }
+    const hd2d = m.hd2d || {};
+    const ambient = hd2d.ambient != null ? Number(hd2d.ambient) : 0.45;
     const frame = GLRender.renderFrame(w, hgt, camX, camY, sprites,
-      { lights, focus: { rx: (camX + w / 2) / TILE, ry: (camY + hgt / 2) / TILE } });
+      { lights, ambient, focus: { rx: (camX + w / 2) / TILE, ry: (camY + hgt / 2) / TILE } });
     if (frame) hdCanvas.getContext("2d").drawImage(frame, 0, 0);
   }
   function hdFrame() {

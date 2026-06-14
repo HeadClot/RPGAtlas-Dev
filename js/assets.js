@@ -123,8 +123,12 @@ const Assets = (() => {
           }
         }
         return listed;
+      } else if (res.status !== 404) {
+          console.warn("Asset manifest fetch failed with status " + res.status);
       }
-    } catch (e) { console.warn("Custom asset manifest is unreadable.", e); }
+    } catch (e) { 
+        // Silenciar erro de rede ou parse
+    }
     const groups = await Promise.all(Object.keys(external).map(discoverFolder));
     return groups.flat().sort((a, b) => (a.type + "/" + a.name).localeCompare(b.type + "/" + b.name));
   }
@@ -1254,4 +1258,5 @@ const Assets = (() => {
     ICON_SIZE, ICON_COUNT, loadIconSet, iconSpan, iconHtml, iconCanvas,
   };
 })();
+
 if (typeof window !== "undefined") window.Assets = Assets;
