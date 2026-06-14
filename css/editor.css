@@ -246,11 +246,19 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--gold-edge);
 .cmdlist-wrap { border: 1px solid #2c2f44; border-radius: 6px; overflow: hidden; }
 .cmdbtns { display: flex; gap: 5px; padding: 6px; background: #1a1c28; border-bottom: 1px solid #2c2f44; }
 .cmdlist { max-height: 260px; overflow-y: auto; font-family: Consolas, monospace; font-size: 12px; }
+.cmdlist:focus { outline: none; } /* focusable for Ctrl+C/V; the selected-row highlight shows the active row */
 .cmdrow { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cmdrow:hover { background: #2a2d40; }
 .cmdrow.sel { background: var(--accent); color: #fff; }
+.cmdrow.cmd-selected { background: rgba(52, 96, 140, .40); } /* rest of a multi-selection; focus row keeps the strong .sel */
 .cmdrow.branch { color: #8fae6f; }
 .cmdrow.slot { color: #6a6d84; }
+.cmdrow[draggable="true"] { cursor: grab; }
+.cmdrow.dragging { opacity: .45; }
+/* amber (matches the icon-choice highlight) so the line reads against both dark
+   rows and the accent-filled selected row */
+.cmdrow.drop-before { box-shadow: inset 0 3px 0 0 #ffd86a; }
+.cmdrow.drop-after { box-shadow: inset 0 -3px 0 0 #ffd86a; }
 .cmdtabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
 .cmdtabs button.sel { background: var(--accent); border-color: var(--accent-edge); color: #fff; }
 .cmdgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
