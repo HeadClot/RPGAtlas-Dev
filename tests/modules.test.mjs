@@ -15,6 +15,11 @@ const {
   saveProject,
 } = await importBrowserModule("js/editor/project-io.js");
 const { createMessageSystem } = await importBrowserModule("js/runtime/messages.js");
+const {
+  createEditorI18n,
+  EDITOR_LOCALE_STORAGE_KEY,
+  normalizeEditorLocale,
+} = await importBrowserModule("js/editor/i18n.js");
 
 class MemoryStorage {
   constructor(entries = {}) {
@@ -30,6 +35,23 @@ class MemoryStorage {
     this.entries.delete(key);
   }
 }
+
+assert.equal(normalizeEditorLocale("fr-CA"), "fr");
+assert.equal(normalizeEditorLocale("unknown"), "en");
+const localeStorage = new MemoryStorage();
+const i18n = createEditorI18n({ storage: localeStorage, browserLocale: "es-MX" });
+assert.equal(i18n.locale, "es");
+assert.equal(i18n.t("Save Project"), "Guardar proyecto");
+assert.equal(i18n.t("Untranslated editor text"), "Untranslated editor text");
+assert.equal(
+  i18n.t("Heights — painting {value} with {tool}", { value: 3, tool: "Lápiz" }),
+  "Heights — painting 3 with Lápiz",
+);
+i18n.setLocale("de-DE");
+assert.equal(i18n.locale, "de");
+assert.equal(i18n.t("Maps"), "Karten");
+assert.equal(localeStorage.getItem(EDITOR_LOCALE_STORAGE_KEY), "de");
+assert.deepEqual(i18n.locales().map((locale) => locale.id), ["en", "es", "fr", "de"]);
 
 const storage = new MemoryStorage({
   driftwood_project: JSON.stringify({ meta: { engine: "driftwood" }, system: {} }),

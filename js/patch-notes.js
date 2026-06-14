@@ -4,6 +4,16 @@
 
 export const PATCH_NOTES = [
   {
+    date: "June 14, 2026",
+    title: "Multilingual Editor Interface",
+    summary: "Added a persistent interface-language module so creators can use the editor chrome in English, Spanish, French, or German.",
+    items: [
+      "Added Help → Interface Language for switching languages without reloading the editor.",
+      "Translated the main menus, toolbar labels, map sidebar, status text, and common dialog controls.",
+      "Language selection follows the browser by default, is saved locally, and never changes project-authored names or content.",
+    ],
+  },
+  {
     date: "June 13, 2026",
     title: "Smoother Movement",
     summary: "Reworked the play-test movement loop so walking is fluid and runs at a consistent speed on every display.",

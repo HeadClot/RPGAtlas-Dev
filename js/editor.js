@@ -10,11 +10,18 @@ import {
   loadStoredProject,
   saveProject,
 } from "./editor/project-io.js";
+import { createEditorI18n } from "./editor/i18n.js";
 import { PATCH_NOTES } from "./patch-notes.js";
 
 const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
+const editorI18n = createEditorI18n({
+  storage: window.localStorage,
+  document,
+  browserLocale: navigator.language,
+});
 
 (() => {
+  const t = editorI18n.t;
   const TILE = Assets.TILE;
   const LAYER_ORDER = ["ground", "decor", "decor2", "over"];
   const LAYER_LABELS = { auto: "Auto layer", ground: "Layer 1 (Ground)", decor: "Layer 2 (Decor)", decor2: "Layer 3 (Decor 2)", over: "Layer 4 (Overhead)" };
@@ -100,7 +107,7 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
     return h("span", { class: "rangewrap" }, r, out);
   }
   function field(label, input) {
-    return h("label", { class: "fld" }, h("span", null, label), input);
+    return h("label", { class: "fld" }, h("span", null, t(label)), input);
   }
   function row(...kids) { return h("div", { class: "frow" }, ...kids); }
 
@@ -163,7 +170,7 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
   function modal(opts) {
     const overlay = h("div", { class: "overlay" });
     const win = h("div", { class: "modal " + (opts.wide ? "wide " : "") + (opts.class || "") });
-    win.appendChild(h("div", { class: "modal-title" }, opts.title || ""));
+    win.appendChild(h("div", { class: "modal-title" }, t(opts.title || "")));
     const body = h("div", { class: "modal-body" });
     if (opts.content) body.appendChild(opts.content);
     win.appendChild(body);
@@ -176,7 +183,7 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
       btnrow.appendChild(h("button", {
         class: b.primary ? "primary" : "",
         onclick() { if (b.onClick) b.onClick(close); else close(); },
-      }, b.label));
+      }, t(b.label)));
     });
     win.appendChild(btnrow);
     overlay.appendChild(win);
@@ -198,7 +205,7 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
   // ============================ persistence ============================
   let saveTimer = null;
   function touch() {
-    $("save-ind").textContent = "● unsaved";
+    $("save-ind").textContent = "● " + t("unsaved");
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNow, 700);
     hdMarkDirty(); // keep the HD-2D preview in sync with edits
@@ -206,9 +213,9 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
   function saveNow() {
     try {
       saveProject(localStorage, proj);
-      $("save-ind").textContent = "✓ saved";
+      $("save-ind").textContent = "✓ " + t("saved");
     } catch (e) {
-      $("save-ind").textContent = "⚠ save failed";
+      $("save-ind").textContent = "⚠ " + t("save failed");
       console.error(e);
     }
   }
@@ -859,11 +866,14 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
   function setStatus() {
     const m = curMap();
     let s = m ? m.name + " (" + m.width + "×" + m.height + ")" : "";
-    s += "  ·  " + (mode === "map" ? TOOL_LABELS[tool] + " / " + LAYER_LABELS[layer]
-      : mode === "event" ? "Event mode (double-click = new/edit, drag = move)"
-      : mode === "pass" ? "Passability (click cycles auto → ✕ block → ○ pass)"
-      : mode === "height" ? "Heights — painting " + heightVal + " with " + TOOL_LABELS[tool] + " (keys 0–9 set the value, right-click picks, Eraser clears)"
-      : "Click the map to set the start position");
+    s += "  ·  " + (mode === "map" ? t(TOOL_LABELS[tool]) + " / " + t(LAYER_LABELS[layer])
+      : mode === "event" ? t("Event mode (double-click = new/edit, drag = move)")
+      : mode === "pass" ? t("Passability (click cycles auto → ✕ block → ○ pass)")
+      : mode === "height" ? t("Heights — painting {value} with {tool} (keys 0–9 set the value, right-click picks, Eraser clears)", {
+        value: heightVal,
+        tool: t(TOOL_LABELS[tool]),
+      })
+      : t("Click the map to set the start position"));
     if (hoverCell && m) {
       s += "  ·  " + hoverCell.x + "," + hoverCell.y;
       if (mode === "map") {
@@ -872,14 +882,14 @@ const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window
         s += "  ·  " + ln + ": " + (Assets.tiles[t] ? Assets.tiles[t].name : "?");
       }
       if (mode === "pass") {
-        s += "  ·  " + (effectivePass(hoverCell.x, hoverCell.y) ? "○ passable" : "✕ blocked") +
-          (m.passOv[hoverCell.y * m.width + hoverCell.x] ? " (override)" : "");
+        s += "  ·  " + (effectivePass(hoverCell.x, hoverCell.y) ? "○ " + t("passable") : "✕ " + t("blocked")) +
+          (m.passOv[hoverCell.y * m.width + hoverCell.x] ? " (" + t("override") + ")" : "");
       }
       const ev = mode !== "map" && eventAt(hoverCell.x, hoverCell.y);
       if (ev) s += "  ·  " + ev.name;
     }
-    if (mode === "map" && selection) s += "  ·  selection " + (selection.x2 - selection.x1 + 1) + "×" + (selection.y2 - selection.y1 + 1);
-    if (mode === "map") s += "  ·  brush: " + (Assets.tiles[selectedTile] ? Assets.tiles[selectedTile].name : "?");
+    if (mode === "map" && selection) s += "  ·  " + t("selection") + " " + (selection.x2 - selection.x1 + 1) + "×" + (selection.y2 - selection.y1 + 1);
+    if (mode === "map") s += "  ·  " + t("brush") + ": " + (Assets.tiles[selectedTile] ? Assets.tiles[selectedTile].name : "?");
     $("status-text").textContent = s;
     $("zoom-ind").textContent = Math.round(zoom * 100) + "%";
   }
@@ -3545,6 +3555,38 @@ atlas.onMapLoad((map) => {
   }
 
   // ============================ help / about ============================
+  function refreshLocalizedChrome() {
+    editorI18n.localizeStatic();
+    buildMenubar();
+    buildToolbar();
+    refreshToolbar();
+    setStatus();
+    const saveIndicator = $("save-ind");
+    if (saveIndicator.textContent.startsWith("●")) saveIndicator.textContent = "● " + t("unsaved");
+    else if (saveIndicator.textContent.startsWith("⚠")) saveIndicator.textContent = "⚠ " + t("save failed");
+    else saveIndicator.textContent = "✓ " + t("saved");
+  }
+  function openLanguageSettings() {
+    let selectedLocale = editorI18n.locale;
+    const languageSelect = h("select", {
+      onchange(e) { selectedLocale = e.target.value; },
+    }, ...editorI18n.locales().map((locale) =>
+      h("option", { value: locale.id, ...(locale.id === selectedLocale ? { selected: "" } : {}) }, locale.label)));
+    modal({
+      title: "Interface Language",
+      content: h("div", null,
+        h("p", null, t("Choose the language used by the editor. Project content is not translated.")),
+        field("Language", languageSelect)),
+      buttons: [
+        { label: "Apply", primary: true, onClick(close) {
+          editorI18n.setLocale(selectedLocale);
+          close();
+          refreshLocalizedChrome();
+        } },
+        { label: "Cancel" },
+      ],
+    });
+  }
   function openPatchNotes() {
     const list = h("div", { class: "patch-notes" });
     PATCH_NOTES.forEach((note) => {
@@ -3676,7 +3718,13 @@ atlas.onMapLoad((map) => {
 
   // ============================ actions / menus / toolbar ============================
   const ACT = {};
-  function act(id, def) { ACT[id] = def; }
+  function act(id, def) {
+    def.labelKey = def.label;
+    def.tipKey = def.tip;
+    ACT[id] = def;
+  }
+  function actionLabel(action) { return t(action.labelKey); }
+  function actionTip(action) { return t(action.tipKey || action.labelKey); }
   function runAct(id) {
     const a = ACT[id];
     if (!a || (a.enabled && !a.enabled())) return;
@@ -3750,6 +3798,7 @@ atlas.onMapLoad((map) => {
   act("search", { label: "Event Searcher…", icon: "search", tip: "Event Searcher — find text / switches / variables across maps", run: openEventSearcher });
   act("resources", { label: "Resource Manager…", icon: "resources", tip: "Resource Manager — browse and export generated assets", run: openResourceManager });
   act("chargen", { label: "Character Generator…", icon: "chargen", tip: "Character Generator — build original walking sprites", run: openCharGenerator });
+  act("language", { label: "Interface Language…", run: openLanguageSettings });
   act("patchnotes", { label: "Patch Notes", run: openPatchNotes });
   act("help", { label: "Quick Help", run: openHelp });
   act("about", { label: "About RPGAtlas", run: openAbout });
@@ -3774,11 +3823,11 @@ atlas.onMapLoad((map) => {
         const a = ACT[id];
         const btn = h("button", {
           class: "tbtn" + (id === "play" ? " play-btn" : ""),
-          title: (a.tip || a.label) + (a.key ? "  (" + a.key + ")" : ""),
+          title: actionTip(a) + (a.key ? "  (" + a.key + ")" : ""),
           onclick: () => runAct(id),
         });
         btn.innerHTML = ICONS[a.icon] || "";
-        if (id === "play") btn.appendChild(document.createTextNode("Playtest"));
+        if (id === "play") btn.appendChild(document.createTextNode(actionLabel(a)));
         a.btn = btn;
         bar.appendChild(btn);
       }
@@ -3802,9 +3851,10 @@ atlas.onMapLoad((map) => {
     { label: "Scale", items: ["zoomin", "zoomout", "zoom1", "zoomfit"] },
     { label: "Tools", items: ["db", "plugins", "audio", "search", "resources", "chargen"] },
     { label: "Game", items: ["play", "build", "-", "mapprops", "hdpreview", "mode-start"] },
-    { label: "Help", items: ["patchnotes", "help", "about"] },
+    { label: "Help", items: ["language", "-", "patchnotes", "help", "about"] },
   ];
   let menuOpenRef = null;
+  let menuDismissBound = false;
   function closeMenus() {
     if (!menuOpenRef) return;
     menuOpenRef.drop.remove();
@@ -3823,7 +3873,7 @@ atlas.onMapLoad((map) => {
         onclick() { if (dis) return; closeMenus(); a.run(); refreshToolbar(); },
       },
         h("span", { class: "mi-check" }, a.active && a.active() ? "✓" : ""),
-        h("span", { class: "mi-label" }, a.label),
+        h("span", { class: "mi-label" }, actionLabel(a)),
         a.key ? h("span", { class: "mi-key" }, a.key) : null));
     }
     const r = lab.getBoundingClientRect();
@@ -3837,7 +3887,7 @@ atlas.onMapLoad((map) => {
     const nav = $("menus");
     nav.innerHTML = "";
     for (const menu of MENUS) {
-      const lab = h("span", { class: "menu-label" }, menu.label);
+      const lab = h("span", { class: "menu-label" }, t(menu.label));
       lab.addEventListener("mousedown", (e) => {
         e.preventDefault(); e.stopPropagation();
         if (menuOpenRef && menuOpenRef.lab === lab) closeMenus();
@@ -3848,9 +3898,12 @@ atlas.onMapLoad((map) => {
       });
       nav.appendChild(lab);
     }
-    document.addEventListener("mousedown", (e) => {
-      if (menuOpenRef && !menuOpenRef.drop.contains(e.target)) closeMenus();
-    });
+    if (!menuDismissBound) {
+      document.addEventListener("mousedown", (e) => {
+        if (menuOpenRef && !menuOpenRef.drop.contains(e.target)) closeMenus();
+      });
+      menuDismissBound = true;
+    }
   }
 
   // ============================ modes / zoom ============================
@@ -3910,6 +3963,7 @@ atlas.onMapLoad((map) => {
     mapCtx = mapCanvas.getContext("2d");
     palCanvas = $("palette");
 
+    editorI18n.localizeStatic();
     buildMenubar();
     buildToolbar();
 
