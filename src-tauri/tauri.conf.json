@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "RPGAtlas — Editor",
+        "title": "RPGAtlas Desktop",
         "width": 1280,
         "height": 800,
         "minWidth": 900,

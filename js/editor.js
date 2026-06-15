@@ -224,13 +224,27 @@ const editorI18n = createEditorI18n({
   function loadStored() {
     return loadStoredProject(localStorage, (project) => RA.migrateProject(project));
   }
-  function exportProject() {
-    if (host.isTauri) {
-      host.saveProjectToFile(proj)
-        .then((path) => { if (path) flashStatus("Project saved"); })
-        .catch((e) => alert("Save failed: " + e.message));
-      return;
+  // Desktop: the .json file the project is bound to. Save (Ctrl+S) writes here
+  // silently once set; the first save — or Export (Save As) — prompts for it.
+  let currentProjectPath = null;
+  function baseName(p) { return String(p).replace(/^.*[\\/]/, ""); }
+  async function desktopSave(saveAs) {
+    saveNow(); // keep the local autosave as a crash-recovery copy
+    try {
+      if (saveAs || !currentProjectPath) {
+        const path = await host.saveProjectToFile(proj); // native Save dialog
+        if (!path) { flashStatus("Saved locally — file save cancelled"); return; }
+        currentProjectPath = path;
+      } else {
+        await host.saveProjectToPath(currentProjectPath, proj); // silent overwrite
+      }
+      flashStatus("Project saved to " + baseName(currentProjectPath));
+    } catch (e) {
+      flashStatus("Save failed: " + e.message);
     }
+  }
+  function exportProject() {
+    if (host.isTauri) { desktopSave(true); return; } // Export = Save As on desktop
     exportProjectFile(proj);
   }
   function openStandaloneExport() {
@@ -3922,10 +3936,13 @@ atlas.onMapLoad((map) => {
     });
   } });
   act("open", { label: "Open Project (.json)…", icon: "open", tip: "Open / import a project file", run() { $("import-file").click(); } });
-  act("save", { label: "Save Project", icon: "save", key: "Ctrl+S", tip: "Save the project to this browser now", run() {
-    saveNow();
-    flashStatus("Project saved to this browser — use File ▸ Export for a backup file");
-  } });
+  act("save", { label: "Save Project", icon: "save", key: "Ctrl+S",
+    tip: host.isTauri ? "Save the project to its file (Ctrl+S)" : "Save the project to this browser now",
+    run() {
+      if (host.isTauri) { desktopSave(false); return; }
+      saveNow();
+      flashStatus("Project saved to this browser — use File ▸ Export for a backup file");
+    } });
   act("export", { label: "Export Project As File…", run: exportProject });
   act("build", { label: "Export Standalone Game…", run: openStandaloneExport });
   act("play", { label: "Playtest", icon: "play", tip: "Save and run the game", run() {

@@ -33,6 +33,14 @@ fn save_project(
     }
 }
 
+/// Write the project JSON straight to a known path (no dialog). Used by the
+/// Save button once the project is bound to a file. The path originates from a
+/// prior Save dialog, so it is already user-authorized.
+#[tauri::command]
+fn save_project_to_path(path: String, json: String) -> Result<(), String> {
+    std::fs::write(&path, json).map_err(|e| e.to_string())
+}
+
 /// Open a project file chosen by the user and return its contents. Returns
 /// `None` if the user cancelled.
 #[tauri::command]
@@ -77,6 +85,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             save_project,
+            save_project_to_path,
             open_project,
             open_playtest
         ])

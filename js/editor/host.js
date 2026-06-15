@@ -32,6 +32,15 @@ export function saveProjectToFile(project) {
 }
 
 /**
+ * Save the project to an already-known file path, no dialog (the Save button's
+ * silent overwrite once a project is bound to a file).
+ */
+export function saveProjectToPath(path, project) {
+  const json = JSON.stringify(project, null, 1);
+  return invoke("save_project_to_path", { path, json });
+}
+
+/**
  * Open a project via a native Open dialog. Resolves to the parsed project
  * object, or null if the user cancelled.
  */
