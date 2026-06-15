@@ -1689,8 +1689,8 @@ const editorI18n = createEditorI18n({
     // PIXI renderer (Renderer, aliased to GLRender) is async and renders to its own canvas,
     // so this preview needs a PIXI rewrite — disable it gracefully until then rather than
     // throwing every frame. (The in-game HD-2D rendering uses the new renderer fully.)
-    const asyncRenderer = typeof GLRender !== "undefined" && GLRender.renderFrame &&
-      GLRender.renderFrame.constructor && GLRender.renderFrame.constructor.name === "AsyncFunction";
+    const asyncRenderer = typeof GLRender !== "undefined" && GLRender.available &&
+      GLRender.available.constructor && GLRender.available.constructor.name === "AsyncFunction";
     if (typeof GLRender === "undefined" || asyncRenderer) {
       flashStatus("HD-2D live preview is being rebuilt on the new PIXI renderer — unavailable for now");
       return;
