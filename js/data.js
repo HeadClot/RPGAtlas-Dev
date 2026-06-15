@@ -132,6 +132,7 @@ const RA = {
     p.meta.engine = "rpgatlas"; // also adopts pre-rebrand "driftwood" projects
     p.meta.version = 3;
     p.plugins = p.plugins || [];
+    p.quests = p.quests || [];
     p.customChars = p.customChars || [];
     p.assets = p.assets || {};
     p.assets.tiles = p.assets.tiles || {};
@@ -160,6 +161,51 @@ const RA = {
       if (!Array.isArray(sys.types[k]) || !sys.types[k].length) sys.types[k] = defTypes[k];
     }
     if (!Array.isArray(p.states)) p.states = RA.defaultStates();
+    p.quests = (p.quests || []).filter((q) => q && typeof q === "object").map((q) => {
+      const next = Object.assign({
+        name: "Quest",
+        shortDesc: "",
+        desc: "",
+        category: "side",
+        visible: true,
+        objectives: [],
+        startReqs: [],
+        failConditions: [],
+        rewards: [],
+        failEffects: [],
+        failText: "",
+        nextQuestIds: [],
+        autoStartNext: false,
+        allowRestartOnFail: false,
+        canAbandon: false,
+      }, q);
+      next.objectives = (next.objectives || []).filter((obj) => obj && typeof obj === "object").map((obj) => Object.assign({
+        kind: "event",
+        label: "",
+        count: 1,
+        enemyId: 0,
+        itemKind: "item",
+        id: 0,
+        targetMapId: 0,
+        targetEventId: 0,
+        consumeOnComplete: false,
+      }, obj));
+      next.failConditions = (next.failConditions || []).filter((fc) => fc && typeof fc === "object").map((fc) => Object.assign({
+        kind: "manual",
+        id: 0,
+        val: true,
+        cmp: ">=",
+        troopId: 0,
+        enemyId: 0,
+        count: 1,
+      }, fc));
+      if (!Array.isArray(next.startReqs)) next.startReqs = [];
+      if (!Array.isArray(next.failConditions)) next.failConditions = [];
+      if (!Array.isArray(next.rewards)) next.rewards = [];
+      if (!Array.isArray(next.failEffects)) next.failEffects = [];
+      if (!Array.isArray(next.nextQuestIds)) next.nextQuestIds = [];
+      return next;
+    });
     for (const c of p.classes || []) {
       if (!Array.isArray(c.traits)) c.traits = [];
       c.traits = c.traits.filter((t) => t && typeof t === "object").map((t) => ({
@@ -239,7 +285,11 @@ const DataDefaults = (() => {
 
   function newPage() {
     return {
-      cond: { switchId: 0, varId: 0, varVal: 0, selfSw: "" },
+      cond: {
+        switchId: 0, varId: 0, varVal: 0, selfSw: "",
+        questId: 0, questStatus: "active",
+        objectiveQuestId: 0, objectiveIndex: 0, objectiveStatus: "completed",
+      },
       charset: "", dir: 0,
       moveType: "fixed", trigger: "action", priority: "same", through: false,
       commands: [],
@@ -326,14 +376,51 @@ const DataDefaults = (() => {
     // ---- events ----
     ev(m, 13, 8, "Elder", (e) => {
       e.pages[0] = page({ charset: "elder", moveType: "fixed", trigger: "action" }, [
-        { t: "text", name: "Elder Rowan", text: "Welcome to \\c[2]Meridian Village\\c[0], traveler.\nMonsters have been creeping out of the \\c[3]cave\\c[0]\nto the north. Be careful out there!" },
+        { t: "text", name: "Elder Rowan", text: "Welcome to \\c[2]Meridian Village\\c[0], traveler.\nBefore you head north, would you greet our merchant\nand make sure his supply crates arrived?" },
+        { t: "questStart", questId: 1 },
+        { t: "text", name: "", text: "Started quest: Market Introduction" },
         { t: "text", name: "Elder Rowan", text: "Press [b]Z[/b] or [b]Enter[/b] to talk and confirm.\nPress [b]X[/b] or [b]Esc[/b] to open the menu." },
       ]);
+      e.pages.push(page({ cond: { questId: 1, questStatus: "active" }, charset: "elder", moveType: "fixed", trigger: "action" }, [
+        { t: "text", name: "Elder Rowan", text: "Please check in with our merchant by the crossroads.\nHe has supplies waiting for the village." },
+      ]));
+      e.pages.push(page({ cond: { questId: 1, questStatus: "completed" }, charset: "elder", moveType: "fixed", trigger: "action" }, [
+        { t: "text", name: "Elder Rowan", text: "You've already helped the village settle in.\nTilda has been asking after you as well." },
+      ]));
+      e.pages.push(page({ cond: { questId: 4, questStatus: "active" }, charset: "elder", moveType: "fixed", trigger: "action" }, [
+        { t: "text", name: "Elder Rowan", text: "So Vale sent you with the news? I appreciate the honesty." },
+        { t: "questAdvanceObj", questId: 4, objIndex: 0, amount: 1 },
+        { t: "questComplete", questId: 4 },
+      ]));
     });
     ev(m, 10, 11, "Villager", (e) => {
       e.pages[0] = page({ charset: "villager_m", moveType: "random", trigger: "action" }, [
-        { t: "text", name: "Villager", text: "The pond is lovely this time of year.\nJust don't fall in!" },
+        { t: "text", name: "Hunter Vale", text: "The pond is lovely this time of year, but the road north is dangerous.\nCould you thin out two dusk wolves in the cave?" },
+        { t: "questStart", questId: 3 },
+        { t: "text", name: "", text: "Started quest: Wolf Hunt" },
       ]);
+      e.pages.push(page({ cond: { questId: 3, questStatus: "active" }, charset: "villager_m", moveType: "random", trigger: "action" }, [
+        { t: "text", name: "Hunter Vale", text: "Have you dealt with two dusk wolves in the cave yet?" },
+      ]));
+      e.pages.push(page({ cond: { questId: 3, questStatus: "active", objectiveQuestId: 3, objectiveIndex: 0, objectiveStatus: "completed" }, charset: "villager_m", moveType: "random", trigger: "action" }, [
+        { t: "text", name: "Hunter Vale", text: "You really did it? Excellent work.\nI'll pay you right away." },
+        { t: "questComplete", questId: 3 },
+      ]));
+      e.pages.push(page({ cond: { questId: 3, questStatus: "completed" }, charset: "villager_m", moveType: "random", trigger: "action" }, [
+        { t: "text", name: "Hunter Vale", text: "Those dusk wolves won't trouble the road for a while.\nYou have my thanks." },
+      ]));
+      e.pages.push(page({ cond: { questId: 3, questStatus: "failed" }, charset: "villager_m", moveType: "random", trigger: "action" }, [
+        { t: "if", cond: { kind: "quest", questId: 4, status: "completed" }, then: [
+          { t: "text", name: "Hunter Vale", text: "Elder Rowan took the news better than I expected.\nThank you for smoothing things over." },
+        ], else: [
+          { t: "if", cond: { kind: "quest", questId: 4, status: "active" }, then: [
+            { t: "text", name: "Hunter Vale", text: "Please tell Elder Rowan I had to hire another sword.\nI hate leaving him in the dark." },
+          ], else: [
+            { t: "text", name: "Hunter Vale", text: "I had to hire another hunter after those defeats.\nWould you at least carry the news back to Elder Rowan?" },
+            { t: "questStart", questId: 4 },
+          ] },
+        ] },
+      ]));
     });
     ev(m, 11, 8, "Sign", (e) => {
       e.pages[0] = page({ charset: "sign", trigger: "action", priority: "same" }, [
@@ -353,6 +440,12 @@ const DataDefaults = (() => {
     });
     ev(m, 16, 8, "Merchant", (e) => {
       e.pages[0] = page({ charset: "merchant", trigger: "action" }, [
+        { t: "if", cond: { kind: "quest", questId: 1, status: "active" }, then: [
+          { t: "text", name: "Merchant", text: "Ah, Elder Rowan sent you? Good timing.\nThe supply crates made it in before sundown." },
+          { t: "questAdvanceObj", questId: 1, objIndex: 0, amount: 1 },
+          { t: "questComplete", questId: 1 },
+          { t: "text", name: "Merchant", text: "If you see Tilda in the cottage, tell her I'm still selling Potions.\nShe looked worried earlier." },
+        ], else: [] },
         { t: "text", name: "Merchant", text: "Welcome! Take a look at my wares." },
         { t: "shop", goods: [
           { kind: "item", id: 1 }, { kind: "item", id: 2 }, { kind: "item", id: 3 },
@@ -474,7 +567,26 @@ const DataDefaults = (() => {
 
     ev(m, 5, 4, "Resident", (e) => {
       e.pages[0] = page({ charset: "villager_f", moveType: "random", trigger: "action" }, [
-        { t: "text", name: "Tilda", text: "Make yourself at home!\nThe bed is free if you need a rest." },
+        { t: "if", cond: { kind: "quest", questId: 2, status: "completed" }, then: [
+          { t: "text", name: "Tilda", text: "That Potion did the trick.\nThank you again for hurrying it over." },
+        ], else: [
+          { t: "if", cond: { kind: "quest", questId: 2, status: "active" }, then: [
+            { t: "if", cond: { kind: "item", itemKind: "item", id: 1 }, then: [
+              { t: "text", name: "Tilda", text: "You found a Potion? Oh, wonderful!" },
+              { t: "questComplete", questId: 2 },
+            ], else: [
+              { t: "text", name: "Tilda", text: "If you're heading through the village, could you bring me just one Potion?\nThe merchant should have plenty." },
+            ] },
+          ], else: [
+            { t: "if", cond: { kind: "quest", questId: 1, status: "completed" }, then: [
+              { t: "text", name: "Tilda", text: "Since you're helping everyone... could you fetch me a Potion?\nI'd pay you back, of course." },
+              { t: "questStart", questId: 2 },
+              { t: "text", name: "", text: "Started quest: Tilda's Tonic" },
+            ], else: [
+              { t: "text", name: "Tilda", text: "Make yourself at home!\nThe bed is free if you need a rest." },
+            ] },
+          ] },
+        ] },
       ]);
     });
     ev(m, 7, 2, "Bed", (e) => {
@@ -503,6 +615,80 @@ const DataDefaults = (() => {
     const proj = {
       meta: { engine: "rpgatlas", version: 3, builtinsSeeded: true },
       plugins: typeof AtlasBuiltins !== "undefined" ? AtlasBuiltins.seed(1) : [],
+      quests: [
+        {
+          id: 1,
+          name: "Market Introduction",
+          shortDesc: "Speak with the merchant for Elder Rowan.",
+          desc: "Elder Rowan asked you to stop by the crossroads merchant and confirm that the village supply crates arrived safely.",
+          category: "side",
+          visible: true,
+          objectives: [{ kind: "event", label: "Report to the merchant", count: 1 }],
+          startReqs: [],
+          failConditions: [],
+          rewards: [{ kind: "gold", amount: 40 }],
+          failEffects: [],
+          failText: "",
+          nextQuestIds: [2],
+          autoStartNext: false,
+          allowRestartOnFail: false,
+          canAbandon: false,
+        },
+        {
+          id: 2,
+          name: "Tilda's Tonic",
+          shortDesc: "Bring Tilda a Potion from the village shop.",
+          desc: "Tilda in the cottage is feeling faint and asked for a single Potion. Buy one from the merchant and bring it to her.",
+          category: "side",
+          visible: true,
+          objectives: [{ kind: "fetch", label: "Bring Tilda a Potion", itemKind: "item", id: 1, count: 1, targetMapId: 3, targetEventId: 1, consumeOnComplete: true }],
+          startReqs: [{ kind: "quest", questId: 1, status: "completed" }],
+          failConditions: [],
+          rewards: [{ kind: "exp", amount: 30 }, { kind: "gold", amount: 25 }, { kind: "item", itemKind: "item", id: 3, count: 1 }],
+          failEffects: [],
+          failText: "",
+          nextQuestIds: [],
+          autoStartNext: false,
+          allowRestartOnFail: false,
+          canAbandon: false,
+        },
+        {
+          id: 3,
+          name: "Wolf Hunt",
+          shortDesc: "Defeat two dusk wolves in Whispering Cave.",
+          desc: "Hunter Vale wants the road north made safer. Defeat two dusk wolves in Whispering Cave, then return to him for your reward.",
+          category: "side",
+          visible: true,
+          objectives: [{ kind: "kill", label: "Defeat dusk wolves", enemyId: 7, count: 2 }],
+          startReqs: [],
+          failConditions: [{ kind: "enemyDefeatCount", enemyId: 7, count: 2 }],
+          rewards: [{ kind: "exp", amount: 45 }, { kind: "gold", amount: 35 }],
+          failEffects: [{ kind: "switch", id: 2, val: "true" }, { kind: "questUnlock", questId: 4 }],
+          failText: "Hunter Vale hired another hunter after too many losses, so the original reward is gone.",
+          nextQuestIds: [],
+          autoStartNext: false,
+          allowRestartOnFail: false,
+          canAbandon: true,
+        },
+        {
+          id: 4,
+          name: "Bad News Travels",
+          shortDesc: "Bring Elder Rowan news of Vale's replacement hunter.",
+          desc: "After failing the wolf hunt, Hunter Vale asks you to let Elder Rowan know that someone else took the contract.",
+          category: "side",
+          visible: true,
+          objectives: [{ kind: "event", label: "Tell Elder Rowan what happened", count: 1 }],
+          startReqs: [{ kind: "quest", questId: 3, status: "failed" }],
+          failConditions: [],
+          rewards: [{ kind: "gold", amount: 12 }],
+          failEffects: [],
+          failText: "",
+          nextQuestIds: [],
+          autoStartNext: false,
+          allowRestartOnFail: false,
+          canAbandon: false,
+        },
+      ],
       customChars: [],
       assets: { tiles: {} },
       system: {
@@ -636,6 +822,7 @@ const DataDefaults = (() => {
     for (let i = 1; i <= 50; i++) proj.system.switches.push("");
     for (let i = 1; i <= 50; i++) proj.system.variables.push("");
     proj.system.switches[0] = "Crystal Found";
+    proj.system.switches[1] = "Wolf Hunt Lost";
     proj.maps = [buildVillage(), buildCave(), buildInterior()];
     return proj;
   }

@@ -144,6 +144,11 @@
     if (noneLabel != null) o.unshift({ v: 0, l: noneLabel });
     return o;
   }
+  function stringSelOpts(values) {
+    const o = values.map((v) => ({ v, l: v }));
+    o.stringValues = true;
+    return o;
+  }
 
   // ============================ modal framework ============================
   const modalRoot = () => $("modal-root");
@@ -1407,7 +1412,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
       m.layers.ground[exitCell.y * w + exitCell.x] = exitTile;
       
       e.pages[0] = {
-        cond: { switchId: 0, varId: 0, varVal: 0, selfSw: "" },
+        cond: { switchId: 0, varId: 0, varVal: 0, selfSw: "", questId: 0, questStatus: "active", objectiveQuestId: 0, objectiveIndex: 0, objectiveStatus: "completed" },
         charset: "", dir: 0,
         moveType: "fixed", trigger: "touch", priority: "below", through: true,
         commands: [
@@ -1451,7 +1456,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
       }
       
       e.pages[0] = {
-        cond: { switchId: 0, varId: 0, varVal: 0, selfSw: "" },
+        cond: { switchId: 0, varId: 0, varVal: 0, selfSw: "", questId: 0, questStatus: "active", objectiveQuestId: 0, objectiveIndex: 0, objectiveStatus: "completed" },
         charset: "chest", dir: 0,
         moveType: "fixed", trigger: "action", priority: "same", through: false,
         commands: [
@@ -1462,7 +1467,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
         ],
       };
       e.pages.push({
-        cond: { switchId: 0, varId: 0, varVal: 0, selfSw: "A" },
+        cond: { switchId: 0, varId: 0, varVal: 0, selfSw: "A", questId: 0, questStatus: "active", objectiveQuestId: 0, objectiveIndex: 0, objectiveStatus: "completed" },
         charset: "chest_open", dir: 0,
         moveType: "fixed", trigger: "action", priority: "same", through: false,
         commands: [
@@ -1577,6 +1582,12 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
     const swName = (id) => id + (proj.system.switches[id - 1] ? " (" + proj.system.switches[id - 1] + ")" : "");
     const varName = (id) => id + (proj.system.variables[id - 1] ? " (" + proj.system.variables[id - 1] + ")" : "");
     const dbName = (arr, id) => { const e = RA.byId(arr, id); return e ? e.name : "#" + id; };
+    const questName = (id) => dbName(proj.quests || [], id);
+    const questObjName = (questId, objIndex) => {
+      const q = RA.byId(proj.quests || [], questId);
+      const obj = q && Array.isArray(q.objectives) ? q.objectives[objIndex] : null;
+      return obj ? (obj.label || obj.kind || ("Objective " + (objIndex + 1))) : ("Objective " + (objIndex + 1));
+    };
     switch (c.t) {
       case "text": return "Text" + (c.name ? " [" + c.name + "]" : "") + ": " + c.text.split("\n")[0].slice(0, 42);
       case "choices": return "Show Choices: " + c.options.join(" / ");
@@ -1588,10 +1599,16 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
         let d = k === "switch" ? "Switch " + swName(c.cond.id) + (c.cond.val === false ? " is OFF" : " is ON")
           : k === "var" ? "Var " + varName(c.cond.id) + " " + (c.cond.cmp || ">=") + " " + c.cond.val
           : k === "selfsw" ? "Self-Switch " + c.cond.key + " is ON"
+          : k === "quest" ? "Quest " + questName(c.cond.questId) + " is " + (c.cond.status || "active")
           : k === "item" ? "Has " + dbName(c.cond.itemKind === "weapon" ? proj.weapons : c.cond.itemKind === "armor" ? proj.armors : proj.items, c.cond.id)
           : "Gold " + (c.cond.cmp || ">=") + " " + c.cond.val;
         return "If " + d;
       }
+      case "questStart": return "Start Quest: " + questName(c.questId);
+      case "questAdvanceObj": return "Advance Objective: " + questName(c.questId) + " — " + questObjName(c.questId, c.objIndex) + " +" + (c.amount || 1);
+      case "questSetObj": return "Set Objective: " + questName(c.questId) + " — " + questObjName(c.questId, c.objIndex) + " = " + (c.value || 0);
+      case "questComplete": return "Complete Quest: " + questName(c.questId);
+      case "questFail": return "Fail Quest: " + questName(c.questId);
       case "transfer": { const m = RA.byId(proj.maps, c.mapId); return "Transfer → " + (m ? m.name : "?") + " (" + c.x + "," + c.y + ")"; }
       case "gold": return (c.op === "sub" ? "Lose" : "Gain") + " " + c.val + " " + proj.system.currency;
       case "item": return (c.op === "sub" ? "Lose" : "Gain") + " " + dbName(c.kind === "weapon" ? proj.weapons : c.kind === "armor" ? proj.armors : proj.items, c.id) + " ×" + c.val;
@@ -1717,6 +1734,9 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
               field("Value", nIn(w, "val"))));
           } else if (w.kind === "selfsw") {
             sub.appendChild(field("Self-Switch", sel(w, "key", [{ v: "A", l: "A" }, { v: "B", l: "B" }, { v: "C", l: "C" }, { v: "D", l: "D" }])));
+          } else if (w.kind === "quest") {
+            sub.appendChild(row(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"))),
+              field("Status", sel(w, "status", stringSelOpts(["inactive", "active", "completed", "failed"])))));
           } else if (w.kind === "item") {
             const kindSel = sel(w, "itemKind", [{ v: "item", l: "Item" }, { v: "weapon", l: "Weapon" }, { v: "armor", l: "Armor" }], redrawItem);
             sub.appendChild(row(field("Kind", kindSel), field("Entry", h("span", { id: "ifitem" }))));
@@ -1733,10 +1753,14 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
         }
         box.appendChild(field("Condition type", sel(w, "kind", [
           { v: "switch", l: "Switch" }, { v: "var", l: "Variable" }, { v: "selfsw", l: "Self-Switch" },
-          { v: "item", l: "Has item" }, { v: "gold", l: "Gold" },
+          { v: "quest", l: "Quest Status" }, { v: "item", l: "Has item" }, { v: "gold", l: "Gold" },
         ], redraw)));
         if (w.kind === "item" && !w.itemKind) w.itemKind = "item";
         if (w.kind === "selfsw" && !w.key) w.key = "A";
+        if (w.kind === "quest") {
+          if (w.questId == null) w.questId = 0;
+          if (!w.status) w.status = "active";
+        }
         box.appendChild(sub);
         redraw();
         return () => {
@@ -1746,6 +1770,52 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
           if (!c.then) c.then = [];
           if (!c.else) c.else = [];
         };
+      } },
+    { t: "questStart", label: "Start Quest", make: () => ({ t: "questStart", questId: proj.quests[0] ? proj.quests[0].id : 0 }),
+      form(c, box) {
+        const w = { questId: c.questId || (proj.quests[0] ? proj.quests[0].id : 0) };
+        box.appendChild(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"))));
+        return () => { c.questId = w.questId; };
+      } },
+    { t: "questAdvanceObj", label: "Advance Quest Objective", make: () => ({ t: "questAdvanceObj", questId: proj.quests[0] ? proj.quests[0].id : 0, objIndex: 0, amount: 1 }),
+      form(c, box) {
+        const w = { questId: c.questId || (proj.quests[0] ? proj.quests[0].id : 0), objIndex: c.objIndex || 0, amount: c.amount || 1 };
+        const objWrap = h("span");
+        function redrawObj() {
+          const q = RA.byId(proj.quests, w.questId);
+          const opts = (q && q.objectives && q.objectives.length ? q.objectives : [{ label: "(none)" }]).map((obj, i) => ({ v: i, l: (i + 1) + ": " + (obj.label || obj.kind || "Objective") }));
+          objWrap.innerHTML = "";
+          objWrap.appendChild(sel(w, "objIndex", opts));
+        }
+        redrawObj();
+        box.appendChild(row(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"), redrawObj)), field("Objective", objWrap), field("Amount", nIn(w, "amount", 1, 999))));
+        return () => Object.assign(c, w);
+      } },
+    { t: "questSetObj", label: "Set Quest Objective Progress", make: () => ({ t: "questSetObj", questId: proj.quests[0] ? proj.quests[0].id : 0, objIndex: 0, value: 0 }),
+      form(c, box) {
+        const w = { questId: c.questId || (proj.quests[0] ? proj.quests[0].id : 0), objIndex: c.objIndex || 0, value: c.value || 0 };
+        const objWrap = h("span");
+        function redrawObj() {
+          const q = RA.byId(proj.quests, w.questId);
+          const opts = (q && q.objectives && q.objectives.length ? q.objectives : [{ label: "(none)" }]).map((obj, i) => ({ v: i, l: (i + 1) + ": " + (obj.label || obj.kind || "Objective") }));
+          objWrap.innerHTML = "";
+          objWrap.appendChild(sel(w, "objIndex", opts));
+        }
+        redrawObj();
+        box.appendChild(row(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"), redrawObj)), field("Objective", objWrap), field("Value", nIn(w, "value", 0, 999))));
+        return () => Object.assign(c, w);
+      } },
+    { t: "questComplete", label: "Complete Quest", make: () => ({ t: "questComplete", questId: proj.quests[0] ? proj.quests[0].id : 0 }),
+      form(c, box) {
+        const w = { questId: c.questId || (proj.quests[0] ? proj.quests[0].id : 0) };
+        box.appendChild(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"))));
+        return () => { c.questId = w.questId; };
+      } },
+    { t: "questFail", label: "Fail Quest", make: () => ({ t: "questFail", questId: proj.quests[0] ? proj.quests[0].id : 0 }),
+      form(c, box) {
+        const w = { questId: c.questId || (proj.quests[0] ? proj.quests[0].id : 0) };
+        box.appendChild(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"))));
+        return () => { c.questId = w.questId; };
       } },
     { t: "switch", label: "Control Switch", make: () => ({ t: "switch", id: 1, val: true }),
       form(c, box) {
@@ -1909,7 +1979,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
     { t: "script", label: "Script (JavaScript)", make: () => ({ t: "script", code: "" }),
       form(c, box) {
         const ta = h("textarea", { rows: 6, spellcheck: "false" }, c.code || "");
-        box.appendChild(field("JS — api: game.setSwitch(id,v) getSwitch setVar getVar addGold(n) party() state()", ta));
+        box.appendChild(field("JS — api: game.setSwitch(id,v) getSwitch setVar getVar addGold(n) party() quest(id) questStatus startQuest advanceQuestObjective setQuestObjective completeQuest failQuest abandonQuest state()", ta));
         return () => { c.code = ta.value; };
       } },
   ];
@@ -2052,7 +2122,28 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
         row(field("Switch ON", sel(pg.cond, "switchId", switchOpts())),
           field("Variable ≥", sel(pg.cond, "varId", varOpts())), field("…value", nIn(pg.cond, "varVal")),
           field("Self-Switch ON", sel(pg.cond, "selfSw", [{ v: "", l: "(none)" }, { v: "A", l: "A" }, { v: "B", l: "B" }, { v: "C", l: "C" }, { v: "D", l: "D" }]))),
+        row(field("Quest", sel(pg.cond, "questId", dbOpts(proj.quests, "(none)"))),
+          field("Status", sel(pg.cond, "questStatus", stringSelOpts(["inactive", "active", "completed", "failed"])))),
       );
+      const objectiveRow = h("div", { class: "frow" });
+      function redrawObjectiveCond() {
+        objectiveRow.innerHTML = "";
+        const questWrap = h("span");
+        const objWrap = h("span");
+        const redrawObjectiveList = () => {
+          const q = RA.byId(proj.quests, pg.cond.objectiveQuestId);
+          const opts = [{ v: 0, l: "(none)" }].concat(((q && q.objectives) || []).map((obj, i) => ({ v: i, l: (i + 1) + ": " + (obj.label || obj.kind || "Objective") })));
+          objWrap.innerHTML = "";
+          objWrap.appendChild(sel(pg.cond, "objectiveIndex", opts));
+        };
+        questWrap.appendChild(sel(pg.cond, "objectiveQuestId", dbOpts(proj.quests, "(none)"), redrawObjectiveList));
+        redrawObjectiveList();
+        objectiveRow.appendChild(field("Objective Quest", questWrap));
+        objectiveRow.appendChild(field("Objective", objWrap));
+        objectiveRow.appendChild(field("Objective is", sel(pg.cond, "objectiveStatus", stringSelOpts(["incomplete", "completed"]))));
+      }
+      redrawObjectiveCond();
+      condBox.appendChild(objectiveRow);
       // appearance / behaviour
       const preview = h("span", { class: "char-preview" });
       function redrawPreview() {
@@ -2153,9 +2244,29 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
         spec.list().push(e);
         cur = e; touch(); redrawList(); redrawForm();
       } }, "+ New"),
+      ...(spec.reorderable ? [
+        h("button", { class: "mini", title: "Move earlier", onclick() {
+          if (!cur) return;
+          const arr = spec.list();
+          const i = arr.indexOf(cur);
+          if (i <= 0) return;
+          const [moved] = arr.splice(i, 1);
+          arr.splice(i - 1, 0, moved);
+          touch(); redrawList(); redrawForm();
+        } }, "↑"),
+        h("button", { class: "mini", title: "Move later", onclick() {
+          if (!cur) return;
+          const arr = spec.list();
+          const i = arr.indexOf(cur);
+          if (i < 0 || i >= arr.length - 1) return;
+          const [moved] = arr.splice(i, 1);
+          arr.splice(i + 1, 0, moved);
+          touch(); redrawList(); redrawForm();
+        } }, "↓"),
+      ] : []),
       h("button", { onclick() {
         if (!cur) return;
-        if (spec.list().length <= 1) { alert("Keep at least one entry."); return; }
+        if (spec.allowEmpty !== true && spec.list().length <= 1) { alert("Keep at least one entry."); return; }
         confirmBox("Delete \"" + cur.name + "\"?", () => {
           const arr = spec.list();
           arr.splice(arr.indexOf(cur), 1);
@@ -2525,6 +2636,277 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
           redrawM();
           box.appendChild(h("div", { class: "subhead" }, "Members (up to 4)"));
           box.appendChild(mbox);
+        },
+      }) },
+      { label: "Quests", build: () => listFormTab({
+        list: () => proj.quests,
+        allowEmpty: true,
+        reorderable: true,
+        blank: () => ({
+          id: 0,
+          name: "Quest",
+          shortDesc: "",
+          desc: "",
+          category: "side",
+          visible: true,
+          objectives: [],
+          startReqs: [],
+          failConditions: [],
+          rewards: [],
+          failEffects: [],
+          failText: "",
+          nextQuestIds: [],
+          autoStartNext: false,
+          allowRestartOnFail: false,
+          canAbandon: false,
+        }),
+        form(e, box, redrawList) {
+          if (!e.name) e.name = "Quest";
+          if (e.shortDesc == null) e.shortDesc = "";
+          if (e.desc == null) e.desc = "";
+          if (!Array.isArray(e.objectives)) e.objectives = [];
+          if (!Array.isArray(e.rewards)) e.rewards = [];
+          if (!Array.isArray(e.startReqs)) e.startReqs = [];
+          if (!Array.isArray(e.failConditions)) e.failConditions = [];
+          if (!Array.isArray(e.failEffects)) e.failEffects = [];
+          if (!Array.isArray(e.nextQuestIds)) e.nextQuestIds = [];
+          if (!e.category) e.category = "side";
+          if (e.visible == null) e.visible = true;
+          if (e.autoStartNext == null) e.autoStartNext = false;
+          if (e.failText == null) e.failText = "";
+          if (e.allowRestartOnFail == null) e.allowRestartOnFail = false;
+          if (e.canAbandon == null) e.canAbandon = false;
+
+          function effectEditor(list, title, addLabel, blank, kinds) {
+            const panel = h("div", { class: "minilist" });
+            function redraw() {
+              panel.innerHTML = "";
+              list.forEach((rw, i) => {
+                if (!rw.kind) rw.kind = kinds[0].v;
+                const rowEl = h("div", { class: "minirow" });
+                rowEl.appendChild(sel(rw, "kind", kinds, redraw));
+                if (rw.kind === "item") {
+                  if (!rw.itemKind) rw.itemKind = "item";
+                  const entryWrap = h("span");
+                  const redrawEntry = () => {
+                    const arr = rw.itemKind === "weapon" ? proj.weapons : rw.itemKind === "armor" ? proj.armors : proj.items;
+                    if (!arr.some((it) => it.id === Number(rw.id))) rw.id = arr[0] ? arr[0].id : 0;
+                    entryWrap.innerHTML = "";
+                    entryWrap.appendChild(sel(rw, "id", dbOpts(arr, "(none)")));
+                  };
+                  rowEl.appendChild(sel(rw, "itemKind", [
+                    { v: "item", l: "Item" },
+                    { v: "weapon", l: "Weapon" },
+                    { v: "armor", l: "Armor" },
+                  ], redrawEntry));
+                  redrawEntry();
+                  rowEl.appendChild(entryWrap);
+                  rowEl.appendChild(nIn(rw, "count", 1, 99));
+                } else if (rw.kind === "switch") {
+                  rowEl.appendChild(sel(rw, "id", switchOpts()));
+                  rowEl.appendChild(sel(rw, "val", [{ v: "true", l: "ON" }, { v: "false", l: "OFF" }]));
+                } else if (rw.kind === "var") {
+                  rowEl.appendChild(sel(rw, "id", varOpts()));
+                  rowEl.appendChild(sel(rw, "op", [{ v: "set", l: "Set" }, { v: "add", l: "Add" }, { v: "sub", l: "Sub" }]));
+                  rowEl.appendChild(nIn(rw, "amount", -9999999, 9999999));
+                } else if (rw.kind === "questUnlock" || rw.kind === "questLock") {
+                  rowEl.appendChild(sel(rw, "questId", dbOpts(proj.quests, "(none)")));
+                } else {
+                  rowEl.appendChild(nIn(rw, "amount", 0, 9999999));
+                }
+                rowEl.appendChild(h("button", { class: "mini", onclick() { list.splice(i, 1); touch(); redraw(); } }, "✕"));
+                panel.appendChild(rowEl);
+              });
+              panel.appendChild(h("button", { class: "mini", onclick() {
+                list.push(blank());
+                touch(); redraw();
+              } }, addLabel));
+            }
+            redraw();
+            box.appendChild(h("div", { class: "subhead" }, title));
+            box.appendChild(panel);
+          }
+          function failConditionEditor() {
+            const panel = h("div", { class: "minilist" });
+            function redraw() {
+              panel.innerHTML = "";
+              e.failConditions.forEach((fc, i) => {
+                if (!fc.kind) fc.kind = "manual";
+                const rowEl = h("div", { class: "minirow", style: "align-items:flex-start; flex-wrap:wrap" });
+                rowEl.appendChild(field("Type", sel(fc, "kind", stringSelOpts(["manual", "switch", "var", "battleLose", "enemyDefeatCount"]), redraw)));
+                if (fc.kind === "switch") {
+                  rowEl.appendChild(field("Switch", sel(fc, "id", switchOpts())));
+                  rowEl.appendChild(field("State", sel(fc, "val", [{ v: "true", l: "ON" }, { v: "false", l: "OFF" }])));
+                } else if (fc.kind === "var") {
+                  rowEl.appendChild(field("Variable", sel(fc, "id", varOpts())));
+                  rowEl.appendChild(field("Cmp", sel(fc, "cmp", [{ v: ">=", l: "≥" }, { v: "==", l: "=" }, { v: "<=", l: "≤" }])));
+                  rowEl.appendChild(field("Value", nIn(fc, "val", -9999999, 9999999)));
+                } else if (fc.kind === "battleLose") {
+                  rowEl.appendChild(field("Troop", sel(fc, "troopId", dbOpts(proj.troops, "(none)"))));
+                } else if (fc.kind === "enemyDefeatCount") {
+                  rowEl.appendChild(field("Enemy", sel(fc, "enemyId", dbOpts(proj.enemies, "(none)"))));
+                  rowEl.appendChild(field("Losses", nIn(fc, "count", 1, 99)));
+                } else {
+                  rowEl.appendChild(h("div", { class: "dim" }, "Manual fail only — use the Fail Quest command."));
+                }
+                rowEl.appendChild(h("button", { class: "mini", onclick() { e.failConditions.splice(i, 1); touch(); redraw(); } }, "✕"));
+                panel.appendChild(rowEl);
+              });
+              panel.appendChild(h("button", { class: "mini", onclick() {
+                e.failConditions.push({ kind: "manual" });
+                touch(); redraw();
+              } }, "+ add fail condition"));
+            }
+            redraw();
+            box.appendChild(h("div", { class: "subhead" }, "Fail conditions"));
+            box.appendChild(panel);
+          }
+
+          function requirementEditor() {
+            const panel = h("div", { class: "minilist" });
+            function redraw() {
+              panel.innerHTML = "";
+              e.startReqs.forEach((rq, i) => {
+                if (!rq.kind) rq.kind = "quest";
+                const rowEl = h("div", { class: "minirow" });
+                rowEl.appendChild(sel(rq, "kind", [
+                  { v: "quest", l: "Quest state" },
+                  { v: "switch", l: "Switch" },
+                  { v: "var", l: "Variable" },
+                ], redraw));
+                if (rq.kind === "quest") {
+                  const questOpts = [{ v: 0, l: "(none)" }].concat(proj.quests.filter((q) => q !== e).map((q) => ({ v: q.id, l: q.id + ": " + (q.name || "Quest") })));
+                  rowEl.appendChild(sel(rq, "questId", questOpts));
+                  rowEl.appendChild(sel(rq, "status", stringSelOpts(["active", "completed", "failed"])));
+                } else if (rq.kind === "switch") {
+                  rowEl.appendChild(sel(rq, "id", switchOpts()));
+                  rowEl.appendChild(sel(rq, "val", [{ v: "true", l: "ON" }, { v: "false", l: "OFF" }]));
+                } else {
+                  rowEl.appendChild(sel(rq, "id", varOpts()));
+                  rowEl.appendChild(sel(rq, "cmp", [{ v: ">=", l: "≥" }, { v: "==", l: "=" }, { v: "<=", l: "≤" }]));
+                  rowEl.appendChild(nIn(rq, "val", -9999999, 9999999));
+                }
+                rowEl.appendChild(h("button", { class: "mini", onclick() { e.startReqs.splice(i, 1); touch(); redraw(); } }, "✕"));
+                panel.appendChild(rowEl);
+              });
+              panel.appendChild(h("button", { class: "mini", onclick() {
+                e.startReqs.push({ kind: "quest", questId: 0, status: "completed" });
+                touch(); redraw();
+              } }, "+ add requirement"));
+            }
+            redraw();
+            box.appendChild(h("div", { class: "subhead" }, "Availability / start requirements"));
+            box.appendChild(panel);
+          }
+          function objectiveEditor() {
+            const panel = h("div", { class: "minilist" });
+            function redraw() {
+              panel.innerHTML = "";
+              e.objectives.forEach((obj, i) => {
+                if (!obj.kind) obj.kind = "event";
+                if (!obj.label) obj.label = "";
+                if (obj.count == null) obj.count = 1;
+                const rowEl = h("div", { class: "minirow", style: "align-items:flex-start; flex-wrap:wrap" });
+                rowEl.appendChild(field("Type", sel(obj, "kind", stringSelOpts(["event", "kill", "fetch"]), redraw)));
+                rowEl.appendChild(field("Label", tIn(obj, "label")));
+                rowEl.appendChild(field("Count", nIn(obj, "count", 1, 999)));
+                if (obj.kind === "kill") {
+                  rowEl.appendChild(field("Enemy", sel(obj, "enemyId", dbOpts(proj.enemies, "(none)"))));
+                } else if (obj.kind === "fetch") {
+                  const itemWrap = h("span");
+                  const eventWrap = h("span");
+                  const redrawItem = () => {
+                    const arr = obj.itemKind === "weapon" ? proj.weapons : obj.itemKind === "armor" ? proj.armors : proj.items;
+                    if (!arr.some((it) => it.id === Number(obj.id))) obj.id = arr[0] ? arr[0].id : 0;
+                    itemWrap.innerHTML = "";
+                    itemWrap.appendChild(sel(obj, "id", dbOpts(arr, "(none)")));
+                  };
+                  const redrawEvent = () => {
+                    const map = RA.byId(proj.maps, obj.targetMapId);
+                    const eventOpts = [{ v: 0, l: "(any)" }].concat((map || { events: [] }).events.map((ev2) => ({ v: ev2.id, l: ev2.id + ": " + ev2.name })));
+                    eventWrap.innerHTML = "";
+                    eventWrap.appendChild(sel(obj, "targetEventId", eventOpts));
+                  };
+                  if (!obj.itemKind) obj.itemKind = "item";
+                  rowEl.appendChild(field("Kind", sel(obj, "itemKind", [
+                    { v: "item", l: "Item" },
+                    { v: "weapon", l: "Weapon" },
+                    { v: "armor", l: "Armor" },
+                  ], redrawItem)));
+                  redrawItem();
+                  rowEl.appendChild(field("Entry", itemWrap));
+                  rowEl.appendChild(field("Turn-in map", sel(obj, "targetMapId", dbOpts(proj.maps, "(any)"), redrawEvent)));
+                  redrawEvent();
+                  rowEl.appendChild(field("Turn-in event", eventWrap));
+                  rowEl.appendChild(field("Consume on complete", chk(obj, "consumeOnComplete")));
+                }
+                rowEl.appendChild(h("button", { class: "mini", onclick() { e.objectives.splice(i, 1); touch(); redraw(); } }, "✕"));
+                panel.appendChild(rowEl);
+              });
+              panel.appendChild(h("div", { class: "minirow" },
+                h("button", { class: "mini", onclick() { e.objectives.push({ kind: "event", label: "Talk to target", count: 1 }); touch(); redraw(); } }, "+ Event objective"),
+                h("button", { class: "mini", onclick() { e.objectives.push({ kind: "kill", label: "Defeat target enemies", enemyId: proj.enemies[0] ? proj.enemies[0].id : 0, count: 3 }); touch(); redraw(); } }, "+ Kill objective"),
+                h("button", { class: "mini", onclick() { e.objectives.push({ kind: "fetch", label: "Bring requested item", itemKind: "item", id: proj.items[0] ? proj.items[0].id : 0, count: 1, targetMapId: 0, targetEventId: 0, consumeOnComplete: false }); touch(); redraw(); } }, "+ Fetch objective")));
+            }
+            redraw();
+            box.appendChild(h("div", { class: "subhead" }, "Objectives"));
+            box.appendChild(panel);
+          }
+
+          box.appendChild(row(field("Title", nameRefresher(e, redrawList)),
+            field("Category", sel(e, "category", stringSelOpts(["main", "side", "guild", "hidden"]))),
+            field("Visible in journal", chk(e, "visible"))));
+          const shortDesc = h("input", { type: "text", value: e.shortDesc || "", oninput(ev) { e.shortDesc = ev.target.value; touch(); } });
+          const desc = h("textarea", { rows: 5, oninput(ev) { e.desc = ev.target.value; touch(); } }, e.desc || "");
+          box.appendChild(field("Short description", shortDesc));
+          box.appendChild(field("Long description", desc));
+
+          objectiveEditor();
+          requirementEditor();
+          failConditionEditor();
+
+          effectEditor(e.rewards, "Rewards", "+ add reward", () => ({ kind: "gold", amount: 100 }), [
+            { v: "exp", l: "XP" },
+            { v: "gold", l: "Money" },
+            { v: "item", l: "Item" },
+          ]);
+
+          effectEditor(e.failEffects, "Fail effects", "+ add fail effect", () => ({ kind: "switch", id: 1, val: "true" }), [
+            { v: "gold", l: "Money" },
+            { v: "item", l: "Item" },
+            { v: "switch", l: "Switch" },
+            { v: "var", l: "Variable" },
+            { v: "questUnlock", l: "Unlock quest" },
+            { v: "questLock", l: "Lock quest" },
+          ]);
+          box.appendChild(field("Failure / consequence text", h("textarea", { rows: 3, oninput(ev) { e.failText = ev.target.value; touch(); } }, e.failText || "")));
+
+          const nextBox = h("div", { class: "minilist" });
+          function redrawNext() {
+            nextBox.innerHTML = "";
+            e.nextQuestIds.forEach((id, i) => {
+              const slot = { id };
+              const options = [{ v: 0, l: "(none)" }].concat(proj.quests.filter((q) => q !== e).map((q) => ({ v: q.id, l: q.id + ": " + (q.name || "Quest") })));
+              nextBox.appendChild(h("div", { class: "minirow" },
+                sel(slot, "id", options, () => {
+                  e.nextQuestIds[i] = slot.id;
+                  e.nextQuestIds = e.nextQuestIds.filter((qid) => qid && qid !== e.id);
+                  touch();
+                }),
+                h("button", { class: "mini", onclick() { e.nextQuestIds.splice(i, 1); touch(); redrawNext(); } }, "✕")));
+            });
+            nextBox.appendChild(h("button", { class: "mini", onclick() {
+              const candidate = proj.quests.find((q) => q !== e && !e.nextQuestIds.includes(q.id));
+              if (!candidate) return;
+              e.nextQuestIds.push(candidate.id);
+              touch(); redrawNext();
+            } }, "+ add next quest"));
+          }
+          redrawNext();
+          box.appendChild(h("div", { class: "subhead" }, "Next quests"));
+          box.appendChild(nextBox);
+          box.appendChild(field("Auto-start next quests", chk(e, "autoStartNext")));
+          box.appendChild(row(field("Allow restart after fail", chk(e, "allowRestartOnFail")), field("Player can abandon", chk(e, "canAbandon"))));
         },
       }) },
       { label: "States", build: () => listFormTab({
