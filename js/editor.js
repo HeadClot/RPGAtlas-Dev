@@ -1662,8 +1662,10 @@ const editorI18n = createEditorI18n({
         if (ci >= 0) sprites.push({ canvas: Assets.charFrameCanvas(ci, pg.dir || 0, 1), rx: ev.x, ry: ev.y, pr: 1 });
       }
     }
+    const hd2d = m.hd2d || {};
+    const ambient = hd2d.ambient != null ? Number(hd2d.ambient) : 0.45;
     const frame = GLRender.renderFrame(w, hgt, camX, camY, sprites,
-      { lights, focus: { rx: (camX + w / 2) / TILE, ry: (camY + hgt / 2) / TILE } });
+      { lights, ambient, focus: { rx: (camX + w / 2) / TILE, ry: (camY + hgt / 2) / TILE } });
     if (frame) hdCanvas.getContext("2d").drawImage(frame, 0, 0);
   }
   function hdFrame() {
@@ -1683,7 +1685,17 @@ const editorI18n = createEditorI18n({
   }
   function toggleHdPreview() {
     if (hdPanel) { closeHdPreview(); return; }
-    if (typeof GLRender === "undefined" || !GLRender.available()) {
+    // The in-editor HD-2D live preview was built on the old synchronous GLRender. The new
+    // PIXI renderer (Renderer, aliased to GLRender) is async and renders to its own canvas,
+    // so this preview needs a PIXI rewrite — disable it gracefully until then rather than
+    // throwing every frame. (The in-game HD-2D rendering uses the new renderer fully.)
+    const asyncRenderer = typeof GLRender !== "undefined" && GLRender.renderFrame &&
+      GLRender.renderFrame.constructor && GLRender.renderFrame.constructor.name === "AsyncFunction";
+    if (typeof GLRender === "undefined" || asyncRenderer) {
+      flashStatus("HD-2D live preview is being rebuilt on the new PIXI renderer — unavailable for now");
+      return;
+    }
+    if (!GLRender.available()) {
       flashStatus("HD-2D preview needs WebGL2, which is unavailable in this browser");
       return;
     }

@@ -327,6 +327,11 @@ const DataDefaults = (() => {
     set(m, "decor", 18, 12, T.tree); set(m, "decor", 19, 13, T.tree); set(m, "decor", 17, 14, T.pine);
     set(m, "decor", 9, 12, T.pine);
 
+    // HD-2D config (enable PIXI rendering path)
+    m.hd2d = { enabled: true, tilt: 50, bloom: false, dof: false, fog: false, lights: true, ambient: 0.45 };
+    // Light test
+    m.lights = [{ rx: 12, ry: 8, color: "#FFFF00", radius: 64 }];
+
     // ---- events ----
     ev(m, 13, 8, "Elder", (e) => {
       e.pages[0] = page({ charset: "elder", moveType: "fixed", trigger: "action" }, [

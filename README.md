@@ -13,7 +13,7 @@
 </p>
 
 **RPGAtlas** is a complete, original, **free and open source** RPG making engine in the spirit of
-classic 2D RPG makers. No copyrighted assets, no dependencies, no build step — everything (code,
+classic 2D RPG makers. No copyrighted assets, no build step — everything (code,
 tiles, sprites, monsters, sound effects, even the music) is generated procedurally in plain JavaScript.
 
 ## Quick start

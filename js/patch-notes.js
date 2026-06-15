@@ -5,6 +5,34 @@
 export const PATCH_NOTES = [
   {
     date: "June 14, 2026",
+    title: "Lighting polish: smoother lights, shadows disabled",
+    summary:
+      "Improve radial light visuals and temporarily disable shadow generation while debugging.",
+    items: [
+      "Smoothed radial gradient for more natural light falloff (less burnt centers).",
+      "Removed the ambient overlay sprite in favor of a single ambient background color.",
+      "Temporarily disabled per-tile shadow generation to prevent visual artifacts.",
+      "Fixed PIXI v8 compatibility: string blend modes and linear scaleMode usage.",
+      "Credits: Kiro (Dirgefall Studio) — PIXI integration and lighting polish",
+    ],
+  },
+  {
+    date: "June 14, 2026",
+    title: "PIXI v8 HD-2D Lighting System",
+    summary:
+      "Replaced basic circle-based light rendering with a GPU-efficient radial gradient light map for PIXI v8.",
+    items: [
+      "Lights now use radial gradient sprites with smooth falloff instead of hard-edged circles.",
+      "Ambient darkness overlay darkens unlit areas; lights pierce through via ADD blend mode.",
+      "Fixed TILE size mismatch (32 to 48) for correct sprite and light positioning.",
+      "Camera zoom is now applied to the PIXI scene container.",
+      "Light sprites are pooled and reused each frame (zero GC pressure).",
+      "Editor GLRender alias added for HD-2D preview compatibility.",
+      "Credits: Kiro (Dirgefall Studio) — PIXI integration and lighting polish",
+    ],
+  },
+  {
+    date: "June 14, 2026",
     title: "Desktop App (Tauri)",
     summary: "RPGAtlas can now be packaged as a lightweight cross-platform desktop application using the system WebView, alongside the existing local-server build.",
     items: [
