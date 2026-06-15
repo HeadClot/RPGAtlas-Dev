@@ -3,6 +3,18 @@
 "use strict";
 
 export const PATCH_NOTES = [
+   {
+     date: "June 15, 2026",
+     title: "Built-In Quest System",
+     summary: "Added a built-in quest framework with editor tools, runtime tracking, objective progress, branching outcomes, and an in-game Journal.",
+     items: [
+       "New Database -> Quests tab for creating and editing quests, objectives, rewards, prerequisites, failure rules, and follow-up quest chains.",
+       "Added Event, Kill, and Fetch objectives with progress tracking, optional fetch item turn-in consumption, and objective-aware event page conditions.",
+       "New event commands: Start Quest, Complete Quest, Fail Quest, Advance Quest Objective, and Set Quest Objective Progress.",
+       "Added an in-game Journal with Active, Completed, and Failed quest lists, objective progress display, outcome text, and optional quest abandonment.",
+       "Quest rewards now support XP, gold, and items, with save/load support, restart/abandon policies, branching failures, and automatic follow-up quest unlocking.",
+     ],
+   },
   {
     date: "June 14, 2026",
     title: "Lighting polish: smoother lights, shadows disabled",
