@@ -3503,6 +3503,85 @@ const editorI18n = createEditorI18n({
           if (e.allowRestartOnFail == null) e.allowRestartOnFail = false;
           if (e.canAbandon == null) e.canAbandon = false;
 
+          const warningWrap = h("div");
+          const warningBox = h("div", { class: "minilist" });
+          function pushQuestWarning(list, text) {
+            if (!list.includes(text)) list.push(text);
+          }
+          function questWarnings() {
+            const warnings = [];
+            const questById = (id) => RA.byId(proj.quests, Number(id) || 0);
+            const itemDbFor = (kind) => kind === "weapon" ? proj.weapons : kind === "armor" ? proj.armors : proj.items;
+            if (!e.objectives.length) pushQuestWarning(warnings, "This quest has no objectives.");
+
+            const seenNext = new Set();
+            e.nextQuestIds.forEach((nextId) => {
+              const id = Number(nextId) || 0;
+              if (!id) return;
+              if (id === e.id) pushQuestWarning(warnings, "A quest cannot list itself as a next quest.");
+              if (seenNext.has(id)) pushQuestWarning(warnings, "This quest lists the same next quest more than once.");
+              seenNext.add(id);
+              if (!questById(id)) pushQuestWarning(warnings, "Next quest #" + id + " does not exist.");
+            });
+
+            e.startReqs.forEach((rq) => {
+              if (rq.kind === "quest") {
+                const id = Number(rq.questId) || 0;
+                if (id && !questById(id)) pushQuestWarning(warnings, "Start requirement references missing quest #" + id + ".");
+              }
+            });
+
+            e.failEffects.forEach((fx) => {
+              if (fx.kind === "questUnlock" || fx.kind === "questLock") {
+                const id = Number(fx.questId) || 0;
+                if (id && !questById(id)) pushQuestWarning(warnings, "Fail effect references missing quest #" + id + ".");
+              }
+            });
+
+            e.failConditions.forEach((fc) => {
+              if (fc.kind === "battleLose") {
+                const id = Number(fc.troopId) || 0;
+                if (id && !RA.byId(proj.troops, id)) pushQuestWarning(warnings, "Fail condition references missing troop #" + id + ".");
+              } else if (fc.kind === "enemyDefeatCount") {
+                const id = Number(fc.enemyId) || 0;
+                if (id && !RA.byId(proj.enemies, id)) pushQuestWarning(warnings, "Fail condition references missing enemy #" + id + ".");
+              }
+            });
+
+            e.objectives.forEach((obj, i) => {
+              const idx = i + 1;
+              if (obj.kind === "kill") {
+                const id = Number(obj.enemyId) || 0;
+                if (id && !RA.byId(proj.enemies, id)) pushQuestWarning(warnings, "Objective " + idx + " references missing enemy #" + id + ".");
+              } else if (obj.kind === "fetch") {
+                const kind = obj.itemKind || "item";
+                const id = Number(obj.id) || 0;
+                if (id && !RA.byId(itemDbFor(kind), id)) pushQuestWarning(warnings, "Objective " + idx + " references missing " + kind + " #" + id + ".");
+                const mapId = Number(obj.targetMapId) || 0;
+                const eventId = Number(obj.targetEventId) || 0;
+                const map = mapId ? RA.byId(proj.maps, mapId) : null;
+                if (mapId && !map) pushQuestWarning(warnings, "Objective " + idx + " references missing turn-in map #" + mapId + ".");
+                if (eventId && !mapId) pushQuestWarning(warnings, "Objective " + idx + " has a turn-in event but no turn-in map.");
+                if (map && eventId && !(map.events || []).some((ev2) => ev2.id === eventId)) {
+                  pushQuestWarning(warnings, "Objective " + idx + " references missing turn-in event #" + eventId + " on map #" + mapId + ".");
+                }
+              }
+            });
+
+            return warnings;
+          }
+          function renderWarnings() {
+            const warnings = questWarnings();
+            warningWrap.innerHTML = "";
+            if (!warnings.length) return;
+            warningBox.innerHTML = "";
+            warnings.forEach((text) => {
+              warningBox.appendChild(h("div", { class: "minirow", style: "color:#ffd1a8; white-space:normal" }, text));
+            });
+            warningWrap.appendChild(h("div", { class: "subhead" }, "Warnings (" + warnings.length + ")"));
+            warningWrap.appendChild(warningBox);
+          }
+
           function effectEditor(list, title, addLabel, blank, kinds) {
             const panel = h("div", { class: "minilist" });
             function redraw() {
@@ -3547,6 +3626,7 @@ const editorI18n = createEditorI18n({
                 list.push(blank());
                 touch(); redraw();
               } }, addLabel));
+              renderWarnings();
             }
             redraw();
             box.appendChild(h("div", { class: "subhead" }, title));
@@ -3582,6 +3662,7 @@ const editorI18n = createEditorI18n({
                 e.failConditions.push({ kind: "manual" });
                 touch(); redraw();
               } }, "+ add fail condition"));
+              renderWarnings();
             }
             redraw();
             box.appendChild(h("div", { class: "subhead" }, "Fail conditions"));
@@ -3619,6 +3700,7 @@ const editorI18n = createEditorI18n({
                 e.startReqs.push({ kind: "quest", questId: 0, status: "completed" });
                 touch(); redraw();
               } }, "+ add requirement"));
+              renderWarnings();
             }
             redraw();
             box.appendChild(h("div", { class: "subhead" }, "Availability / start requirements"));
@@ -3673,6 +3755,7 @@ const editorI18n = createEditorI18n({
                 h("button", { class: "mini", onclick() { e.objectives.push({ kind: "event", label: "Talk to target", count: 1 }); touch(); redraw(); } }, "+ Event objective"),
                 h("button", { class: "mini", onclick() { e.objectives.push({ kind: "kill", label: "Defeat target enemies", enemyId: proj.enemies[0] ? proj.enemies[0].id : 0, count: 3 }); touch(); redraw(); } }, "+ Kill objective"),
                 h("button", { class: "mini", onclick() { e.objectives.push({ kind: "fetch", label: "Bring requested item", itemKind: "item", id: proj.items[0] ? proj.items[0].id : 0, count: 1, targetMapId: 0, targetEventId: 0, consumeOnComplete: false }); touch(); redraw(); } }, "+ Fetch objective")));
+              renderWarnings();
             }
             redraw();
             box.appendChild(h("div", { class: "subhead" }, "Objectives"));
@@ -3686,6 +3769,8 @@ const editorI18n = createEditorI18n({
           const desc = h("textarea", { rows: 5, oninput(ev) { e.desc = ev.target.value; touch(); } }, e.desc || "");
           box.appendChild(field("Short description", shortDesc));
           box.appendChild(field("Long description", desc));
+          renderWarnings();
+          box.appendChild(warningWrap);
 
           objectiveEditor();
           requirementEditor();
@@ -3727,6 +3812,7 @@ const editorI18n = createEditorI18n({
               e.nextQuestIds.push(candidate.id);
               touch(); redrawNext();
             } }, "+ add next quest"));
+            renderWarnings();
           }
           redrawNext();
           box.appendChild(h("div", { class: "subhead" }, "Next quests"));
