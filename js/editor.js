@@ -181,20 +181,48 @@ const editorI18n = createEditorI18n({
     const body = h("div", { class: "modal-body" });
     if (opts.content) body.appendChild(opts.content);
     win.appendChild(body);
-    const btnrow = h("div", { class: "modal-btns" });
+    let onKey = null;
     function close(result) {
+      if (onKey) document.removeEventListener("keydown", onKey);
       overlay.remove();
       if (opts.onClose) opts.onClose(result);
     }
-    (opts.buttons || [{ label: "Close" }]).forEach((b) => {
-      btnrow.appendChild(h("button", {
-        class: b.primary ? "primary" : "",
-        onclick() { if (b.onClick) b.onClick(close); else close(); },
-      }, t(b.label)));
-    });
-    win.appendChild(btnrow);
+    // A caller can supply a fully custom footer node (its own button layout); otherwise we
+    // generate the standard right-aligned button row from opts.buttons.
+    if (opts.footer) {
+      win.appendChild(opts.footer);
+    } else {
+      const btnrow = h("div", { class: "modal-btns" });
+      (opts.buttons || [{ label: "Close" }]).forEach((b) => {
+        btnrow.appendChild(h("button", {
+          class: b.primary ? "primary" : "",
+          onclick() { if (b.onClick) b.onClick(close); else close(); },
+        }, t(b.label)));
+      });
+      win.appendChild(btnrow);
+    }
     overlay.appendChild(win);
     overlay.addEventListener("mousedown", (e) => { if (e.target === overlay && opts.dismissable !== false) close(); });
+    // Opt-in keyboard shortcuts for small dialogs: Enter = primary (OK/Save), Esc = Cancel/Close.
+    // Only the topmost dialog responds, and Enter is ignored while typing in a textarea/select so
+    // multi-line fields (Show Text, Script) keep their newline behavior.
+    if (opts.dialogKeys) {
+      const runBtn = (b) => { if (!b) return; if (b.onClick) b.onClick(close); else close(); };
+      onKey = (e) => {
+        if (overlay !== modalRoot().lastElementChild) return;
+        if (e.key === "Escape") {
+          const cancel = (opts.buttons || []).find((b) => b.label && /^(cancel|close|no)$/i.test(b.label));
+          if (cancel) { e.preventDefault(); runBtn(cancel); }
+          else if (opts.dismissable !== false) { e.preventDefault(); close(); }
+        } else if (e.key === "Enter") {
+          const ae = document.activeElement, tag = ae && ae.tagName;
+          if (tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON" || (ae && ae.isContentEditable)) return;
+          const primary = (opts.buttons || []).find((b) => b.primary);
+          if (primary) { e.preventDefault(); runBtn(primary); }
+        }
+      };
+      document.addEventListener("keydown", onKey);
+    }
     modalRoot().appendChild(overlay);
     return { close, body, el: win };
   }
@@ -206,6 +234,7 @@ const editorI18n = createEditorI18n({
         { label: "OK", primary: true, onClick(c) { c(); onYes(); } },
         { label: "Cancel" },
       ],
+      dialogKeys: true,
     });
   }
 
@@ -2255,25 +2284,32 @@ const editorI18n = createEditorI18n({
   ];
   const cmdDef = (t) => CMD_DEFS.find((d) => d.t === t);
 
-  function editCommand(c, onDone, skipSnapshot, snapFn) {
+  // Build a command's parameter form into any container and return its apply() commit
+  // closure. Shared by the modal editor (editCommand) and the inline inspector, so each
+  // per-type form builder is reused verbatim regardless of where it's hosted.
+  function mountForm(c, container) {
+    return cmdDef(c.t).form(c, container) || (() => {});
+  }
+  function editCommand(c, onDone, skipSnapshot, snapFn, onCancel) {
     const def = cmdDef(c.t);
     const box = h("div");
-    const apply = def.form(c, box) || (() => {});
+    const apply = mountForm(c, box);
     modal({
       title: def.label,
       content: box,
       buttons: [
         { label: "OK", primary: true, onClick(close) { if (!skipSnapshot && snapFn) snapFn(); apply(); close(); touch(); onDone(); } },
-        { label: "Cancel", onClick(close) { close(); onDone(); } },
+        { label: "Cancel", onClick(close) { close(); (onCancel || onDone)(); } },
       ],
       dismissable: false,
+      dialogKeys: true,
     });
   }
   function pickCommand(onPicked) {
     const PAGE_SIZE = 24;
     const tabs = h("div", { class: "cmdtabs" });
     const grid = h("div", { class: "cmdgrid" });
-    const m = modal({ title: "Add Command", content: h("div", null, tabs, grid), buttons: [{ label: "Cancel" }] });
+    const m = modal({ title: "Add Command", content: h("div", null, tabs, grid), buttons: [{ label: "Cancel" }], dialogKeys: true });
     let page = 0;
 
     function editPreset(preset) {
@@ -2317,6 +2353,7 @@ const editorI18n = createEditorI18n({
           preset ? h("div", { class: "dim" }, "Saved command buttons are stored with this project.") : null),
         buttons,
         dismissable: false,
+        dialogKeys: true,
       });
     }
 
@@ -2375,9 +2412,10 @@ const editorI18n = createEditorI18n({
       }
     });
   }
-  function cmdListWidget(getList, undoApi) {
+  function cmdListWidget(getList, undoApi, onSelect) {
     const wrap = h("div", { class: "cmdlist-wrap" });
     const listEl = h("div", { class: "cmdlist", tabindex: "0" });
+    const cmdCount = h("span", { class: "ev-cmd-count" });   // lives in the banner; updated in redraw()
     const snap = undoApi.snapshot;             // snapshot before a mutation
     let selRow = null, anchorRow = null, rows = [], dragFromIdx = null, cmdMenuEl = null;
     let dragBlock = null, dragFromArr = null, dragFrom = 0, dragCount = 0;
@@ -2430,7 +2468,7 @@ const editorI18n = createEditorI18n({
           },
           ondblclick() { anchorRow = selRow = i; if (r2.slot) addAt(r2); else if (r2.cmd) editAt(r2); },
           oncontextmenu(e) { openCmdMenu(e, i); },
-        }, r2.label ? r2.label : r2.slot ? "◇ …" : "◆ " + cmdSummary(r2.cmd));
+        }, r2.label ? r2.label : r2.slot ? "◇ " + t("Add command…") : "◆ " + cmdSummary(r2.cmd));
         if (r2.cmd) {
           div.draggable = true;
           div.addEventListener("dragstart", (e) => {
@@ -2475,6 +2513,12 @@ const editorI18n = createEditorI18n({
         });
         listEl.appendChild(div);
       });
+      // One notification site for the inspector: report the single focused command
+      // (or null for none/multi-select/label/slot). Every selection change that should
+      // update the inspector funnels through redraw(); ondblclick/dragstart are the two
+      // deliberate exceptions that settle on the next redraw.
+      cmdCount.textContent = "(" + getList().length + ")";
+      if (onSelect) { const b = selBlock(); onSelect(b && b.count === 1 ? b.cmds[0] : null); }
     }
     function cur() { return selRow != null ? rows[selRow] : null; }
     // The current selection as a contiguous block within ONE sibling array: the run between
@@ -2491,11 +2535,14 @@ const editorI18n = createEditorI18n({
       let target = r2 || cur();
       if (!target || (!target.slot && !target.cmd)) target = { arr: getList(), idx: getList().length };
       pickCommand((nc) => {
-        snap();
-        target.arr.splice(target.idx, 0, nc);
-        touch();
-        editCommand(nc, redraw, true);   // suppress: this snapshot already covers the whole add
-        redraw(nc);
+        // Edit the new command in its own dialog FIRST; only insert it on OK, so Cancel adds nothing.
+        editCommand(nc, () => {
+          snap();                                   // snapshot pre-insertion state (one clean "add" undo step)
+          target.arr.splice(target.idx, 0, nc);
+          touch();
+          redraw(nc);
+          listEl.focus({ preventScroll: true });    // so Delete works immediately on the new row
+        }, true, null, () => {});                    // skipSnapshot + no-op Cancel: nothing happens unless OK
       });
     }
     function editAt(r2) {
@@ -2596,15 +2643,14 @@ const editorI18n = createEditorI18n({
       document.addEventListener("mousedown", onCmdMenuOutside, true);
       document.addEventListener("keydown", onCmdMenuKey, true);
     }
+    // Banner: "Commands N" on the left, actions on the right. Copy/Cut/Paste/move keep working
+    // via Ctrl+C/X/V, drag-reorder, and the right-click menu — they just lost their buttons.
     const btns = h("div", { class: "cmdbtns" },
-      h("button", { onclick: () => addAt() }, "+ Add"),
-      h("button", { onclick: () => editAt() }, "Edit"),
-      h("button", { onclick: delAt }, "Delete"),
-      h("button", { title: "Copy command (Ctrl+C)", onclick: () => copySel(false) }, "Copy"),
-      h("button", { title: "Cut command (Ctrl+X)", onclick: () => copySel(true) }, "Cut"),
-      h("button", { title: "Paste command (Ctrl+V)", onclick: () => pasteSel() }, "Paste"),
-      h("button", { onclick: () => moveSel(-1) }, "↑"),
-      h("button", { onclick: () => moveSel(1) }, "↓"),
+      h("div", { class: "cmdbanner-title" }, h("span", null, t("Commands")), cmdCount),
+      h("div", { class: "cmdbtns-actions" },
+        h("button", { onclick: () => addAt() }, "+ Add"),
+        h("button", { onclick: () => editAt() }, "Edit"),
+        h("button", { onclick: delAt }, "Delete")),
     );
     // Ctrl+C/X/V and Delete work when the command list has focus. The global editor shortcuts
     // are suppressed while a modal is open, so there's no collision with map copy/paste.
@@ -2679,9 +2725,9 @@ const editorI18n = createEditorI18n({
     }
     document.addEventListener("keydown", onEvKey);
 
-    const head = h("div");
+    const head = h("div", { class: "event-head" });
     const tabs = h("div", { class: "tabs" });
-    const pageBox = h("div");
+    const pageBox = h("div", { class: "event-pagebox" });
 
     function deletePage(i) {
       if (ev.pages.length <= 1) return;
@@ -2746,6 +2792,7 @@ const editorI18n = createEditorI18n({
     function clearTabDrops() { tabs.querySelectorAll(".drop-left, .drop-right").forEach((b) => b.classList.remove("drop-left", "drop-right")); }
     function redrawTabs() {
       tabs.innerHTML = "";
+      tabs.appendChild(h("button", { class: "mini tab-add", title: "Add a page", onclick() { ev.pages.push(DataDefaults.newPage()); pageIdx = ev.pages.length - 1; redrawTabs(); redrawPage(); } }, "+"));
       ev.pages.forEach((_, i) => {
         if (editingPage === i) {                  // inline rename: an input replaces the tab button
           const inp = h("input", { class: "tab-rename", value: ev.pages[i].name || "",
@@ -2787,96 +2834,176 @@ const editorI18n = createEditorI18n({
         });
         tabs.appendChild(btn);
       });
-      tabs.appendChild(h("button", { class: "mini", title: "Add a page", onclick() { ev.pages.push(DataDefaults.newPage()); pageIdx = ev.pages.length - 1; redrawTabs(); redrawPage(); } }, "+"));
-      tabs.appendChild(h("button", { class: "mini", title: "Delete this page", onclick() { deletePage(pageIdx); } }, "−"));
     }
     function redrawPage() {
       const pg = ev.pages[pageIdx];
       pageBox.innerHTML = "";
-      // conditions
-      const condBox = h("div", { class: "subbox" },
-        h("div", { class: "subhead" }, "Page conditions (all must hold)"),
-        row(field("Switch ON", sel(pg.cond, "switchId", switchOpts())),
-          field("Variable ≥", sel(pg.cond, "varId", varOpts())), field("…value", nIn(pg.cond, "varVal")),
-          field("Self-Switch ON", sel(pg.cond, "selfSw", [{ v: "", l: "(none)" }, { v: "A", l: "A" }, { v: "B", l: "B" }, { v: "C", l: "C" }, { v: "D", l: "D" }]))),
-        row(field("Quest", sel(pg.cond, "questId", dbOpts(proj.quests, "(none)"))),
-          field("Status", sel(pg.cond, "questStatus", stringSelOpts(["inactive", "active", "completed", "failed", "abandoned"])))),
-      );
-      const objectiveRow = h("div", { class: "frow" });
-      function redrawObjectiveCond() {
-        objectiveRow.innerHTML = "";
-        const questWrap = h("span");
-        const objWrap = h("span");
-        const redrawObjectiveList = () => {
-          const q = RA.byId(proj.quests, pg.cond.objectiveQuestId);
-          const opts = [{ v: 0, l: "(none)" }].concat(((q && q.objectives) || []).map((obj, i) => ({ v: i, l: (i + 1) + ": " + (obj.label || obj.kind || "Objective") })));
-          objWrap.innerHTML = "";
-          objWrap.appendChild(sel(pg.cond, "objectiveIndex", opts));
-        };
-        questWrap.appendChild(sel(pg.cond, "objectiveQuestId", dbOpts(proj.quests, "(none)"), redrawObjectiveList));
-        redrawObjectiveList();
-        objectiveRow.appendChild(field("Objective Quest", questWrap));
-        objectiveRow.appendChild(field("Objective", objWrap));
-        objectiveRow.appendChild(field("Objective is", sel(pg.cond, "objectiveStatus", stringSelOpts(["incomplete", "completed"]))));
+      // ---- right pane: live inspector (Show Text inline; placeholder otherwise) ----
+      const inspector = h("div", { class: "event-inspector" });
+      let mountedCmd = null, dirtySinceMount = false, selfCommitting = false;
+      let cw;   // command-list widget, assigned below; inline commits trigger cw.redraw()
+      function showPlaceholder() {
+        mountedCmd = null;
+        inspector.innerHTML = "";
+        inspector.appendChild(h("div", { class: "ev-insp-empty" },
+          t("Select a command to edit here, or double-click any command to edit in the dialog.")));
       }
-      redrawObjectiveCond();
-      condBox.appendChild(objectiveRow);
-      // appearance / behaviour
+      function mountInspector(c) {
+        mountedCmd = c; dirtySinceMount = false;
+        inspector.innerHTML = "";
+        const formBox = h("div", { class: "ev-insp-form" });
+        const apply = mountForm(c, formBox);   // reuse the command's own form builder verbatim
+        inspector.appendChild(formBox);
+        if (!formBox.childNodes.length)        // no-parameter commands (erase/save/gameover/totitle)
+          formBox.appendChild(h("div", { class: "ev-insp-empty" }, t("This command has no parameters.")));
+        if (c.t === "choices" || c.t === "if") // nested branches are authored in the command tree, not here
+          inspector.appendChild(h("div", { class: "ev-insp-hint" }, t("Branch contents are edited in the command list.")));
+        function commit() {
+          if (!dirtySinceMount) { undoApi.snapshot(); dirtySinceMount = true; }  // one undo step per mount
+          apply();
+          touch();   // explicit: some forms (e.g. the message textarea) don't call touch() themselves
+          selfCommitting = true;
+          cw.redraw();   // refresh the command's list-row summary (same-identity → no remount)
+          selfCommitting = false;
+        }
+        formBox.addEventListener("input", commit);
+        formBox.addEventListener("change", commit);
+      }
+      // Selection → inspector. Same command during our own inline commit is a no-op (keeps
+      // focus); the same command from any OTHER cause (modal edit, undo/redo) force-remounts
+      // so the inspector re-reads a fresh working copy and never overwrites external edits.
+      function onSelect(cmd) {
+        if (cmd) {
+          if (cmd === mountedCmd && selfCommitting) return;
+          mountInspector(cmd);
+        } else {
+          showPlaceholder();
+        }
+      }
+      showPlaceholder();
+
+      // ---- left pane: Conditions + Appearance + Behaviour (always expanded) ----
+      function section(title, bodyKids, badge) {
+        const secHead = h("div", { class: "ev-sec-head" }, h("span", { class: "ev-sec-title" }, t(title)), badge || null);
+        return h("div", { class: "ev-section" }, secHead, h("div", { class: "ev-sec-body" }, ...bodyKids));
+      }
+
+      // Shared label-left / control-right row, used by Conditions, Appearance, and Behaviour.
+      function propRow(label, control) {
+        return h("div", { class: "prop-row" }, h("span", { class: "prop-label" }, t(label)), h("div", { class: "prop-ctrl" }, control));
+      }
+
+      const condBadge = h("span", { class: "ev-badge" });
+      function refreshConditions() {
+        const n = (pg.cond.switchId ? 1 : 0) + (pg.cond.varId ? 1 : 0) + (pg.cond.selfSw ? 1 : 0)
+          + (pg.cond.questId ? 1 : 0) + (pg.cond.objectiveQuestId ? 1 : 0);
+        condBadge.textContent = n ? n + " active" : "";
+        condBadge.style.display = n ? "" : "none";
+      }
+      // Quest objective condition: the objective dropdown depends on the chosen quest, so it
+      // rebuilds whenever the objective-quest selection changes (preserved from the quest system).
+      const objWrap = h("div", { class: "prop-ctrl" });
+      function redrawObjectiveList() {
+        const q = RA.byId(proj.quests, pg.cond.objectiveQuestId);
+        const opts = [{ v: 0, l: "(none)" }].concat(((q && q.objectives) || []).map((obj, i) => ({ v: i, l: (i + 1) + ": " + (obj.label || obj.kind || "Objective") })));
+        objWrap.innerHTML = "";
+        objWrap.appendChild(sel(pg.cond, "objectiveIndex", opts));
+      }
+      redrawObjectiveList();
+      const condSection = section("Conditions", [
+        h("div", { class: "prop-rows" },
+          propRow("Switch", sel(pg.cond, "switchId", switchOpts(), refreshConditions)),
+          propRow("Variable", h("div", { class: "cond-var" },
+            sel(pg.cond, "varId", varOpts(), refreshConditions),
+            h("span", { class: "cond-cmp" }, "≥"),
+            nIn(pg.cond, "varVal"))),
+          propRow("Self-Switch", sel(pg.cond, "selfSw",
+            [{ v: "", l: "(none)" }, { v: "A", l: "A" }, { v: "B", l: "B" }, { v: "C", l: "C" }, { v: "D", l: "D" }],
+            refreshConditions)),
+          propRow("Quest", sel(pg.cond, "questId", dbOpts(proj.quests, "(none)"), refreshConditions)),
+          propRow("Status", sel(pg.cond, "questStatus", stringSelOpts(["inactive", "active", "completed", "failed", "abandoned"]))),
+          propRow("Obj. quest", sel(pg.cond, "objectiveQuestId", dbOpts(proj.quests, "(none)"),
+            () => { refreshConditions(); redrawObjectiveList(); })),
+          h("div", { class: "prop-row" }, h("span", { class: "prop-label" }, t("Objective")), objWrap),
+          propRow("Obj. is", sel(pg.cond, "objectiveStatus", stringSelOpts(["incomplete", "completed"])))),
+      ], condBadge);
+      refreshConditions();
+
       const preview = h("span", { class: "char-preview" });
       function redrawPreview() {
         preview.innerHTML = "";
         const ci = Assets.charsetIndex(pg.charset);
         if (ci >= 0) preview.appendChild(Assets.charFrameCanvas(ci, pg.dir || 0, 1));
       }
-      const appBox = h("div", { class: "subbox" },
-        h("div", { class: "subhead" }, "Appearance & behaviour"),
-        row(field("Graphic", sel(pg, "charset", charsetOpts(), redrawPreview)), field("Facing", sel(pg, "dir", DIR_OPTS, redrawPreview)), preview),
-        row(field("Trigger", sel(pg, "trigger", [
+      redrawPreview();
+      const appSection = section("Appearance", [
+        h("div", { class: "appearance-row" },
+          h("div", { class: "prop-rows appearance-fields" },
+            propRow("Graphic", sel(pg, "charset", charsetOpts(), redrawPreview)),
+            propRow("Facing", sel(pg, "dir", DIR_OPTS, redrawPreview))),
+          preview),
+      ]);
+      const behSection = section("Behaviour", [
+        h("div", { class: "prop-rows" },
+          propRow("Trigger", sel(pg, "trigger", [
             { v: "action", l: "Action button" }, { v: "touch", l: "Player touch" },
             { v: "auto", l: "Autorun" }, { v: "parallel", l: "Parallel" }])),
-          field("Movement", sel(pg, "moveType", [{ v: "fixed", l: "Fixed" }, { v: "random", l: "Random" }])),
-          field("Priority", sel(pg, "priority", [{ v: "below", l: "Below player" }, { v: "same", l: "Same as player" }, { v: "above", l: "Above player" }])),
-          field("Through", chk(pg, "through"))),
-      );
-      redrawPreview();
-      pageBox.appendChild(condBox);
-      pageBox.appendChild(appBox);
-      const cw = cmdListWidget(() => ev.pages[pageIdx].commands, undoApi);
-      pageBox.appendChild(h("div", { class: "subhead" }, "Commands"));
-      pageBox.appendChild(cw.el);
+          propRow("Movement", sel(pg, "moveType", [{ v: "fixed", l: "Fixed" }, { v: "random", l: "Random" }])),
+          propRow("Priority", sel(pg, "priority", [{ v: "below", l: "Below player" }, { v: "same", l: "Same as player" }, { v: "above", l: "Above player" }])),
+          propRow("Through", chk(pg, "through"))),
+      ]);
+
+      const left = h("div", { class: "event-ide-col event-ide-left" }, condSection, appSection, behSection);
+
+      // ---- center pane: command list ----
+      cw = cmdListWidget(() => ev.pages[pageIdx].commands, undoApi, onSelect);
+      const center = h("div", { class: "event-ide-col event-ide-center" }, cw.el);
+
+      // ---- right pane: inspector ----
+      const right = h("div", { class: "event-ide-col event-ide-right" }, inspector);
+
+      pageBox.appendChild(h("div", { class: "event-ide" }, left, center, right));
     }
 
-    head.appendChild(row(field("Event name", tIn(ev, "name")),
-      h("div", { class: "fld" }, h("span", null, "Position"), h("span", { class: "dim" }, ev.x + ", " + ev.y))));
-    head.appendChild(tabs);
+    const evIcon = h("span", { class: "event-icon" });
+    evIcon.innerHTML = ICONS.event;   // the person glyph used by the Event tool in the main editor
+    const closeX = h("button", { class: "event-close", title: t("Close") }, "✕");
+    head.appendChild(h("div", { class: "event-topbar" },
+      h("div", { class: "event-topbar-id" },
+        evIcon,
+        tIn(ev, "name", "event-name-input")),
+      tabs,
+      closeX));
     head.appendChild(pageBox);
     redrawTabs(); redrawPage();
+
+    // Footer: map position pinned far left, OK/Cancel right-aligned like every other dialog.
+    const okBtn = h("button", { class: "primary" }, t("OK"));
+    const cancelBtn = h("button", null, t("Cancel"));
+    const footer = h("div", { class: "modal-btns event-footer" },
+      h("div", { class: "ef-left" },
+        h("span", { class: "event-pos-foot" },
+          h("span", { class: "epf-label" }, t("Map Position:")),
+          h("span", { class: "epf-val" }, ev.x + ", " + ev.y))),
+      h("div", { class: "ef-right" }, okBtn, cancelBtn));
 
     const evModal = modal({
       title: "Event — " + esc(evOriginal.name),
       content: head,
       wide: true,
+      class: "event-modal",
       dismissable: false,
       onClose() { closePageMenu(); document.removeEventListener("keydown", onEvKey); },
-      buttons: [
-        { label: "OK", primary: true, onClick(close) {
-          pushUndo();
-          Object.assign(evOriginal, ev);
-          touch(); renderMap(); close();
-        } },
-        { label: "Delete Event", onClick(close) {
-          confirmBox("Delete this event?", () => {
-            pushUndo();
-            const m = curMap();
-            m.events = m.events.filter((e) => e.id !== evOriginal.id);
-            selectedEvent = null;
-            touch(); renderMap(); refreshToolbar(); close();
-          });
-        } },
-        { label: "Cancel" },
-      ],
+      footer,
     });
+    okBtn.onclick = () => {
+      pushUndo();
+      Object.assign(evOriginal, ev);
+      touch(); renderMap(); evModal.close();
+    };
+    cancelBtn.onclick = () => evModal.close();
     evOverlay = evModal.el.parentElement;
+    closeX.onclick = () => evModal.close();   // ✕ in the header = Cancel (discard the working clone)
   }
 
   // ============================ database ============================

@@ -38,6 +38,19 @@ export const PATCH_NOTES = [
    },
   {
     date: "June 14, 2026",
+    title: "Event editor: 3-pane layout + live command inspector",
+    summary:
+      "Reorganized the event editor into a three-pane workspace and added an inline inspector that edits the selected command without opening a dialog.",
+    items: [
+      "Event editor now uses a 3-pane layout: Conditions, Appearance, and Behaviour on the left; the command list in the center; and a command inspector on the right.",
+      "The Conditions section shows an \"N active\" badge when page conditions are set.",
+      "Single-click a Show Text command to edit its speaker, face, and message live in the right-hand inspector; double-click any command to open the full editor dialog as before.",
+      "Command list is easier to scan with alternating row shading and a running command count next to the \"Commands\" heading.",
+      "Event name and page tabs moved into a single header bar; the map position now sits in the footer beside OK / Cancel.",
+    ],
+  },
+  {
+    date: "June 14, 2026",
     title: "Lighting polish: smoother lights, shadows disabled",
     summary:
       "Improve radial light visuals and temporarily disable shadow generation while debugging.",
