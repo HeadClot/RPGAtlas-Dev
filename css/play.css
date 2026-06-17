@@ -88,6 +88,13 @@ body { font: 15px/1.5 "Segoe UI", system-ui, sans-serif; color: #f0f2f8; }
   transform: scale(0.75); margin: -7px -2px -7px -4px;
   vertical-align: middle;
 }
+/* Procedural input-prompt glyph (\input[...]). Has class "msg-icon" so the typewriter reveals it
+   as one char; these rules (defined after .msg-icon) size it to the running text instead. */
+.input-glyph {
+  display: inline-block; height: 1.3em; width: auto;
+  transform: none; margin: 0 2px; vertical-align: -0.28em;
+  image-rendering: auto;
+}
 .msgwin.msg-done::after {
   content: "▼"; position: absolute; bottom: 4px; left: 50%;
   color: #c8d4f0; font-size: 12px; animation: bob 0.8s infinite;
@@ -95,6 +102,24 @@ body { font: 15px/1.5 "Segoe UI", system-ui, sans-serif; color: #f0f2f8; }
 @keyframes bob { 50% { transform: translateY(3px); } }
 
 .choicewin { left: auto; right: 16px; top: auto; bottom: 176px; transform: none; min-width: 180px; }
+
+/* ---------- options / controls (centered, inherits .listwin positioning) ---------- */
+.optionswin { min-width: 320px; }
+.optionswin .menu-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 28px;
+}
+.optionswin .menu-list li .bind {
+  color: #b8c6e6; opacity: 0.85;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.cap-prompt { text-align: center; min-width: 280px; }
+
+/* In-menu rebinder glyphs (Options ▸ Controls): same procedural icons as the editor grid,
+   a touch larger than running-text and vertically centered in the list rows. */
+.menu-list li .input-glyph { vertical-align: middle; }
+.bind-icon { height: 1.45em; vertical-align: middle; margin: 0 1px; }
+.bind-none { color: #7f88a6; opacity: 0.7; }
+.bind-name { margin-left: 6px; vertical-align: middle; }
 
 /* ---------- main menu ---------- */
 .mainmenu { left: auto; right: 14px; top: 14px; transform: none; min-width: 160px; }

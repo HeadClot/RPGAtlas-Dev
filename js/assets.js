@@ -93,6 +93,161 @@ const Assets = (() => {
     }
     return canvas;
   }
+
+  // ---------- input prompt glyphs (procedural; no atlas) ----------
+  // Small key-cap / gamepad-button icons for the editor rebind grid and the \input[...] message
+  // code. Drawn into a canvas so they inline into standalone exports for free (no asset to embed).
+  // The short token to draw ("A", "LB", arrows, a key cap) comes from RA.glyphText; RA is read
+  // lazily because assets.js loads before data.js in both shells.
+  const GLYPH_H = 30;            // canvas height in px; width adapts to the token
+  const GLYPH_FONT = '"Segoe UI", system-ui, Arial, sans-serif';
+  const glyphCanvasCache = {};
+  const glyphUrlCache = {};
+  // Per-family face-button accent colors. Xbox = lettered colors; PlayStation = classic symbol
+  // colors (✕ blue, ○ red, ▢ pink, △ green); Switch = neutral (white letter, no accent).
+  const FAMILY_FACE_COLORS = {
+    xbox: { face_south: "#6cc04a", face_east: "#e0584b", face_west: "#3f8ae0", face_north: "#e8b53a" },
+    ps: { face_south: "#7a9bd6", face_east: "#e0584b", face_west: "#d65fb0", face_north: "#57c08a" },
+    switch: null, // neutral: white letter on a dark circle
+  };
+  function raLookup() {
+    if (typeof RA !== "undefined" && RA) return RA;
+    if (typeof window !== "undefined" && window.RA) return window.RA;
+    return null;
+  }
+  function glyphToken(device, code, family) {
+    const R = raLookup();
+    return R && R.glyphText ? R.glyphText(device, code, family) : code;
+  }
+  function glyphShapeOf(device, code) {
+    if (device !== "gamepad") return "pill";
+    const R = raLookup();
+    return R && R.glyphShape ? R.glyphShape(code) : "pill";
+  }
+  function faceColor(family, code) {
+    const fam = FAMILY_FACE_COLORS[family] || FAMILY_FACE_COLORS.xbox;
+    return (fam && fam[code]) || "#eef1f6";
+  }
+  function dirOf(code) {
+    if (/up$/.test(code)) return "up";
+    if (/down$/.test(code)) return "down";
+    if (/left$/.test(code)) return "left";
+    if (/right$/.test(code)) return "right";
+    return null;
+  }
+  function roundRectPath(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+  // A direction arrowhead, shared by the d-pad and analog-stick glyphs.
+  function drawArrow(g, cx, cy, dir, s) {
+    g.beginPath();
+    if (dir === "up") { g.moveTo(cx, cy - s); g.lineTo(cx - s, cy + s * 0.7); g.lineTo(cx + s, cy + s * 0.7); }
+    else if (dir === "down") { g.moveTo(cx, cy + s); g.lineTo(cx - s, cy - s * 0.7); g.lineTo(cx + s, cy - s * 0.7); }
+    else if (dir === "left") { g.moveTo(cx - s, cy); g.lineTo(cx + s * 0.7, cy - s); g.lineTo(cx + s * 0.7, cy + s); }
+    else { g.moveTo(cx + s, cy); g.lineTo(cx - s * 0.7, cy - s); g.lineTo(cx - s * 0.7, cy + s); }
+    g.closePath(); g.fill();
+  }
+  // D-pad: a plus/cross silhouette with a direction arrowhead at the centre.
+  function drawDpad(g, W, H, dir) {
+    const cx = W / 2, cy = H / 2, t = Math.round(H * 0.32), pad = 3;
+    const grad = g.createLinearGradient(0, pad, 0, H - pad);
+    grad.addColorStop(0, "#41454f"); grad.addColorStop(1, "#2a2d35");
+    g.fillStyle = grad;
+    roundRectPath(g, cx - t / 2, pad, t, H - pad * 2, 3); g.fill();
+    roundRectPath(g, pad, cy - t / 2, W - pad * 2, t, 3); g.fill();
+    g.lineWidth = 1.2; g.strokeStyle = "#11131a";
+    roundRectPath(g, cx - t / 2, pad, t, H - pad * 2, 3); g.stroke();
+    roundRectPath(g, pad, cy - t / 2, W - pad * 2, t, 3); g.stroke();
+    if (dir) { g.fillStyle = "#cdd6e6"; drawArrow(g, cx, cy, dir, H * 0.20); }
+  }
+  // Analog stick: a round stick-top (ring) with either a push-direction arrow or an L3/R3 label.
+  function drawStick(g, W, H, dir, label) {
+    const cx = W / 2, cy = H / 2, r = (Math.min(W, H) - 6) / 2;
+    const grad = g.createRadialGradient(cx, cy - r * 0.3, r * 0.2, cx, cy, r);
+    grad.addColorStop(0, "#4a4f5b"); grad.addColorStop(1, "#23262e");
+    g.fillStyle = grad;
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    g.lineWidth = 1.5; g.strokeStyle = "#11131a";
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+    g.lineWidth = 1; g.strokeStyle = "rgba(180,190,210,0.35)"; // concave inner lip
+    g.beginPath(); g.arc(cx, cy, r * 0.55, 0, Math.PI * 2); g.stroke();
+    if (dir) { g.fillStyle = "#cdd6e6"; drawArrow(g, cx, cy, dir, r * 0.5); }
+    else if (label) { g.fillStyle = "#eef1f6"; g.fillText(label, cx, cy + 0.5); }
+  }
+  function inputGlyphCanvas(device, code, family) {
+    family = device === "gamepad" ? (family || "xbox") : "xbox";
+    const key = device + "_" + code + "_" + family;
+    if (glyphCanvasCache[key]) return glyphCanvasCache[key];
+    const shape = glyphShapeOf(device, code);
+    const H = GLYPH_H, inset = 1.5;
+    let canvas, g, W;
+    if (shape === "dpad" || shape === "stick") {
+      W = H; canvas = mkCanvas(W, H); g = canvas.getContext("2d");
+      g.textAlign = "center"; g.textBaseline = "middle";
+      if (shape === "dpad") drawDpad(g, W, H, dirOf(code));
+      else drawStick(g, W, H, dirOf(code), null);
+    } else if (shape === "stick_click") {
+      W = H; canvas = mkCanvas(W, H); g = canvas.getContext("2d");
+      g.font = "600 " + Math.round(H * 0.40) + "px " + GLYPH_FONT;
+      g.textAlign = "center"; g.textBaseline = "middle";
+      drawStick(g, W, H, null, String(glyphToken(device, code, family) || "L3"));
+    } else if (shape === "face") {
+      W = H; canvas = mkCanvas(W, H); g = canvas.getContext("2d");
+      const txt = String(glyphToken(device, code, family) || code || "?");
+      g.font = "600 " + Math.round(H * (txt.length > 1 ? 0.46 : 0.56)) + "px " + GLYPH_FONT;
+      g.textAlign = "center"; g.textBaseline = "middle";
+      const cx = W / 2, r = (H - inset * 2) / 2;
+      const grad = g.createLinearGradient(0, inset, 0, H - inset);
+      grad.addColorStop(0, "#3a3f4b"); grad.addColorStop(1, "#23262e");
+      g.fillStyle = grad;
+      g.beginPath(); g.arc(cx, H / 2, r, 0, Math.PI * 2); g.fill();
+      g.lineWidth = 1.5; g.strokeStyle = "#11131a";
+      g.beginPath(); g.arc(cx, H / 2, r, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = faceColor(family, code);
+      g.fillText(txt, cx, H / 2 + 0.5);
+    } else {
+      // pill / key-cap (bumpers, triggers, start/select, all keyboard codes) — width fits the token.
+      const txt = String(glyphToken(device, code, family) || code || "?");
+      const fontPx = Math.round(H * (txt.length > 1 ? 0.46 : 0.56));
+      const meas = mkCanvas(2, 2).getContext("2d");
+      meas.font = "600 " + fontPx + "px " + GLYPH_FONT;
+      const tw = Math.ceil(meas.measureText(txt).width);
+      W = Math.max(H, tw + Math.round(H * 0.7));
+      canvas = mkCanvas(W, H); g = canvas.getContext("2d");
+      g.font = "600 " + fontPx + "px " + GLYPH_FONT;
+      g.textAlign = "center"; g.textBaseline = "middle";
+      const grad = g.createLinearGradient(0, inset, 0, H - inset);
+      grad.addColorStop(0, "#41454f"); grad.addColorStop(1, "#2a2d35");
+      g.fillStyle = grad;
+      roundRectPath(g, inset, inset, W - inset * 2, H - inset * 2, 6); g.fill();
+      g.lineWidth = 1.5; g.strokeStyle = "#11131a";
+      roundRectPath(g, inset, inset, W - inset * 2, H - inset * 2, 6); g.stroke();
+      g.fillStyle = "#eef1f6";
+      g.fillText(txt, W / 2, H / 2 + 0.5);
+    }
+    glyphCanvasCache[key] = canvas;
+    return canvas;
+  }
+  // Cached data: URL — use this for an <img> (a cached canvas node can only live in one place).
+  function inputGlyphDataUrl(device, code, family) {
+    family = device === "gamepad" ? (family || "xbox") : "xbox";
+    const key = device + "_" + code + "_" + family;
+    if (!glyphUrlCache[key]) glyphUrlCache[key] = inputGlyphCanvas(device, code, family).toDataURL();
+    return glyphUrlCache[key];
+  }
+  function inputGlyphHtml(device, code, family, className) {
+    const R = raLookup();
+    const alt = (R && R.codeLabel ? R.codeLabel(device, code, family) : code) || "";
+    const cls = "input-glyph" + (className ? " " + className : "");
+    return '<img class="' + cls + '" draggable="false" alt="' +
+      String(alt).replace(/"/g, "&quot;") + '" src="' + inputGlyphDataUrl(device, code, family) + '">';
+  }
   async function discoverFolder(type) {
     try {
       const res = await fetch("img/" + type + "/");
@@ -1256,6 +1411,7 @@ const Assets = (() => {
     HAIR_STYLES, registerHuman, removeCharset, registerCustomChars,
     ENEMY_TYPES, enemyCanvas, assetLabel, loadExternalAssets, bindExternalAssets, exportUsedExternalAssets,
     ICON_SIZE, ICON_COUNT, loadIconSet, iconSpan, iconHtml, iconCanvas,
+    inputGlyphCanvas, inputGlyphDataUrl, inputGlyphHtml,
   };
 })();
 

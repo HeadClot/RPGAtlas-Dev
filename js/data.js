@@ -129,6 +129,191 @@ const RA = {
       defeatSelfSwitch: "",
     };
   },
+  // --- Input system (keyboard + gamepad bindings, remappable) ---
+  // Generic positional gamepad button names, in W3C "Standard Gamepad" index order (0..15).
+  PAD_BUTTONS: [
+    "face_south", "face_east", "face_west", "face_north",
+    "bumper_l", "bumper_r", "trigger_l", "trigger_r",
+    "select", "start", "stick_l", "stick_r",
+    "dpad_up", "dpad_down", "dpad_left", "dpad_right",
+  ],
+  // Logical input actions the engine + menus consume.
+  INPUT_ACTIONS: [
+    { key: "up", label: "Up" },
+    { key: "down", label: "Down" },
+    { key: "left", label: "Left" },
+    { key: "right", label: "Right" },
+    { key: "ok", label: "Confirm" },
+    { key: "cancel", label: "Cancel" },
+    { key: "dash", label: "Dash" },
+    { key: "attack", label: "Attack" },
+  ],
+  // Default bindings. keyboard = arrays of KeyboardEvent.code; gamepad = arrays of PAD_BUTTONS
+  // names. Keyboard values match the engine's original hard-coded bindings for exact parity.
+  defaultInput() {
+    return {
+      keyboard: {
+        up: ["ArrowUp", "KeyW"], down: ["ArrowDown", "KeyS"],
+        left: ["ArrowLeft", "KeyA"], right: ["ArrowRight", "KeyD"],
+        ok: ["KeyZ", "Enter", "Space"], cancel: ["KeyX", "Escape"],
+        dash: ["ShiftLeft", "ShiftRight"], attack: ["KeyJ"],
+      },
+      gamepad: {
+        // Directions bind both the D-Pad and the left stick (the poller synthesizes
+        // lstick_* names from the stick axes) so each is a visible, editable binding.
+        up: ["dpad_up", "lstick_up"], down: ["dpad_down", "lstick_down"],
+        left: ["dpad_left", "lstick_left"], right: ["dpad_right", "lstick_right"],
+        ok: ["face_south"], cancel: ["face_east"], dash: ["face_west"], attack: ["face_north"],
+      },
+      stickDeadzone: 0.5,
+    };
+  },
+  // Merge a player's override bindings over project (author) defaults, falling back to engine
+  // defaults for any missing action. Pure (returns a fresh deep copy); used by the runtime at
+  // boot and by the headless test.
+  mergeInputBindings(projInput, override) {
+    const di = this.defaultInput();
+    const pick = (dev, key) =>
+      projInput && projInput[dev] && Array.isArray(projInput[dev][key])
+        ? projInput[dev][key]
+        : di[dev][key];
+    const out = { keyboard: {}, gamepad: {}, stickDeadzone: di.stickDeadzone };
+    if (projInput && projInput.stickDeadzone != null) out.stickDeadzone = projInput.stickDeadzone;
+    for (const a of this.INPUT_ACTIONS) {
+      out.keyboard[a.key] = pick("keyboard", a.key).slice();
+      out.gamepad[a.key] = pick("gamepad", a.key).slice();
+    }
+    if (override) {
+      for (const dev of ["keyboard", "gamepad"]) {
+        if (!override[dev]) continue;
+        for (const a of this.INPUT_ACTIONS) {
+          if (Array.isArray(override[dev][a.key])) out[dev][a.key] = override[dev][a.key].slice();
+        }
+      }
+      if (override.stickDeadzone != null) out.stickDeadzone = override.stickDeadzone;
+    }
+    return out;
+  },
+  // Returns the action a key/button is already bound to on a device, or null. Ignores
+  // `exceptAction` so re-binding an action onto a code it already owns isn't a conflict.
+  inputConflict(bindings, device, code, exceptAction) {
+    const dev = bindings && bindings[device];
+    if (!dev) return null;
+    for (const a of this.INPUT_ACTIONS) {
+      if (a.key === exceptAction) continue;
+      if (Array.isArray(dev[a.key]) && dev[a.key].indexOf(code) !== -1) return a.key;
+    }
+    return null;
+  },
+  // Actions that must never be left with no binding on a device, or the player could lock
+  // themselves out of the menus these drive (Confirm/Cancel). The rebinder enforces it per device.
+  INPUT_CRITICAL: ["ok", "cancel"],
+  // Human-readable labels for raw key/button codes. Verbose form for menus/lists
+  // ("Up Arrow", "Face Down (A)", KeyZ -> "Z"). These live in RA (not input.js) so the editor
+  // -- which never loads runtime/input.js -- and the runtime share one source. input.js
+  // delegates label formatting here lazily (RA exists by the time any input function runs).
+  KB_LABELS: {
+    ArrowUp: "Up Arrow", ArrowDown: "Down Arrow", ArrowLeft: "Left Arrow", ArrowRight: "Right Arrow",
+    Enter: "Enter", Space: "Space", Escape: "Esc", Tab: "Tab", Backspace: "Backspace",
+    ShiftLeft: "L-Shift", ShiftRight: "R-Shift", ControlLeft: "L-Ctrl", ControlRight: "R-Ctrl",
+    AltLeft: "L-Alt", AltRight: "R-Alt",
+  },
+  PAD_LABELS: {
+    face_south: "Face Down (A)", face_east: "Face Right (B)", face_west: "Face Left (X)", face_north: "Face Up (Y)",
+    bumper_l: "L Bumper", bumper_r: "R Bumper", trigger_l: "L Trigger", trigger_r: "R Trigger",
+    select: "Select", start: "Start", stick_l: "L Stick (click)", stick_r: "R Stick (click)",
+    dpad_up: "D-Pad Up", dpad_down: "D-Pad Down", dpad_left: "D-Pad Left", dpad_right: "D-Pad Right",
+    lstick_up: "L-Stick Up", lstick_down: "L-Stick Down", lstick_left: "L-Stick Left", lstick_right: "L-Stick Right",
+  },
+  // Controller "families". Bindings are stored by POSITION (face_south = W3C Standard Gamepad
+  // index 0) on every controller; family only changes how a code is DRAWN/LABELLED. PAD_LABELS /
+  // GLYPH_TEXT above are the Xbox (default) set; the tables below hold only the codes that differ.
+  PAD_FAMILIES: [
+    { key: "xbox", label: "Xbox" },
+    { key: "ps", label: "PlayStation" },
+    { key: "switch", label: "Nintendo Switch" },
+  ],
+  // Verbose label overrides per family (menus/lists). Xbox omitted -> falls back to PAD_LABELS.
+  FAMILY_PAD_LABELS: {
+    ps: {
+      face_south: "Cross", face_east: "Circle", face_west: "Square", face_north: "Triangle",
+      bumper_l: "L1", bumper_r: "R1", trigger_l: "L2", trigger_r: "R2",
+      select: "Share", start: "Options", stick_l: "L3 (click)", stick_r: "R3 (click)",
+    },
+    switch: {
+      face_south: "B Button", face_east: "A Button", face_west: "Y Button", face_north: "X Button",
+      bumper_l: "L", bumper_r: "R", trigger_l: "ZL", trigger_r: "ZR",
+      select: "Minus (−)", start: "Plus (+)",
+    },
+  },
+  // Compact glyph-token overrides per family (drawn inside a chip). Xbox omitted -> GLYPH_TEXT.
+  FAMILY_GLYPH_TEXT: {
+    ps: {
+      face_south: "✕", face_east: "○", face_west: "▢", face_north: "△",
+      bumper_l: "L1", bumper_r: "R1", trigger_l: "L2", trigger_r: "R2",
+    },
+    switch: {
+      face_south: "B", face_east: "A", face_west: "Y", face_north: "X",
+      bumper_l: "L", bumper_r: "R", trigger_l: "ZL", trigger_r: "ZR",
+      select: "−", start: "+",
+    },
+  },
+  codeLabel(device, code, family) {
+    if (device === "gamepad") {
+      const fam = family && family !== "xbox" ? this.FAMILY_PAD_LABELS[family] : null;
+      if (fam && fam[code]) return fam[code];
+      return this.PAD_LABELS[code] || code;
+    }
+    if (this.KB_LABELS[code]) return this.KB_LABELS[code];
+    if (/^Key.$/.test(code)) return code.slice(3); // KeyZ -> Z
+    if (/^Digit.$/.test(code)) return code.slice(5); // Digit1 -> 1
+    if (/^Numpad/.test(code)) return "Num " + code.slice(6);
+    return code;
+  },
+  // Compact token for DRAWING a glyph chip (button icon / keycap), distinct from the verbose
+  // codeLabel above. Keyboard/gamepad code namespaces don't collide, so one flat map keys both.
+  GLYPH_TEXT: {
+    face_south: "A", face_east: "B", face_west: "X", face_north: "Y",
+    bumper_l: "LB", bumper_r: "RB", trigger_l: "LT", trigger_r: "RT",
+    select: "⧉", start: "≡", stick_l: "L3", stick_r: "R3",
+    dpad_up: "↑", dpad_down: "↓", dpad_left: "←", dpad_right: "→",
+    lstick_up: "↑", lstick_down: "↓", lstick_left: "←", lstick_right: "→",
+    ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→",
+    Space: "␣", Enter: "↵", Escape: "Esc", Backspace: "⌫", Tab: "⇥",
+    ShiftLeft: "⇧", ShiftRight: "⇧", ControlLeft: "Ctrl", ControlRight: "Ctrl",
+    AltLeft: "Alt", AltRight: "Alt",
+  },
+  glyphText(device, code, family) {
+    if (device === "gamepad" && family && family !== "xbox") {
+      const fov = this.FAMILY_GLYPH_TEXT[family];
+      if (fov && fov[code]) return fov[code];
+    }
+    if (this.GLYPH_TEXT[code]) return this.GLYPH_TEXT[code];
+    if (device === "keyboard") {
+      if (/^Key.$/.test(code)) return code.slice(3);
+      if (/^Digit.$/.test(code)) return code.slice(5);
+      if (/^Numpad(.+)$/.test(code)) return code.slice(6);
+    }
+    return this.codeLabel(device, code, family);
+  },
+  // Drawing category for a button/key code, so the glyph renderer can pick a SHAPE (d-pad cross,
+  // analog-stick ring, key-cap pill...) instead of just a text token. Direction (up/down/left/
+  // right) is parsed from the code suffix by the renderer.
+  glyphShape(code) {
+    if (/^face_/.test(code)) return "face";
+    if (/^dpad_/.test(code)) return "dpad";
+    if (/^[lr]stick_(up|down|left|right)$/.test(code)) return "stick";
+    if (code === "stick_l" || code === "stick_r") return "stick_click";
+    return "pill"; // bumpers, triggers, start/select, all keyboard codes
+  },
+  // Classify a connected gamepad by its Gamepad.id string -> controller family. Pure (no
+  // navigator access) so it's unit-testable; runtime/input.js feeds it the live pad id.
+  padFamilyFromId(id) {
+    const s = String(id || "").toLowerCase();
+    if (/(054c|dualsense|dualshock|playstation)/.test(s)) return "ps";
+    if (/(057e|pro controller|joy-?con|nintendo|switch)/.test(s)) return "switch";
+    return "xbox"; // Xbox / XInput / unknown all use the Xbox positional set
+  },
   defaultStates() {
     return [
       { id: 1, name: "Poison", icon: 12, color: "#a050d8", restrict: "none", hpTurn: -12, minTurns: 3, maxTurns: 5, removeAtEnd: true },
@@ -166,6 +351,13 @@ const RA = {
     if (sys.windowOpacity == null) sys.windowOpacity = 93;
     sys.sounds = Object.assign(RA.defaultSounds(), sys.sounds || {});
     sys.music = Object.assign(RA.defaultMusic(), sys.music || {});
+    // v3 input bindings (keyboard + gamepad, remappable). Backfill per action so a partial
+    // author override survives while new/missing actions gain defaults.
+    const defInput = RA.defaultInput();
+    sys.input = sys.input || {};
+    sys.input.keyboard = Object.assign({}, defInput.keyboard, sys.input.keyboard || {});
+    sys.input.gamepad = Object.assign({}, defInput.gamepad, sys.input.gamepad || {});
+    if (sys.input.stickDeadzone == null) sys.input.stickDeadzone = defInput.stickDeadzone;
     // v3 element/skill/weapon/armor/equipment type lists (Database ▸ Types)
     const defTypes = RA.defaultTypes();
     sys.types = sys.types || {};
@@ -742,6 +934,7 @@ const DataDefaults = (() => {
         sounds: RA.defaultSounds(),
         music: RA.defaultMusic(),
         types: RA.defaultTypes(),
+        input: RA.defaultInput(),
       },
       actors: [
         { id: 1, name: "Ardan", classId: 1, level: 1, charset: "hero",    weaponId: 1, armorId: 1 },

@@ -15,6 +15,12 @@ These work out of the box:
 | `\v[n]` | The current value of **variable** number `n` |
 | `\n[id]` | The **name** of actor `id` (so dialogue can say the hero's name) |
 | `\g` | The **currency/gold** amount (or label) |
+| `\input[action]` | The **button glyph** for a bound control, auto-matched to the player's keyboard or gamepad |
+
+The `\input` action is one of the input actions from **Database ▸ Controls**: `up`, `down`, `left`,
+`right`, `ok`, `cancel`, `dash`, `attack`. The glyph follows whatever the player has bound and which
+device they're using — e.g. `Press \input[ok] to continue` shows the **Z** key-cap on a keyboard, or
+**A** / **✕** / **B** on an Xbox / PlayStation / Switch pad. It's chosen when the message opens.
 
 Messages also use **typewriter** display by default — text appears letter by letter.
 
