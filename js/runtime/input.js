@@ -287,7 +287,7 @@ function createInputSystem(deps) {
         if (isDown) anyDown = true;
         const wasDown = !!prev[a];
         if (isDown && !wasDown) {
-          // fresh press — route by precedence (menu > map edge). capture lands in phase 4.
+          // fresh press — route by precedence (menu > map edge).
           if (isMenuOpen()) onMenuNav(a);
           else edges[a] = true;
           slot.navHeld[a] = 0;

@@ -137,7 +137,7 @@ const RA = {
     "select", "start", "stick_l", "stick_r",
     "dpad_up", "dpad_down", "dpad_left", "dpad_right",
   ],
-  // Logical input actions the engine + menus consume (mirrors engine keyName()).
+  // Logical input actions the engine + menus consume.
   INPUT_ACTIONS: [
     { key: "up", label: "Up" },
     { key: "down", label: "Down" },
@@ -149,7 +149,7 @@ const RA = {
     { key: "attack", label: "Attack" },
   ],
   // Default bindings. keyboard = arrays of KeyboardEvent.code; gamepad = arrays of PAD_BUTTONS
-  // names. Keyboard values are copied verbatim from engine keyName() for exact parity.
+  // names. Keyboard values match the engine's original hard-coded bindings for exact parity.
   defaultInput() {
     return {
       keyboard: {
