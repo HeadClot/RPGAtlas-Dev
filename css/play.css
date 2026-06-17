@@ -96,6 +96,14 @@ body { font: 15px/1.5 "Segoe UI", system-ui, sans-serif; color: #f0f2f8; }
 
 .choicewin { left: auto; right: 16px; top: auto; bottom: 176px; transform: none; min-width: 180px; }
 
+/* ---------- options / controls (centered, inherits .listwin positioning) ---------- */
+.optionswin { min-width: 320px; }
+.optionswin .menu-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 28px;
+}
+.optionswin .menu-list li .bind { color: #b8c6e6; opacity: 0.85; }
+.cap-prompt { text-align: center; min-width: 280px; }
+
 /* ---------- main menu ---------- */
 .mainmenu { left: auto; right: 14px; top: 14px; transform: none; min-width: 160px; }
 .menupanel { left: 14px; top: 14px; width: 430px; z-index: 15; }

@@ -10,6 +10,7 @@ const _Music = window.RPGAtlasDeps.Music;
 const _RA = window.RPGAtlasDeps.RA;
 const _Sfx = window.RPGAtlasDeps.Sfx;
 const _createMessageSystem = window.createMessageSystem;
+const _createInputSystem = window.createInputSystem;
 
 (() => {
   const Assets = _Assets;
@@ -19,6 +20,7 @@ const _createMessageSystem = window.createMessageSystem;
   const RA = _RA;
   const Sfx = _Sfx;
   const createMessageSystem = _createMessageSystem;
+  const createInputSystem = _createInputSystem;
 
   const TILE = Assets.TILE;
   // defaults (overridden at boot from system.screenWidth/Height)
@@ -75,58 +77,9 @@ const _createMessageSystem = window.createMessageSystem;
 
   // ============================ input / UI stack ============================
   const UIStack = [];
-  let okTriggered = false,
-    cancelTriggered = false,
-    attackTriggered = false;
-  const held = {};
-  function keyName(e) {
-    switch (e.code) {
-      case "ArrowUp":
-      case "KeyW":
-        return "up";
-      case "ArrowDown":
-      case "KeyS":
-        return "down";
-      case "ArrowLeft":
-      case "KeyA":
-        return "left";
-      case "ArrowRight":
-      case "KeyD":
-        return "right";
-      case "KeyZ":
-      case "Enter":
-      case "Space":
-        return "ok";
-      case "KeyX":
-      case "Escape":
-        return "cancel";
-      case "ShiftLeft":
-      case "ShiftRight":
-        return "dash";
-      case "KeyJ":
-        return "attack";
-      default:
-        return null;
-    }
-  }
-  document.addEventListener("keydown", (e) => {
-    const k = keyName(e);
-    if (!k) return;
-    e.preventDefault();
-    held[k] = true;
-    if (e.repeat && (k === "ok" || k === "cancel")) return;
-    if (UIStack.length) {
-      UIStack[UIStack.length - 1].onKey(k);
-    } else {
-      if (k === "ok") okTriggered = true;
-      if (k === "cancel") cancelTriggered = true;
-      if (k === "attack") attackTriggered = true;
-    }
-  });
-  document.addEventListener("keyup", (e) => {
-    const k = keyName(e);
-    if (k) held[k] = false;
-  });
+  // All physical input flows through the unified Input system (js/runtime/input.js);
+  // it is instantiated near the message-system wiring once UIStack/onKey exist.
+  let Input = null;
 
   function pushUI(ui) {
     UIStack.push(ui);
@@ -1311,6 +1264,19 @@ const _createMessageSystem = window.createMessageSystem;
     removeUI,
   }));
 
+  // Unified input (keyboard + gamepad). Engine + menu code reads named actions through
+  // this; the in-game Controls menu rebinds them via Input.beginCapture. Menu navigation
+  // is gated here: while any UI is open a press is routed to UIStack.top.onKey and never
+  // queued as a map edge.
+  Input = createInputSystem({
+    defaultBindings: RA.defaultInput(),
+    isMenuOpen: () => UIStack.length > 0,
+    onMenuNav: (action) => {
+      if (UIStack.length) UIStack[UIStack.length - 1].onKey(action);
+    },
+  });
+  Input.attachDOM(document);
+
   let frameWaiters = [];
   function frameWait() { return new Promise((r) => frameWaiters.push(r)); }
   // Tick-accurate timers: counted in update(), so event waits/tweens advance by ticks even
@@ -1382,9 +1348,11 @@ const _createMessageSystem = window.createMessageSystem;
     frameWaiters = [];
     waiters.forEach((r) => r());
     pumpTickTimers(); // advance tick-accurate event timers (wait / camera-zoom)
+    // Rebuild this frame's input edge set before any early-return, so title/pause
+    // menus see a clean edge set every tick and nothing stays latched across them.
+    Input.poll();
     if (scene === "map") Plugins.fire("update");
     if (scene !== "map" || menuOpen) {
-      attackTriggered = false;
       return;
     }
 
@@ -1396,14 +1364,14 @@ const _createMessageSystem = window.createMessageSystem;
     // next one immediately, so there's no dead frame at each tile. activePlayerControl()
     // stays false during events/battles, so chaining can't spawn a spurious move.
     if (p.moving) {
-      const arrived = updateEntityMotion(p, held.dash ? 0.13 : 0.085);
+      const arrived = updateEntityMotion(p, Input.pressed("dash") ? 0.13 : 0.085);
       if (arrived) onPlayerStep();
     }
     if (!p.moving && p.route) {
       updateRoute(p);
     } else if (!p.moving && activePlayerControl()) {
-      const d = held.down ? 0 : held.left ? 1 : held.right ? 2 : held.up ? 3 : -1;
-      if (attackTriggered) {
+      const d = Input.dir();
+      if (Input.consume("attack")) {
         startPlayerAttack();
       } else if (d >= 0) {
         p.dir = d;
@@ -1422,16 +1390,9 @@ const _createMessageSystem = window.createMessageSystem;
           p.animT = p.animT || 0;
         }
       }
-      if (okTriggered) checkActionTrigger();
-      if (cancelTriggered) {
-        cancelTriggered = false;
-        okTriggered = false;
-        openMenu();
-      }
+      if (Input.consume("ok")) checkActionTrigger();
+      if (Input.consume("cancel")) openMenu();
     }
-    okTriggered = false;
-    cancelTriggered = false;
-    attackTriggered = false;
     if (p.moving) p.animT = (p.animT || 0) + 0; // animT advanced in motion fn
     updateMapCombat();
 
@@ -1761,6 +1722,7 @@ const _createMessageSystem = window.createMessageSystem;
                 ) + "Status",
             },
             { html: Assets.iconHtml(16, "menu-icon") + "Journal" },
+            { html: Assets.iconHtml(46, "menu-icon") + "Options" },
             { html: Assets.iconHtml(44, "menu-icon") + "Save" },
             { html: Assets.iconHtml(45, "menu-icon") + "Load" },
             { html: Assets.iconHtml(47, "menu-icon") + "To Title" },
@@ -1769,7 +1731,7 @@ const _createMessageSystem = window.createMessageSystem;
         );
         if (i < 0) break;
         idx = i;
-        
+
         if (i === 0) {
           await menuItems();
         } else if (i === 1) {
@@ -1786,10 +1748,12 @@ const _createMessageSystem = window.createMessageSystem;
             panel.style.display = "";
           }
         } else if (i === 5) {
-          await saveLoadMenu("save");
+          await optionsMenu();
         } else if (i === 6) {
-          if (await saveLoadMenu("load")) break;
+          await saveLoadMenu("save");
         } else if (i === 7) {
+          if (await saveLoadMenu("load")) break;
+        } else if (i === 8) {
           const c = await showList(
             [{ label: "Return to title" }, { label: "Cancel" }],
             { className: "choicewin" },
@@ -1806,6 +1770,175 @@ const _createMessageSystem = window.createMessageSystem;
       panel.remove();
       menuOpen = false;
     }
+  }
+
+  // ---- player options (per-player overrides: input rebinds + music toggle) ----
+  // Stored separately from the project so author defaults stay intact and a player's
+  // remaps/preferences persist across sessions. Per-game namespaced like saveKey().
+  let playerOptions = {};
+  function optionsKey() {
+    const gameId = window.RPGATLAS_GAME_ID;
+    return gameId ? "rpgatlas_" + gameId + "_options" : "rpgatlas_options";
+  }
+  function loadOptions() {
+    try {
+      const raw = localStorage.getItem(optionsKey());
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveOptions() {
+    try {
+      localStorage.setItem(optionsKey(), JSON.stringify(playerOptions));
+    } catch (e) {}
+  }
+  function setMusicEnabled(on) {
+    Music.setEnabled(on);
+    playerOptions.music = { enabled: on };
+    saveOptions();
+  }
+
+  // In-game Options: rebind keyboard / gamepad per action (editable list — add / replace
+  // / remove), music toggle, reset. Built on showList/UIStack; capture uses
+  // Input.beginCapture (ignore-held-until-release + conflict prompt). Player overrides
+  // persist to the options store and apply live via Input.setBindings.
+  function actionLabel(key) {
+    const a = RA.INPUT_ACTIONS.find((x) => x.key === key);
+    return a ? a.label : key;
+  }
+  async function optionsMenu() {
+    let idx = 0;
+    while (true) {
+      const i = await showList(
+        [
+          { label: "Keyboard" },
+          { label: "Gamepad" },
+          { label: "Music: " + (Music.enabled ? "On" : "Off") },
+          { label: "Reset to Defaults" },
+          { label: "Back" },
+        ],
+        { title: "Options", className: "optionswin", start: idx },
+      );
+      if (i < 0 || i === 4) return;
+      idx = i;
+      if (i === 0) await controlsDevice("keyboard");
+      else if (i === 1) await controlsDevice("gamepad");
+      else if (i === 2) setMusicEnabled(!Music.enabled);
+      else if (i === 3) {
+        const c = await showList(
+          [{ label: "Reset all controls" }, { label: "Cancel" }],
+          { title: "Reset controls to defaults?" },
+        );
+        if (c === 0) {
+          delete playerOptions.input;
+          Input.setBindings(RA.mergeInputBindings(proj.system.input, null));
+          saveOptions();
+        }
+      }
+    }
+  }
+  // Per-device action list: each row shows the action and its joined bindings.
+  async function controlsDevice(device) {
+    let idx = 0;
+    while (true) {
+      const rows = RA.INPUT_ACTIONS.map((a) => ({
+        html:
+          "<span>" + esc(a.label) + "</span>" +
+          "<span class='bind'>" + esc(Input.label(device, a.key)) + "</span>",
+        help: "Press Confirm to edit " + a.label,
+      }));
+      const i = await showList(rows, {
+        title: (device === "keyboard" ? "Keyboard" : "Gamepad") + " — pick an action",
+        className: "optionswin",
+        start: idx,
+      });
+      if (i < 0) return;
+      idx = i;
+      await actionBindings(device, RA.INPUT_ACTIONS[i].key);
+    }
+  }
+  // Editable binding list for one action: existing bindings + Add + Back. Selecting a
+  // binding offers Replace / Remove; Add captures a new one. First entry = primary.
+  async function actionBindings(device, action) {
+    let idx = 0;
+    while (true) {
+      const arr = (Input.getBindings()[device] || {})[action] || [];
+      const items = arr.map((code) => ({ label: Input.codeLabel(device, code) }));
+      items.push({ label: "+ Add binding" });
+      items.push({ label: "Back" });
+      const i = await showList(items, {
+        title: actionLabel(action) + " — " + (device === "keyboard" ? "Keyboard" : "Gamepad"),
+        start: idx,
+      });
+      if (i < 0 || i === items.length - 1) return; // cancel or Back
+      idx = i;
+      if (i === arr.length) {
+        const code = await rebindCapture(device);
+        if (code) await applyCapturedCode(device, action, code, -1);
+      } else {
+        const c = await showList(
+          [{ label: "Replace" }, { label: "Remove" }, { label: "Cancel" }],
+          { title: Input.codeLabel(device, arr[i]) },
+        );
+        if (c === 0) {
+          const code = await rebindCapture(device);
+          if (code) await applyCapturedCode(device, action, code, i);
+        } else if (c === 1) {
+          removeBinding(device, action, i);
+        }
+      }
+    }
+  }
+  // Show a centered "press any input" prompt and resolve to the captured code, or null
+  // if cancelled. The capture itself (ignore-held-until-release) lives in input.js.
+  async function rebindCapture(device) {
+    const prompt = el(
+      "div",
+      "win listwin cap-prompt",
+      "<div class='win-title'>Press any " + (device === "keyboard" ? "key" : "button") + "</div>" +
+        "<div class='win-help'>Esc cancels</div>",
+    );
+    uiLayer.appendChild(prompt);
+    let cap;
+    try {
+      cap = await new Promise((res) => Input.beginCapture(device, res));
+    } finally {
+      prompt.remove();
+    }
+    return cap ? cap.code : null;
+  }
+  // Apply a captured code to an action (slot -1 = append, otherwise replace that index),
+  // resolving a cross-action conflict via a Replace/Cancel prompt, then persist + apply.
+  async function applyCapturedCode(device, action, code, slot) {
+    const merged = RA.mergeInputBindings(proj.system.input, playerOptions.input || null);
+    const clash = RA.inputConflict(merged, device, code, action);
+    if (clash) {
+      const c = await showList(
+        [{ label: "Replace" }, { label: "Cancel" }],
+        { title: Input.codeLabel(device, code) + " is bound to " + actionLabel(clash) },
+      );
+      if (c !== 0) return;
+      merged[device][clash] = merged[device][clash].filter((x) => x !== code);
+    }
+    const arr = merged[device][action].slice();
+    if (slot >= 0) arr[slot] = code;
+    else arr.push(code);
+    // drop empties and de-duplicate within the action (keep first occurrence)
+    merged[device][action] = arr.filter((x, j) => x && arr.indexOf(x) === j);
+    commitBindings(merged);
+  }
+  function removeBinding(device, action, slot) {
+    const merged = RA.mergeInputBindings(proj.system.input, playerOptions.input || null);
+    const arr = merged[device][action].slice();
+    arr.splice(slot, 1);
+    merged[device][action] = arr;
+    commitBindings(merged);
+  }
+  function commitBindings(merged) {
+    playerOptions.input = merged;
+    Input.setBindings(merged);
+    saveOptions();
   }
 
   async function menuItems() {
@@ -3206,7 +3339,7 @@ const _createMessageSystem = window.createMessageSystem;
         [
           { label: "New Game" },
           { label: "Continue", disabled: !hasSave },
-          { label: "Music: " + (Music.enabled ? "On" : "Off") },
+          { label: "Options" },
         ],
         { className: "titlemenu", cancellable: false },
       );
@@ -3226,8 +3359,7 @@ const _createMessageSystem = window.createMessageSystem;
           return;
         }
       } else if (i === 2) {
-        Music.setEnabled(!Music.enabled);
-        if (Music.enabled) Music.play(sysBgm("title"));
+        await optionsMenu();
       }
     }
   }
@@ -3409,6 +3541,11 @@ const _createMessageSystem = window.createMessageSystem;
     });
 
     proj = loadProject();
+    // Apply author-default bindings, with the player's saved per-device overrides merged
+    // on top, and restore the persisted music preference (before any Music.play()).
+    playerOptions = loadOptions();
+    Input.setBindings(RA.mergeInputBindings(proj.system.input, playerOptions.input || null));
+    if (playerOptions.music && playerOptions.music.enabled === false) Music.setEnabled(false);
     applyScreenSettings();
     window.addEventListener("resize", fitStage);
     fitStage();

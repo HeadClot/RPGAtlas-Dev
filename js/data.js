@@ -129,6 +129,82 @@ const RA = {
       defeatSelfSwitch: "",
     };
   },
+  // --- Input system (keyboard + gamepad bindings, remappable) ---
+  // Generic positional gamepad button names, in W3C "Standard Gamepad" index order (0..15).
+  PAD_BUTTONS: [
+    "face_south", "face_east", "face_west", "face_north",
+    "bumper_l", "bumper_r", "trigger_l", "trigger_r",
+    "select", "start", "stick_l", "stick_r",
+    "dpad_up", "dpad_down", "dpad_left", "dpad_right",
+  ],
+  // Logical input actions the engine + menus consume (mirrors engine keyName()).
+  INPUT_ACTIONS: [
+    { key: "up", label: "Up" },
+    { key: "down", label: "Down" },
+    { key: "left", label: "Left" },
+    { key: "right", label: "Right" },
+    { key: "ok", label: "Confirm" },
+    { key: "cancel", label: "Cancel" },
+    { key: "dash", label: "Dash" },
+    { key: "attack", label: "Attack" },
+  ],
+  // Default bindings. keyboard = arrays of KeyboardEvent.code; gamepad = arrays of PAD_BUTTONS
+  // names. Keyboard values are copied verbatim from engine keyName() for exact parity.
+  defaultInput() {
+    return {
+      keyboard: {
+        up: ["ArrowUp", "KeyW"], down: ["ArrowDown", "KeyS"],
+        left: ["ArrowLeft", "KeyA"], right: ["ArrowRight", "KeyD"],
+        ok: ["KeyZ", "Enter", "Space"], cancel: ["KeyX", "Escape"],
+        dash: ["ShiftLeft", "ShiftRight"], attack: ["KeyJ"],
+      },
+      gamepad: {
+        // Directions bind both the D-Pad and the left stick (the poller synthesizes
+        // lstick_* names from the stick axes) so each is a visible, editable binding.
+        up: ["dpad_up", "lstick_up"], down: ["dpad_down", "lstick_down"],
+        left: ["dpad_left", "lstick_left"], right: ["dpad_right", "lstick_right"],
+        ok: ["face_south"], cancel: ["face_east", "start"], dash: ["face_west"], attack: ["face_north"],
+      },
+      stickDeadzone: 0.5,
+    };
+  },
+  // Merge a player's override bindings over project (author) defaults, falling back to engine
+  // defaults for any missing action. Pure (returns a fresh deep copy); used by the runtime at
+  // boot and by the headless test.
+  mergeInputBindings(projInput, override) {
+    const di = this.defaultInput();
+    const pick = (dev, key) =>
+      projInput && projInput[dev] && Array.isArray(projInput[dev][key])
+        ? projInput[dev][key]
+        : di[dev][key];
+    const out = { keyboard: {}, gamepad: {}, stickDeadzone: di.stickDeadzone };
+    if (projInput && projInput.stickDeadzone != null) out.stickDeadzone = projInput.stickDeadzone;
+    for (const a of this.INPUT_ACTIONS) {
+      out.keyboard[a.key] = pick("keyboard", a.key).slice();
+      out.gamepad[a.key] = pick("gamepad", a.key).slice();
+    }
+    if (override) {
+      for (const dev of ["keyboard", "gamepad"]) {
+        if (!override[dev]) continue;
+        for (const a of this.INPUT_ACTIONS) {
+          if (Array.isArray(override[dev][a.key])) out[dev][a.key] = override[dev][a.key].slice();
+        }
+      }
+      if (override.stickDeadzone != null) out.stickDeadzone = override.stickDeadzone;
+    }
+    return out;
+  },
+  // Returns the action a key/button is already bound to on a device, or null. Ignores
+  // `exceptAction` so re-binding an action onto a code it already owns isn't a conflict.
+  inputConflict(bindings, device, code, exceptAction) {
+    const dev = bindings && bindings[device];
+    if (!dev) return null;
+    for (const a of this.INPUT_ACTIONS) {
+      if (a.key === exceptAction) continue;
+      if (Array.isArray(dev[a.key]) && dev[a.key].indexOf(code) !== -1) return a.key;
+    }
+    return null;
+  },
   defaultStates() {
     return [
       { id: 1, name: "Poison", icon: 12, color: "#a050d8", restrict: "none", hpTurn: -12, minTurns: 3, maxTurns: 5, removeAtEnd: true },
@@ -166,6 +242,13 @@ const RA = {
     if (sys.windowOpacity == null) sys.windowOpacity = 93;
     sys.sounds = Object.assign(RA.defaultSounds(), sys.sounds || {});
     sys.music = Object.assign(RA.defaultMusic(), sys.music || {});
+    // v3 input bindings (keyboard + gamepad, remappable). Backfill per action so a partial
+    // author override survives while new/missing actions gain defaults.
+    const defInput = RA.defaultInput();
+    sys.input = sys.input || {};
+    sys.input.keyboard = Object.assign({}, defInput.keyboard, sys.input.keyboard || {});
+    sys.input.gamepad = Object.assign({}, defInput.gamepad, sys.input.gamepad || {});
+    if (sys.input.stickDeadzone == null) sys.input.stickDeadzone = defInput.stickDeadzone;
     // v3 element/skill/weapon/armor/equipment type lists (Database ▸ Types)
     const defTypes = RA.defaultTypes();
     sys.types = sys.types || {};
@@ -742,6 +825,7 @@ const DataDefaults = (() => {
         sounds: RA.defaultSounds(),
         music: RA.defaultMusic(),
         types: RA.defaultTypes(),
+        input: RA.defaultInput(),
       },
       actors: [
         { id: 1, name: "Ardan", classId: 1, level: 1, charset: "hero",    weaponId: 1, armorId: 1 },
