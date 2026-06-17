@@ -108,8 +108,18 @@ body { font: 15px/1.5 "Segoe UI", system-ui, sans-serif; color: #f0f2f8; }
 .optionswin .menu-list li {
   display: flex; align-items: center; justify-content: space-between; gap: 28px;
 }
-.optionswin .menu-list li .bind { color: #b8c6e6; opacity: 0.85; }
+.optionswin .menu-list li .bind {
+  color: #b8c6e6; opacity: 0.85;
+  display: inline-flex; align-items: center; gap: 4px;
+}
 .cap-prompt { text-align: center; min-width: 280px; }
+
+/* In-menu rebinder glyphs (Options ▸ Controls): same procedural icons as the editor grid,
+   a touch larger than running-text and vertically centered in the list rows. */
+.menu-list li .input-glyph { vertical-align: middle; }
+.bind-icon { height: 1.45em; vertical-align: middle; margin: 0 1px; }
+.bind-none { color: #7f88a6; opacity: 0.7; }
+.bind-name { margin-left: 6px; vertical-align: middle; }
 
 /* ---------- main menu ---------- */
 .mainmenu { left: auto; right: 14px; top: 14px; transform: none; min-width: 160px; }

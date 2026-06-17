@@ -1876,14 +1876,22 @@ const _createInputSystem = window.createInputSystem;
       }
     }
   }
-  // Per-device action list: each row shows the action and its joined bindings.
+  // Render a binding array as the same procedural glyphs the editor draws, skinned to the
+  // player's live controller family for gamepad. Dim em-dash when an action is unbound.
+  function bindGlyphsHtml(device, action) {
+    const arr = (Input.getBindings()[device] || {})[action] || [];
+    if (!arr.length) return "<span class='bind-none'>—</span>";
+    const fam = device === "gamepad" && Input.padFamily ? Input.padFamily() : "xbox";
+    return arr.map((code) => Assets.inputGlyphHtml(device, code, fam, "bind-icon")).join("");
+  }
+  // Per-device action list: each row shows the action and its bindings (as glyphs).
   async function controlsDevice(device) {
     let idx = 0;
     while (true) {
       const rows = RA.INPUT_ACTIONS.map((a) => ({
         html:
           "<span>" + esc(a.label) + "</span>" +
-          "<span class='bind'>" + esc(Input.label(device, a.key)) + "</span>",
+          "<span class='bind'>" + bindGlyphsHtml(device, a.key) + "</span>",
         help: "Press Confirm to edit " + a.label,
       }));
       const i = await showList(rows, {
@@ -1902,7 +1910,12 @@ const _createInputSystem = window.createInputSystem;
     let idx = 0;
     while (true) {
       const arr = (Input.getBindings()[device] || {})[action] || [];
-      const items = arr.map((code) => ({ label: Input.codeLabel(device, code) }));
+      const fam = device === "gamepad" && Input.padFamily ? Input.padFamily() : "xbox";
+      const items = arr.map((code) => ({
+        html:
+          Assets.inputGlyphHtml(device, code, fam, "bind-icon") +
+          "<span class='bind-name'>" + esc(Input.codeLabel(device, code)) + "</span>",
+      }));
       items.push({ label: "+ Add binding" });
       items.push({ label: "Back" });
       const i = await showList(items, {
