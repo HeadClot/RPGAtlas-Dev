@@ -14,6 +14,18 @@ export const PATCH_NOTES = [
     ],
   },
    {
+     date: "June 17, 2026",
+     title: "Gamepad Support & Remappable Controls",
+     summary: "Full gamepad support with a unified keyboard/gamepad input layer, in-game and in-editor rebinding, and input-prompt glyphs you can drop into messages.",
+     items: [
+       "Play with a gamepad: movement, Confirm/Cancel, dash, and attack map to the W3C Standard Gamepad, including left-stick movement with a configurable stick deadzone.",
+       "In-game Options -> Controls lets players rebind keyboard and gamepad inputs, with conflict detection and a guard that stops Confirm/Cancel from being left unbound.",
+       "New System tab \"Controls\" grid in the editor sets the default key/gamepad bindings a new player starts with, shown as button/key glyphs (no more console snippet).",
+       "New \\input[action] message code shows the glyph for a bound control (e.g. \"Press \\input[ok] to continue\"), matching keyboard or gamepad to the device in use when the message opens.",
+       "Input-prompt glyphs are generated procedurally, so they need no extra art and carry into standalone exports automatically.",
+     ],
+   },
+   {
      date: "June 16, 2026",
      title: "Map Action Combat",
      summary: "Events can now become Zelda-style map enemies that take sword damage, flash, knock back, and update kill quests on defeat.",

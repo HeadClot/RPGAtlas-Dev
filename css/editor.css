@@ -240,6 +240,26 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--gold-edge);
 .rangewrap input[type=range] { width: 150px; }
 .range-val { color: #8a8da4; font-size: 12px; min-width: 38px; }
 .namegrid-add { grid-column: 1 / -1; justify-self: start; margin: 8px 0 4px; }
+
+/* ---- Controls: author default input-bindings grid ---- */
+.input-grid-wrap { margin: 4px 0 6px; }
+.input-grid { display: grid; grid-template-columns: 78px 1fr 1fr; gap: 6px 12px; align-items: center; margin: 6px 0; max-width: 560px; }
+.input-row { display: contents; }
+.input-act { font-size: 13px; color: #cdd2e4; }
+.input-head .input-act, .input-head .bind-cell { font-weight: 600; color: #8a8da4; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.bind-cell { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px; }
+.bind-chip { display: inline-flex; align-items: center; gap: 1px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.13); border-radius: 6px; padding: 1px 1px 1px 3px; }
+.bind-glyph { height: 22px; width: auto; display: block; }
+.bind-x { background: none; border: none; color: #b88; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 3px; }
+.bind-x:hover { color: #ff6a6a; }
+.bind-add { background: rgba(255,255,255,.05); border: 1px dashed rgba(255,255,255,.28); color: #9fd6b0; border-radius: 6px; cursor: pointer; width: 24px; height: 24px; line-height: 1; font-size: 15px; }
+.bind-add:hover { background: rgba(255,255,255,.12); }
+.input-note { color: #f2a44a; font-size: 12px; min-height: 16px; margin: 4px 0; }
+.capture-note { padding: 14px 6px; font-size: 14px; color: #cdd2e4; text-align: center; }
+.pad-pick { display: grid; grid-template-columns: repeat(2, minmax(190px, 1fr)); gap: 6px; }
+.pad-pick-btn { display: flex; align-items: center; gap: 9px; padding: 4px 9px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.13); border-radius: 6px; cursor: pointer; color: #dde2f0; text-align: left; }
+.pad-pick-btn:hover { background: rgba(255,255,255,.11); }
+.pad-pick-btn img { height: 24px; width: auto; }
 .icon-sprite {
   display: inline-block; width: 32px; height: 32px; flex: 0 0 32px;
   background-image: var(--icon-set-url); background-position: var(--icon-x) var(--icon-y);

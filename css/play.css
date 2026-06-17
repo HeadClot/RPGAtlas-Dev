@@ -88,6 +88,13 @@ body { font: 15px/1.5 "Segoe UI", system-ui, sans-serif; color: #f0f2f8; }
   transform: scale(0.75); margin: -7px -2px -7px -4px;
   vertical-align: middle;
 }
+/* Procedural input-prompt glyph (\input[...]). Has class "msg-icon" so the typewriter reveals it
+   as one char; these rules (defined after .msg-icon) size it to the running text instead. */
+.input-glyph {
+  display: inline-block; height: 1.3em; width: auto;
+  transform: none; margin: 0 2px; vertical-align: -0.28em;
+  image-rendering: auto;
+}
 .msgwin.msg-done::after {
   content: "▼"; position: absolute; bottom: 4px; left: 50%;
   color: #c8d4f0; font-size: 12px; animation: bob 0.8s infinite;

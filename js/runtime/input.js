@@ -364,26 +364,17 @@ function createInputSystem(deps) {
   }
 
   // ---- labels (generic text prompts; no glyph art) ------------------------
-  const KB_LABELS = {
-    ArrowUp: "Up Arrow", ArrowDown: "Down Arrow", ArrowLeft: "Left Arrow", ArrowRight: "Right Arrow",
-    Enter: "Enter", Space: "Space", Escape: "Esc", Tab: "Tab", Backspace: "Backspace",
-    ShiftLeft: "L-Shift", ShiftRight: "R-Shift", ControlLeft: "L-Ctrl", ControlRight: "R-Ctrl",
-    AltLeft: "L-Alt", AltRight: "R-Alt",
-  };
-  const PAD_LABELS = {
-    face_south: "Face Down (A)", face_east: "Face Right (B)", face_west: "Face Left (X)", face_north: "Face Up (Y)",
-    bumper_l: "L Bumper", bumper_r: "R Bumper", trigger_l: "L Trigger", trigger_r: "R Trigger",
-    select: "Select", start: "Start", stick_l: "L Stick (click)", stick_r: "R Stick (click)",
-    dpad_up: "D-Pad Up", dpad_down: "D-Pad Down", dpad_left: "D-Pad Left", dpad_right: "D-Pad Right",
-    lstick_up: "L-Stick Up", lstick_down: "L-Stick Down", lstick_left: "L-Stick Left", lstick_right: "L-Stick Right",
-  };
+  // The label tables + formatting now live in RA (js/data.js) so the editor -- which never
+  // loads this file -- shares one source. Delegate lazily (RA is a global well before any
+  // input function runs at boot); fall back to the raw code if RA is somehow unavailable.
+  function raNS() {
+    if (typeof RA !== "undefined" && RA) return RA;
+    if (typeof window !== "undefined" && window.RA) return window.RA;
+    return null;
+  }
   function codeLabel(device, code) {
-    if (device === "gamepad") return PAD_LABELS[code] || code;
-    if (KB_LABELS[code]) return KB_LABELS[code];
-    if (/^Key.$/.test(code)) return code.slice(3); // KeyZ -> Z
-    if (/^Digit.$/.test(code)) return code.slice(5); // Digit1 -> 1
-    if (/^Numpad/.test(code)) return "Num " + code.slice(6);
-    return code;
+    const ns = raNS();
+    return ns && ns.codeLabel ? ns.codeLabel(device, code) : code;
   }
   function label(device, action) {
     const arr = (bindings[device] && bindings[device][action]) || [];

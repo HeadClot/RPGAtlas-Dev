@@ -208,6 +208,53 @@ const RA = {
   // Actions that must never be left with no binding on a device, or the player could lock
   // themselves out of the menus these drive (Confirm/Cancel). The rebinder enforces it per device.
   INPUT_CRITICAL: ["ok", "cancel"],
+  // Human-readable labels for raw key/button codes. Verbose form for menus/lists
+  // ("Up Arrow", "Face Down (A)", KeyZ -> "Z"). These live in RA (not input.js) so the editor
+  // -- which never loads runtime/input.js -- and the runtime share one source. input.js
+  // delegates label formatting here lazily (RA exists by the time any input function runs).
+  KB_LABELS: {
+    ArrowUp: "Up Arrow", ArrowDown: "Down Arrow", ArrowLeft: "Left Arrow", ArrowRight: "Right Arrow",
+    Enter: "Enter", Space: "Space", Escape: "Esc", Tab: "Tab", Backspace: "Backspace",
+    ShiftLeft: "L-Shift", ShiftRight: "R-Shift", ControlLeft: "L-Ctrl", ControlRight: "R-Ctrl",
+    AltLeft: "L-Alt", AltRight: "R-Alt",
+  },
+  PAD_LABELS: {
+    face_south: "Face Down (A)", face_east: "Face Right (B)", face_west: "Face Left (X)", face_north: "Face Up (Y)",
+    bumper_l: "L Bumper", bumper_r: "R Bumper", trigger_l: "L Trigger", trigger_r: "R Trigger",
+    select: "Select", start: "Start", stick_l: "L Stick (click)", stick_r: "R Stick (click)",
+    dpad_up: "D-Pad Up", dpad_down: "D-Pad Down", dpad_left: "D-Pad Left", dpad_right: "D-Pad Right",
+    lstick_up: "L-Stick Up", lstick_down: "L-Stick Down", lstick_left: "L-Stick Left", lstick_right: "L-Stick Right",
+  },
+  codeLabel(device, code) {
+    if (device === "gamepad") return this.PAD_LABELS[code] || code;
+    if (this.KB_LABELS[code]) return this.KB_LABELS[code];
+    if (/^Key.$/.test(code)) return code.slice(3); // KeyZ -> Z
+    if (/^Digit.$/.test(code)) return code.slice(5); // Digit1 -> 1
+    if (/^Numpad/.test(code)) return "Num " + code.slice(6);
+    return code;
+  },
+  // Compact token for DRAWING a glyph chip (button icon / keycap), distinct from the verbose
+  // codeLabel above. Keyboard/gamepad code namespaces don't collide, so one flat map keys both.
+  GLYPH_TEXT: {
+    face_south: "A", face_east: "B", face_west: "X", face_north: "Y",
+    bumper_l: "LB", bumper_r: "RB", trigger_l: "LT", trigger_r: "RT",
+    select: "⧉", start: "≡", stick_l: "L3", stick_r: "R3",
+    dpad_up: "↑", dpad_down: "↓", dpad_left: "←", dpad_right: "→",
+    lstick_up: "↑", lstick_down: "↓", lstick_left: "←", lstick_right: "→",
+    ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→",
+    Space: "␣", Enter: "↵", Escape: "Esc", Backspace: "⌫", Tab: "⇥",
+    ShiftLeft: "⇧", ShiftRight: "⇧", ControlLeft: "Ctrl", ControlRight: "Ctrl",
+    AltLeft: "Alt", AltRight: "Alt",
+  },
+  glyphText(device, code) {
+    if (this.GLYPH_TEXT[code]) return this.GLYPH_TEXT[code];
+    if (device === "keyboard") {
+      if (/^Key.$/.test(code)) return code.slice(3);
+      if (/^Digit.$/.test(code)) return code.slice(5);
+      if (/^Numpad(.+)$/.test(code)) return code.slice(6);
+    }
+    return this.codeLabel(device, code);
+  },
   defaultStates() {
     return [
       { id: 1, name: "Poison", icon: 12, color: "#a050d8", restrict: "none", hpTurn: -12, minTurns: 3, maxTurns: 5, removeAtEnd: true },

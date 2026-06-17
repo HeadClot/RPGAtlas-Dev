@@ -3193,6 +3193,109 @@ const editorI18n = createEditorI18n({
         box.appendChild(h("div", { class: "subhead" }, "System music"));
         box.appendChild(row(field("Title theme", sel(s.music, "title", MUSIC_OPTS())),
           field("Battle theme", sel(s.music, "battle", MUSIC_OPTS()))));
+
+        // ---- Controls: the project's DEFAULT key/gamepad bindings (proj.system.input) ----
+        // Mirrors the in-game rebinder but edits the author defaults a new player starts with.
+        // Replaces the old localStorage console snippet for tweaking defaults.
+        box.appendChild(h("div", { class: "subhead" }, "Controls (default bindings)"));
+        box.appendChild(h("div", { class: "dim" }, "The controls a NEW player starts with. Players who change their controls in-game keep their own settings — this won't override them."));
+        s.input = RA.mergeInputBindings(s.input, null); // normalize: guarantees every action/device array exists
+        const inActLabel = (k) => { const a = RA.INPUT_ACTIONS.find((x) => x.key === k); return a ? a.label : k; };
+        const inputWrap = h("div", { class: "input-grid-wrap" });
+        box.appendChild(inputWrap);
+        let inputNote;
+        function flashNote(msg) { if (inputNote) inputNote.textContent = msg; }
+        function setBinding(device, action, code) {
+          // De-conflict: a code drives one action per device, so free it from any other action first.
+          for (const other of RA.INPUT_ACTIONS) {
+            if (other.key === action) continue;
+            const oa = s.input[device][other.key];
+            const idx = oa ? oa.indexOf(code) : -1;
+            if (idx === -1) continue;
+            if (RA.INPUT_CRITICAL.indexOf(other.key) !== -1 && oa.length <= 1) {
+              flashNote(other.label + " needs a binding on this device — rebind it before reusing this one.");
+              return;
+            }
+            oa.splice(idx, 1);
+          }
+          const arr = s.input[device][action];
+          if (arr.indexOf(code) === -1) arr.push(code);
+          touch();
+          renderInputGrid();
+        }
+        function removeBinding(device, action, i) {
+          const arr = s.input[device][action];
+          if (RA.INPUT_CRITICAL.indexOf(action) !== -1 && arr.length <= 1) {
+            flashNote(inActLabel(action) + " must keep at least one binding on each device.");
+            return;
+          }
+          arr.splice(i, 1);
+          touch();
+          renderInputGrid();
+        }
+        function captureKey(action) {
+          let done = false;
+          function cleanup() { if (!done) { done = true; document.removeEventListener("keydown", onKey, true); } }
+          function onKey(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const code = e.code;
+            cleanup();
+            m.close();
+            if (code && code !== "Escape") setBinding("keyboard", action, code);
+          }
+          const m = modal({
+            title: "Bind " + inActLabel(action) + " (keyboard)",
+            content: h("div", { class: "capture-note" }, "Press any key…  (Esc cancels)"),
+            buttons: [{ label: "Cancel" }],
+            onClose: cleanup,
+          });
+          document.addEventListener("keydown", onKey, true);
+        }
+        function pickGamepad(action) {
+          const codes = RA.PAD_BUTTONS.concat(["lstick_up", "lstick_down", "lstick_left", "lstick_right"]);
+          const list = h("div", { class: "pad-pick" });
+          let m;
+          codes.forEach((code) => {
+            list.appendChild(h("button", { class: "pad-pick-btn", onclick() { m.close(); setBinding("gamepad", action, code); } },
+              h("img", { class: "bind-glyph", src: Assets.inputGlyphDataUrl("gamepad", code), alt: "" }),
+              h("span", null, RA.codeLabel("gamepad", code))));
+          });
+          m = modal({ title: "Bind " + inActLabel(action) + " (gamepad)", content: list, buttons: [{ label: "Cancel" }] });
+        }
+        function bindCell(device, action) {
+          const cell = h("div", { class: "bind-cell" });
+          const arr = s.input[device][action] || [];
+          arr.forEach((code, i) => {
+            cell.appendChild(h("span", { class: "bind-chip" },
+              h("img", { class: "bind-glyph", src: Assets.inputGlyphDataUrl(device, code), alt: RA.codeLabel(device, code), title: RA.codeLabel(device, code) }),
+              h("button", { class: "bind-x", title: "Remove", onclick() { removeBinding(device, action, i); } }, "×")));
+          });
+          cell.appendChild(h("button", { class: "bind-add", title: "Add binding", onclick() { device === "keyboard" ? captureKey(action) : pickGamepad(action); } }, "+"));
+          return cell;
+        }
+        function renderInputGrid() {
+          inputWrap.innerHTML = "";
+          const grid = h("div", { class: "input-grid" });
+          grid.appendChild(h("div", { class: "input-row input-head" },
+            h("div", { class: "input-act" }, "Action"),
+            h("div", { class: "bind-cell" }, "Keyboard"),
+            h("div", { class: "bind-cell" }, "Gamepad")));
+          for (const a of RA.INPUT_ACTIONS) {
+            grid.appendChild(h("div", { class: "input-row" },
+              h("div", { class: "input-act" }, a.label),
+              bindCell("keyboard", a.key),
+              bindCell("gamepad", a.key)));
+          }
+          inputWrap.appendChild(grid);
+          inputNote = h("div", { class: "input-note" });
+          inputWrap.appendChild(inputNote);
+          inputWrap.appendChild(h("div", { class: "frow", style: "margin-top:6px" },
+            h("button", { class: "mini", onclick() {
+              confirmBox("Reset all controls to the engine defaults?", () => { s.input = RA.defaultInput(); touch(); renderInputGrid(); });
+            } }, "Reset to defaults")));
+        }
+        renderInputGrid();
         return box;
       } },
       { label: "Actors", build: () => listFormTab({

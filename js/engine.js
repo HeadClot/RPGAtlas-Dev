@@ -1277,6 +1277,27 @@ const _createInputSystem = window.createInputSystem;
   });
   Input.attachDOM(document);
 
+  // Inline input-prompt glyphs in messages: "\input[ok]" renders the glyph for whatever is bound
+  // to that action on the device in use *when the message opens* (a snapshot via activeDevice(),
+  // not live mid-message). Registered as a text processor so it runs post-esc like \i[n] and may
+  // emit the <img> glyph; it lives in the engine because it needs the live Input bindings. Falls
+  // back to the other device's primary binding, then to a plain text label.
+  function inputPromptGlyph(action) {
+    const act = String(action).toLowerCase();
+    if (!RA.INPUT_ACTIONS.some((a) => a.key === act)) return "";
+    const b = Input.getBindings();
+    let device = Input.activeDevice() === "gamepad" ? "gamepad" : "keyboard";
+    let arr = (b[device] && b[device][act]) || [];
+    if (!arr.length) {
+      device = device === "gamepad" ? "keyboard" : "gamepad";
+      arr = (b[device] && b[device][act]) || [];
+    }
+    if (!arr.length) return esc(actionLabel(act));
+    return Assets.inputGlyphHtml(device, arr[0], "msg-icon");
+  }
+  Plugins.textProcessors.push((html) =>
+    html.replace(/\\input\[(\w+)\]/gi, (_m, action) => inputPromptGlyph(action)));
+
   let frameWaiters = [];
   function frameWait() { return new Promise((r) => frameWaiters.push(r)); }
   // Tick-accurate timers: counted in update(), so event waits/tweens advance by ticks even

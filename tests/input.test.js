@@ -103,4 +103,29 @@ assert.equal(evaluate(`RA.inputConflict(${m}, "gamepad", "start", null)`), null,
 //    binding on the device being edited (the guard itself lives in engine.js; this pins the set).
 assert.deepEqual(clone(evaluate("RA.INPUT_CRITICAL")), ["ok", "cancel"], "ok + cancel are the critical actions");
 
+// 9. Label + glyph helpers now live in RA (the editor shares them; input.js delegates here).
+// Verbose codeLabel (menus/lists):
+assert.equal(evaluate('RA.codeLabel("keyboard", "KeyZ")'), "Z", "KeyZ -> Z");
+assert.equal(evaluate('RA.codeLabel("keyboard", "ArrowUp")'), "Up Arrow", "ArrowUp -> verbose label");
+assert.equal(evaluate('RA.codeLabel("keyboard", "Digit1")'), "1", "Digit1 -> 1");
+assert.equal(evaluate('RA.codeLabel("gamepad", "face_south")'), "Face Down (A)", "face_south verbose label");
+assert.equal(evaluate('RA.codeLabel("gamepad", "totally_unknown")'), "totally_unknown", "unknown code falls through");
+// Compact glyphText (for drawing a key-cap / button icon):
+assert.equal(evaluate('RA.glyphText("gamepad", "face_south")'), "A", "face_south glyph token");
+assert.equal(evaluate('RA.glyphText("gamepad", "dpad_up")'), "↑", "dpad_up glyph arrow");
+assert.equal(evaluate('RA.glyphText("gamepad", "bumper_l")'), "LB", "bumper glyph token");
+assert.equal(evaluate('RA.glyphText("keyboard", "KeyZ")'), "Z", "keyboard letter glyph");
+assert.equal(evaluate('RA.glyphText("keyboard", "ArrowUp")'), "↑", "arrow-key glyph");
+assert.equal(evaluate('RA.glyphText("keyboard", "Space")'), "␣", "space glyph token");
+// Every code used by the default bindings resolves to a non-empty glyph token (no blank chips).
+const defAll = clone(evaluate("RA.defaultInput()"));
+for (const k of actions) {
+  for (const dev of ["keyboard", "gamepad"]) {
+    for (const code of defAll[dev][k]) {
+      assert.ok(String(evaluate('RA.glyphText(' + JSON.stringify(dev) + ', ' + JSON.stringify(code) + ')')).length,
+        "glyph token for " + dev + "/" + code);
+    }
+  }
+}
+
 console.log("Input binding tests passed.");

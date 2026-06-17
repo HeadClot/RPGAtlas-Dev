@@ -93,6 +93,90 @@ const Assets = (() => {
     }
     return canvas;
   }
+
+  // ---------- input prompt glyphs (procedural; no atlas) ----------
+  // Small key-cap / gamepad-button icons for the editor rebind grid and the \input[...] message
+  // code. Drawn into a canvas so they inline into standalone exports for free (no asset to embed).
+  // The short token to draw ("A", "LB", arrows, a key cap) comes from RA.glyphText; RA is read
+  // lazily because assets.js loads before data.js in both shells.
+  const GLYPH_H = 30;            // canvas height in px; width adapts to the token
+  const GLYPH_FONT = '"Segoe UI", system-ui, Arial, sans-serif';
+  const glyphCanvasCache = {};
+  const glyphUrlCache = {};
+  // Xbox-positional face-button accent colors (the one spot we imply a controller brand).
+  const FACE_COLORS = { face_south: "#6cc04a", face_east: "#e0584b", face_west: "#3f8ae0", face_north: "#e8b53a" };
+  function raLookup() {
+    if (typeof RA !== "undefined" && RA) return RA;
+    if (typeof window !== "undefined" && window.RA) return window.RA;
+    return null;
+  }
+  function glyphToken(device, code) {
+    const R = raLookup();
+    return R && R.glyphText ? R.glyphText(device, code) : code;
+  }
+  function roundRectPath(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+  function inputGlyphCanvas(device, code) {
+    const key = device + "_" + code;
+    if (glyphCanvasCache[key]) return glyphCanvasCache[key];
+    const txt = String(glyphToken(device, code) || code || "?");
+    const round = device === "gamepad" && !!FACE_COLORS[code]; // circular face button
+    const H = GLYPH_H;
+    const inset = 1.5;
+    const fontPx = Math.round(H * (txt.length > 1 ? 0.46 : 0.56));
+    const meas = mkCanvas(2, 2).getContext("2d");
+    meas.font = "600 " + fontPx + "px " + GLYPH_FONT;
+    const tw = Math.ceil(meas.measureText(txt).width);
+    const W = round ? H : Math.max(H, tw + Math.round(H * 0.7));
+    const canvas = mkCanvas(W, H);
+    const g = canvas.getContext("2d");
+    g.font = "600 " + fontPx + "px " + GLYPH_FONT;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    const cy = H / 2 + 0.5;
+    if (round) {
+      const cx = W / 2, r = (H - inset * 2) / 2;
+      const grad = g.createLinearGradient(0, inset, 0, H - inset);
+      grad.addColorStop(0, "#3a3f4b"); grad.addColorStop(1, "#23262e");
+      g.fillStyle = grad;
+      g.beginPath(); g.arc(cx, H / 2, r, 0, Math.PI * 2); g.fill();
+      g.lineWidth = 1.5; g.strokeStyle = "#11131a";
+      g.beginPath(); g.arc(cx, H / 2, r, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = FACE_COLORS[code];
+      g.fillText(txt, cx, cy);
+    } else {
+      const grad = g.createLinearGradient(0, inset, 0, H - inset);
+      grad.addColorStop(0, "#41454f"); grad.addColorStop(1, "#2a2d35");
+      g.fillStyle = grad;
+      roundRectPath(g, inset, inset, W - inset * 2, H - inset * 2, 6); g.fill();
+      g.lineWidth = 1.5; g.strokeStyle = "#11131a";
+      roundRectPath(g, inset, inset, W - inset * 2, H - inset * 2, 6); g.stroke();
+      g.fillStyle = "#eef1f6";
+      g.fillText(txt, W / 2, cy);
+    }
+    glyphCanvasCache[key] = canvas;
+    return canvas;
+  }
+  // Cached data: URL — use this for an <img> (a cached canvas node can only live in one place).
+  function inputGlyphDataUrl(device, code) {
+    const key = device + "_" + code;
+    if (!glyphUrlCache[key]) glyphUrlCache[key] = inputGlyphCanvas(device, code).toDataURL();
+    return glyphUrlCache[key];
+  }
+  function inputGlyphHtml(device, code, className) {
+    const R = raLookup();
+    const alt = (R && R.codeLabel ? R.codeLabel(device, code) : code) || "";
+    const cls = "input-glyph" + (className ? " " + className : "");
+    return '<img class="' + cls + '" draggable="false" alt="' +
+      String(alt).replace(/"/g, "&quot;") + '" src="' + inputGlyphDataUrl(device, code) + '">';
+  }
   async function discoverFolder(type) {
     try {
       const res = await fetch("img/" + type + "/");
@@ -1256,6 +1340,7 @@ const Assets = (() => {
     HAIR_STYLES, registerHuman, removeCharset, registerCustomChars,
     ENEMY_TYPES, enemyCanvas, assetLabel, loadExternalAssets, bindExternalAssets, exportUsedExternalAssets,
     ICON_SIZE, ICON_COUNT, loadIconSet, iconSpan, iconHtml, iconCanvas,
+    inputGlyphCanvas, inputGlyphDataUrl, inputGlyphHtml,
   };
 })();
 
