@@ -247,6 +247,11 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--gold-edge);
 .input-row { display: contents; }
 .input-act { font-size: 13px; color: #cdd2e4; }
 .input-head .input-act, .input-head .bind-cell { font-weight: 600; color: #8a8da4; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.input-head .input-act, .input-head .bind-cell { align-self: start; } /* top-align the three column headers */
+.gp-head { flex-direction: column; align-items: flex-start; gap: 3px; }
+.gp-preview { display: inline-flex; align-items: center; gap: 5px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.gp-preview > span { color: #8a8da4; font-size: 11px; }
+.gp-preview select { font-size: 12px; padding: 1px 4px; }
 .bind-cell { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px; }
 .bind-chip { display: inline-flex; align-items: center; gap: 1px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.13); border-radius: 6px; padding: 1px 1px 1px 3px; }
 .bind-glyph { height: 22px; width: auto; display: block; }

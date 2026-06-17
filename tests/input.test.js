@@ -128,4 +128,39 @@ for (const k of actions) {
   }
 }
 
+// 10. Drawing-shape classifier — the glyph renderer picks a SHAPE from this, not just a text token.
+assert.equal(evaluate('RA.glyphShape("face_south")'), "face", "face button shape");
+assert.equal(evaluate('RA.glyphShape("dpad_up")'), "dpad", "d-pad shape");
+assert.equal(evaluate('RA.glyphShape("lstick_left")'), "stick", "left-stick direction shape");
+assert.equal(evaluate('RA.glyphShape("stick_l")'), "stick_click", "stick-click shape");
+assert.equal(evaluate('RA.glyphShape("bumper_l")'), "pill", "bumper falls back to pill");
+assert.equal(evaluate('RA.glyphShape("KeyZ")'), "pill", "keyboard code is a pill");
+
+// 11. Controller families are a DISPLAY layer — same positional code, different label/glyph.
+// glyphText (compact draw token) per family:
+assert.equal(evaluate('RA.glyphText("gamepad","face_south","xbox")'), "A", "xbox south = A");
+assert.equal(evaluate('RA.glyphText("gamepad","face_south","ps")'), "✕", "ps south = Cross");
+assert.equal(evaluate('RA.glyphText("gamepad","face_south","switch")'), "B", "switch south = B (Nintendo relabel)");
+assert.equal(evaluate('RA.glyphText("gamepad","face_east","switch")'), "A", "switch east = A (swap is label-only, code unchanged)");
+assert.equal(evaluate('RA.glyphText("gamepad","bumper_l","ps")'), "L1", "ps L bumper = L1");
+assert.equal(evaluate('RA.glyphText("gamepad","bumper_l","switch")'), "L", "switch L bumper = L");
+assert.equal(evaluate('RA.glyphText("gamepad","trigger_l","switch")'), "ZL", "switch L trigger = ZL");
+assert.equal(evaluate('RA.glyphText("gamepad","start","switch")'), "+", "switch start = +");
+// Directions/keys are family-agnostic:
+assert.equal(evaluate('RA.glyphText("gamepad","dpad_up","ps")'), "↑", "dpad arrow ignores family");
+// Default (no family arg) == xbox — back-compat for existing call sites:
+assert.equal(evaluate('RA.glyphText("gamepad","face_south")'),
+  evaluate('RA.glyphText("gamepad","face_south","xbox")'), "default family is xbox");
+// codeLabel (verbose menu label) per family:
+assert.equal(evaluate('RA.codeLabel("gamepad","face_south","ps")'), "Cross", "ps verbose label");
+assert.equal(evaluate('RA.codeLabel("gamepad","face_south","switch")'), "B Button", "switch verbose label");
+assert.equal(evaluate('RA.codeLabel("gamepad","start","ps")'), "Options", "ps start verbose label");
+assert.equal(evaluate('RA.codeLabel("gamepad","face_south")'), "Face Down (A)", "default verbose label unchanged");
+
+// 12. padFamilyFromId classifies the connected controller by its Gamepad.id string (pure, no navigator).
+assert.equal(evaluate('RA.padFamilyFromId("Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)")'), "xbox", "xbox id");
+assert.equal(evaluate('RA.padFamilyFromId("DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)")'), "ps", "dualsense id");
+assert.equal(evaluate('RA.padFamilyFromId("Pro Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)")'), "switch", "pro-controller id");
+assert.equal(evaluate('RA.padFamilyFromId("")'), "xbox", "unknown/empty -> xbox default");
+
 console.log("Input binding tests passed.");

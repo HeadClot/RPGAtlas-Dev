@@ -225,8 +225,45 @@ const RA = {
     dpad_up: "D-Pad Up", dpad_down: "D-Pad Down", dpad_left: "D-Pad Left", dpad_right: "D-Pad Right",
     lstick_up: "L-Stick Up", lstick_down: "L-Stick Down", lstick_left: "L-Stick Left", lstick_right: "L-Stick Right",
   },
-  codeLabel(device, code) {
-    if (device === "gamepad") return this.PAD_LABELS[code] || code;
+  // Controller "families". Bindings are stored by POSITION (face_south = W3C Standard Gamepad
+  // index 0) on every controller; family only changes how a code is DRAWN/LABELLED. PAD_LABELS /
+  // GLYPH_TEXT above are the Xbox (default) set; the tables below hold only the codes that differ.
+  PAD_FAMILIES: [
+    { key: "xbox", label: "Xbox" },
+    { key: "ps", label: "PlayStation" },
+    { key: "switch", label: "Nintendo Switch" },
+  ],
+  // Verbose label overrides per family (menus/lists). Xbox omitted -> falls back to PAD_LABELS.
+  FAMILY_PAD_LABELS: {
+    ps: {
+      face_south: "Cross", face_east: "Circle", face_west: "Square", face_north: "Triangle",
+      bumper_l: "L1", bumper_r: "R1", trigger_l: "L2", trigger_r: "R2",
+      select: "Share", start: "Options", stick_l: "L3 (click)", stick_r: "R3 (click)",
+    },
+    switch: {
+      face_south: "B Button", face_east: "A Button", face_west: "Y Button", face_north: "X Button",
+      bumper_l: "L", bumper_r: "R", trigger_l: "ZL", trigger_r: "ZR",
+      select: "Minus (−)", start: "Plus (+)",
+    },
+  },
+  // Compact glyph-token overrides per family (drawn inside a chip). Xbox omitted -> GLYPH_TEXT.
+  FAMILY_GLYPH_TEXT: {
+    ps: {
+      face_south: "✕", face_east: "○", face_west: "▢", face_north: "△",
+      bumper_l: "L1", bumper_r: "R1", trigger_l: "L2", trigger_r: "R2",
+    },
+    switch: {
+      face_south: "B", face_east: "A", face_west: "Y", face_north: "X",
+      bumper_l: "L", bumper_r: "R", trigger_l: "ZL", trigger_r: "ZR",
+      select: "−", start: "+",
+    },
+  },
+  codeLabel(device, code, family) {
+    if (device === "gamepad") {
+      const fam = family && family !== "xbox" ? this.FAMILY_PAD_LABELS[family] : null;
+      if (fam && fam[code]) return fam[code];
+      return this.PAD_LABELS[code] || code;
+    }
     if (this.KB_LABELS[code]) return this.KB_LABELS[code];
     if (/^Key.$/.test(code)) return code.slice(3); // KeyZ -> Z
     if (/^Digit.$/.test(code)) return code.slice(5); // Digit1 -> 1
@@ -246,14 +283,36 @@ const RA = {
     ShiftLeft: "⇧", ShiftRight: "⇧", ControlLeft: "Ctrl", ControlRight: "Ctrl",
     AltLeft: "Alt", AltRight: "Alt",
   },
-  glyphText(device, code) {
+  glyphText(device, code, family) {
+    if (device === "gamepad" && family && family !== "xbox") {
+      const fov = this.FAMILY_GLYPH_TEXT[family];
+      if (fov && fov[code]) return fov[code];
+    }
     if (this.GLYPH_TEXT[code]) return this.GLYPH_TEXT[code];
     if (device === "keyboard") {
       if (/^Key.$/.test(code)) return code.slice(3);
       if (/^Digit.$/.test(code)) return code.slice(5);
       if (/^Numpad(.+)$/.test(code)) return code.slice(6);
     }
-    return this.codeLabel(device, code);
+    return this.codeLabel(device, code, family);
+  },
+  // Drawing category for a button/key code, so the glyph renderer can pick a SHAPE (d-pad cross,
+  // analog-stick ring, key-cap pill...) instead of just a text token. Direction (up/down/left/
+  // right) is parsed from the code suffix by the renderer.
+  glyphShape(code) {
+    if (/^face_/.test(code)) return "face";
+    if (/^dpad_/.test(code)) return "dpad";
+    if (/^[lr]stick_(up|down|left|right)$/.test(code)) return "stick";
+    if (code === "stick_l" || code === "stick_r") return "stick_click";
+    return "pill"; // bumpers, triggers, start/select, all keyboard codes
+  },
+  // Classify a connected gamepad by its Gamepad.id string -> controller family. Pure (no
+  // navigator access) so it's unit-testable; runtime/input.js feeds it the live pad id.
+  padFamilyFromId(id) {
+    const s = String(id || "").toLowerCase();
+    if (/(054c|dualsense|dualshock|playstation)/.test(s)) return "ps";
+    if (/(057e|pro controller|joy-?con|nintendo|switch)/.test(s)) return "switch";
+    return "xbox"; // Xbox / XInput / unknown all use the Xbox positional set
   },
   defaultStates() {
     return [

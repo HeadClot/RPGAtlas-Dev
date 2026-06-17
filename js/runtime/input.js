@@ -56,6 +56,7 @@ function createInputSystem(deps) {
   let edgeQueue = [];
   let edges = {}; // action -> true (fresh this frame)
   let lastDevice = "keyboard";
+  let lastPadId = ""; // Gamepad.id of the most-recently-used pad, for controller-family display
 
   // Physical keyboard codes currently held (by e.code, regardless of binding) — the
   // snapshot the rebinder's capture mode uses to ignore keys already down when it began.
@@ -174,8 +175,9 @@ function createInputSystem(deps) {
     const action = kbReverse[e.code];
     if (action) keyboard.down[action] = false;
   }
-  function onPadConnected() {
+  function onPadConnected(e) {
     lastDevice = "gamepad";
+    if (e && e.gamepad && e.gamepad.id) lastPadId = e.gamepad.id;
   }
   function onPadDisconnected(e) {
     const idx = e && e.gamepad ? e.gamepad.index : null;
@@ -266,9 +268,10 @@ function createInputSystem(deps) {
       seen[gp.index] = true;
       let slot = padSlots[gp.index];
       if (!slot) {
-        slot = { kind: "gamepad", index: gp.index, down: {}, navHeld: {} };
+        slot = { kind: "gamepad", index: gp.index, id: gp.id || "", down: {}, navHeld: {} };
         padSlots[gp.index] = slot;
         slots.push(slot);
+        if (!lastPadId && gp.id) lastPadId = gp.id; // seed family before the first button press
       }
       if (capture) {
         // Rebinder active: feed the capture scan and suppress all normal routing so
@@ -299,7 +302,7 @@ function createInputSystem(deps) {
           slot.navHeld[a] = 0;
         }
       }
-      if (anyDown) lastDevice = "gamepad";
+      if (anyDown) { lastDevice = "gamepad"; if (slot.id) lastPadId = slot.id; }
       slot.down = cur;
     }
     // Drop pads that vanished from getGamepads() (covers missed disconnect events).
@@ -372,9 +375,16 @@ function createInputSystem(deps) {
     if (typeof window !== "undefined" && window.RA) return window.RA;
     return null;
   }
+  // Controller family ("xbox"|"ps"|"switch") of the most-recently-used pad, for platform-correct
+  // labels/glyphs. Bindings stay positional; this only changes how a code is shown.
+  function padFamily() {
+    const ns = raNS();
+    return ns && ns.padFamilyFromId ? ns.padFamilyFromId(lastPadId) : "xbox";
+  }
   function codeLabel(device, code) {
     const ns = raNS();
-    return ns && ns.codeLabel ? ns.codeLabel(device, code) : code;
+    if (!ns || !ns.codeLabel) return code;
+    return ns.codeLabel(device, code, device === "gamepad" ? padFamily() : undefined);
   }
   function label(device, action) {
     const arr = (bindings[device] && bindings[device][action]) || [];
@@ -435,6 +445,7 @@ function createInputSystem(deps) {
     consume,
     dir,
     activeDevice,
+    padFamily,
     beginCapture,
     cancelCapture,
     isCapturing,

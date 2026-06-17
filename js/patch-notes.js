@@ -20,7 +20,9 @@ export const PATCH_NOTES = [
      items: [
        "Play with a gamepad: movement, Confirm/Cancel, dash, and attack map to the W3C Standard Gamepad, including left-stick movement with a configurable stick deadzone.",
        "In-game Options -> Controls lets players rebind keyboard and gamepad inputs, with conflict detection and a guard that stops Confirm/Cancel from being left unbound.",
-       "New System tab \"Controls\" grid in the editor sets the default key/gamepad bindings a new player starts with, shown as button/key glyphs (no more console snippet).",
+       "New dedicated \"Controls\" tab in the editor sets the default key/gamepad bindings a new player starts with, shown as button/key glyphs (no more console snippet).",
+       "Gamepad glyphs auto-detect the player's controller and relabel for Xbox (A/B/X/Y), PlayStation (Cross/Circle/Square/Triangle), and Nintendo Switch (B/A/Y/X); the editor Controls tab has a per-brand preview.",
+       "Distinct procedural icons for the D-Pad, analog stick, and stick-clicks (L3/R3), so on-screen directions no longer all look the same.",
        "New \\input[action] message code shows the glyph for a bound control (e.g. \"Press \\input[ok] to continue\"), matching keyboard or gamepad to the device in use when the message opens.",
        "Input-prompt glyphs are generated procedurally, so they need no extra art and carry into standalone exports automatically.",
      ],

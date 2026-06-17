@@ -1293,7 +1293,8 @@ const _createInputSystem = window.createInputSystem;
       arr = (b[device] && b[device][act]) || [];
     }
     if (!arr.length) return esc(actionLabel(act));
-    return Assets.inputGlyphHtml(device, arr[0], "msg-icon");
+    const family = device === "gamepad" && Input.padFamily ? Input.padFamily() : "xbox";
+    return Assets.inputGlyphHtml(device, arr[0], family, "msg-icon");
   }
   Plugins.textProcessors.push((html) =>
     html.replace(/\\input\[(\w+)\]/gi, (_m, action) => inputPromptGlyph(action)));

@@ -3194,13 +3194,25 @@ const editorI18n = createEditorI18n({
         box.appendChild(row(field("Title theme", sel(s.music, "title", MUSIC_OPTS())),
           field("Battle theme", sel(s.music, "battle", MUSIC_OPTS()))));
 
-        // ---- Controls: the project's DEFAULT key/gamepad bindings (proj.system.input) ----
-        // Mirrors the in-game rebinder but edits the author defaults a new player starts with.
-        // Replaces the old localStorage console snippet for tweaking defaults.
-        box.appendChild(h("div", { class: "subhead" }, "Controls (default bindings)"));
-        box.appendChild(h("div", { class: "dim" }, "The controls a NEW player starts with. Players who change their controls in-game keep their own settings — this won't override them."));
+        box.appendChild(h("div", { class: "subhead" }, "Controls"));
+        box.appendChild(h("div", { class: "dim" }, "Default key & gamepad bindings now have their own “Controls” tab."));
+        return box;
+      } },
+      { label: "Controls", build() {
+        // The project's DEFAULT key/gamepad bindings (proj.system.input) — the controls a NEW
+        // player starts with. Mirrors the in-game rebinder; replaces the old localStorage snippet.
+        const s = proj.system;
+        const box = h("div", { class: "dbform single" });
+        box.appendChild(h("div", { class: "subhead" }, "Default controls"));
+        box.appendChild(h("div", { class: "dim" }, "The key/gamepad bindings a NEW player starts with. Players who change their controls in-game keep their own settings — editing these won't override them."));
         s.input = RA.mergeInputBindings(s.input, null); // normalize: guarantees every action/device array exists
         const inActLabel = (k) => { const a = RA.INPUT_ACTIONS.find((x) => x.key === k); return a ? a.label : k; };
+        // Display-only controller-family preview. Bindings are stored by POSITION; switching this
+        // only changes how gamepad glyphs/labels are drawn — it is NOT written to proj.system.input.
+        let previewFamily = "xbox";
+        const famOpts = RA.PAD_FAMILIES.map((f) => ({ v: f.key, l: f.label }));
+        famOpts.stringValues = true;
+        const famObj = { v: previewFamily };
         const inputWrap = h("div", { class: "input-grid-wrap" });
         box.appendChild(inputWrap);
         let inputNote;
@@ -3258,17 +3270,18 @@ const editorI18n = createEditorI18n({
           let m;
           codes.forEach((code) => {
             list.appendChild(h("button", { class: "pad-pick-btn", onclick() { m.close(); setBinding("gamepad", action, code); } },
-              h("img", { class: "bind-glyph", src: Assets.inputGlyphDataUrl("gamepad", code), alt: "" }),
-              h("span", null, RA.codeLabel("gamepad", code))));
+              h("img", { class: "bind-glyph", src: Assets.inputGlyphDataUrl("gamepad", code, previewFamily), alt: "" }),
+              h("span", null, RA.codeLabel("gamepad", code, previewFamily))));
           });
           m = modal({ title: "Bind " + inActLabel(action) + " (gamepad)", content: list, buttons: [{ label: "Cancel" }] });
         }
         function bindCell(device, action) {
           const cell = h("div", { class: "bind-cell" });
           const arr = s.input[device][action] || [];
+          const fam = device === "gamepad" ? previewFamily : undefined;
           arr.forEach((code, i) => {
             cell.appendChild(h("span", { class: "bind-chip" },
-              h("img", { class: "bind-glyph", src: Assets.inputGlyphDataUrl(device, code), alt: RA.codeLabel(device, code), title: RA.codeLabel(device, code) }),
+              h("img", { class: "bind-glyph", src: Assets.inputGlyphDataUrl(device, code, fam), alt: RA.codeLabel(device, code, fam), title: RA.codeLabel(device, code, fam) }),
               h("button", { class: "bind-x", title: "Remove", onclick() { removeBinding(device, action, i); } }, "×")));
           });
           cell.appendChild(h("button", { class: "bind-add", title: "Add binding", onclick() { device === "keyboard" ? captureKey(action) : pickGamepad(action); } }, "+"));
@@ -3280,7 +3293,10 @@ const editorI18n = createEditorI18n({
           grid.appendChild(h("div", { class: "input-row input-head" },
             h("div", { class: "input-act" }, "Action"),
             h("div", { class: "bind-cell" }, "Keyboard"),
-            h("div", { class: "bind-cell" }, "Gamepad")));
+            h("div", { class: "bind-cell gp-head" },
+              h("span", { class: "gp-head-label" }, "Gamepad"),
+              h("label", { class: "gp-preview" }, h("span", null, "Preview"),
+                sel(famObj, "v", famOpts, () => { previewFamily = famObj.v; renderInputGrid(); })))));
           for (const a of RA.INPUT_ACTIONS) {
             grid.appendChild(h("div", { class: "input-row" },
               h("div", { class: "input-act" }, a.label),
@@ -3288,6 +3304,7 @@ const editorI18n = createEditorI18n({
               bindCell("gamepad", a.key)));
           }
           inputWrap.appendChild(grid);
+          inputWrap.appendChild(h("div", { class: "dim", style: "margin-top:2px" }, "Gamepad glyphs preview the controller chosen above; in-game they auto-detect the player's. Bindings stay positional — switching the preview doesn't change them."));
           inputNote = h("div", { class: "input-note" });
           inputWrap.appendChild(inputNote);
           inputWrap.appendChild(h("div", { class: "frow", style: "margin-top:6px" },
