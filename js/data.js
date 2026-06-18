@@ -419,6 +419,11 @@ const RA = {
     for (const k of Object.keys(defTypes)) {
       if (!Array.isArray(sys.types[k]) || !sys.types[k].length) sys.types[k] = defTypes[k];
     }
+    if (!Array.isArray(p.tilesets) || !p.tilesets.length) {
+      p.tilesets = [{ id: 1, name: "Default", tileProps: {} }];
+    }
+    for (const ts of p.tilesets) ts.tileProps = ts.tileProps || {};
+    for (const m of p.maps || []) if (m.tilesetId == null) m.tilesetId = 1;
     if (!Array.isArray(p.states)) p.states = RA.defaultStates();
     p.quests = (p.quests || []).filter((q) => q && typeof q === "object").map((q) => {
       const next = Object.assign({
@@ -543,6 +548,7 @@ const DataDefaults = (() => {
     const n = width * height;
     return {
       id, name, width, height,
+      tilesetId: 1,
       music: "field",
       encounters: { troops: [], rate: 0 },
       layers: {
@@ -972,6 +978,7 @@ const DataDefaults = (() => {
       customChars: [],
       commandPresets: [],
       commonEvents: [],
+      tilesets: [{ id: 1, name: "Default", tileProps: {} }],
       assets: { tiles: {} },
       system: {
         title: "Atlas Quest",

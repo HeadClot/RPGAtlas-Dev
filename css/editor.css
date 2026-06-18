@@ -241,6 +241,43 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--gold-edge);
 .range-val { color: #8a8da4; font-size: 12px; min-width: 38px; }
 .namegrid-add { grid-column: 1 / -1; justify-self: start; margin: 8px 0 4px; }
 
+/* ---------- Tilesets tab ---------- */
+.ts-tile-grid {
+  display: flex; flex-wrap: wrap; gap: 3px; padding: 6px;
+  background: #101018; border: 1px solid #2c2f44; border-radius: 6px;
+  max-height: 210px; overflow-y: auto; margin: 4px 0 8px;
+}
+.ts-tile-btn {
+  width: 38px; height: 38px; padding: 3px;
+  background: #1a1c28; border: 1px solid #2c2f44; border-radius: 4px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+}
+.ts-tile-btn:hover { border-color: #6a7aaa; background: #22253a; }
+.ts-tile-btn.sel { border-color: var(--accent); background: rgba(70, 100, 180, 0.28); box-shadow: 0 0 0 1px var(--accent); }
+.ts-tile-detail { margin-top: 2px; border-top: 1px solid #2c2f44; padding-top: 10px; }
+.ts-tile-heading { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.ts-pass-grid {
+  display: grid; grid-template-columns: repeat(3, 40px); gap: 3px; margin: 6px 0 4px;
+}
+.ts-pass-btn {
+  width: 40px; height: 40px; font-size: 17px; cursor: pointer; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center; border: 1px solid;
+}
+.ts-pass-btn.passable { background: #1c3f26; border-color: #3a8050; color: #7fe090; }
+.ts-pass-btn.blocked  { background: #3f1c1c; border-color: #804040; color: #e08080; }
+.ts-pass-btn.passable:hover { background: #22522e; }
+.ts-pass-btn.blocked:hover  { background: #522222; }
+.ts-pass-center {
+  width: 40px; height: 40px; font-size: 20px;
+  display: flex; align-items: center; justify-content: center; border-radius: 5px; border: 1px solid;
+}
+.ts-pass-center.passable { color: #7fe090; border-color: #3a8050; background: #14281a; }
+.ts-pass-center.blocked  { color: #e08080; border-color: #804040; background: #281414; }
+.ts-pass-actions { display: flex; gap: 5px; margin: 4px 0 10px; }
+.ts-flags { display: flex; flex-direction: column; gap: 6px; margin: 5px 0 10px; }
+.ts-flag-label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px; }
+.ts-flag-label input[type=checkbox] { cursor: pointer; width: 14px; height: 14px; }
+
 /* ---- Controls: author default input-bindings grid ---- */
 .input-grid-wrap { margin: 4px 0 6px; }
 .input-grid { display: grid; grid-template-columns: 78px 1fr 1fr; gap: 6px 12px; align-items: center; margin: 6px 0; max-width: 560px; }
