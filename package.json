@@ -5,6 +5,7 @@
   "description": "Tauri desktop wrapper for the RPGAtlas editor",
   "license": "GPL-3.0-or-later",
   "scripts": {
+    "test": "node --test tests/",
     "stage": "node scripts/stage-frontend.mjs",
     "tauri": "tauri",
     "dev": "tauri dev",

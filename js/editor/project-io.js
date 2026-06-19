@@ -105,12 +105,6 @@ export async function buildStandaloneGame(project, Assets) {
   const gameId = safeFileName(title, "rpgatlas-game").toLowerCase();
   const projectJson = JSON.stringify(project).replace(/</g, "\\u003c");
   const assetsJson = JSON.stringify(usedAssets).replace(/</g, "\\u003c");
-  const messageModuleUrl = "data:text/javascript;charset=utf-8," + encodeURIComponent(files[4]);
-  const importMap = JSON.stringify({
-    imports: {
-      "./runtime/messages.js": messageModuleUrl,
-    },
-  }).replace(/</g, "\\u003c");
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -133,10 +127,10 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
   <script>${scriptText(files[1])}<\/script>
   <script>${scriptText(files[2])}<\/script>
   <script>${scriptText(files[3])}<\/script>
+  <script>${scriptText(files[4])}<\/script>
   <script>
 window.RPGAtlasDeps = { Assets, DataDefaults, GLRender: window.GLRender, Music, RA, Sfx };
   <\/script>
-  <script type="importmap">${importMap}<\/script>
   <script type="module">${scriptText(files[5])}<\/script>
 </body>
 </html>

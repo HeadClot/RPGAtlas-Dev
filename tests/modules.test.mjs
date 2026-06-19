@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -8,13 +9,22 @@ async function importBrowserModule(relativePath) {
   const source = await fs.readFile(path.join(root, relativePath), "utf8");
   return import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
 }
+// Some runtime files (e.g. runtime/messages.js) are loaded as classic <script>s in the
+// browser and export via the window global rather than ESM exports. Evaluate those the
+// same way the browser does, with a window shim, and return what they hung off it.
+async function importClassicScript(relativePath, sandbox = {}) {
+  const source = await fs.readFile(path.join(root, relativePath), "utf8");
+  const context = vm.createContext({ window: {}, console, ...sandbox });
+  vm.runInContext(source, context, { filename: relativePath });
+  return context.window;
+}
 const {
   buildStandaloneGame,
   loadStoredProject,
   safeFileName,
   saveProject,
 } = await importBrowserModule("js/editor/project-io.js");
-const { createMessageSystem } = await importBrowserModule("js/runtime/messages.js");
+const { createMessageSystem } = await importClassicScript("js/runtime/messages.js");
 const {
   createEditorI18n,
   EDITOR_LOCALE_STORAGE_KEY,
@@ -119,10 +129,10 @@ try {
     { exportUsedExternalAssets: async () => [] },
   );
   assert.equal(game.baseName, "Module_Test");
-  assert.match(game.html, /<script type="importmap">/);
-  assert.match(game.html, /data:text\/javascript;charset=utf-8/);
+  // messages.js ships as a classic script that hangs createMessageSystem off window
+  // (matching index.html/play.html); engine.js then runs as a module and reads it.
+  assert.match(game.html, /window\.createMessageSystem = createMessageSystem;/);
   assert.match(game.html, /<script type="module">/);
-  assert.match(game.html, /import \{ createMessageSystem \} from "\.\/runtime\/messages\.js";/);
   if (process.env.RPGATLAS_WRITE_STANDALONE_SMOKE) {
     await fs.writeFile(path.join(root, "tests", "standalone-smoke.html"), game.html);
   }

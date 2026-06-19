@@ -7,6 +7,12 @@
 const Renderer = (() => {
   const PIXI = window.PIXI;
   const TILE = (window.Assets && window.Assets.TILE) || 48;
+  // Screen pixels a tile rises per unit of map.heights. A 1/3-tile lift reads as
+  // a believable step in the orthographic faux-3D view (Octopath-style dioramas)
+  // without needing a tilted camera. height 9 ≈ 3 tiles tall.
+  const ELEV = Math.round(TILE / 3);
+  // Auto-shade for exposed block walls (the south face the viewer sees), ~0.6×.
+  const WALL_TINT = 0x9a9a9a;
 
   let app = null,
     ok = false;
@@ -15,6 +21,7 @@ const Renderer = (() => {
   let sceneContainer = null;
   let mapContainer = null;
   let spriteContainer = null;
+  let wallFaceContainer = null; // shaded vertical wall faces, below the sprite layer
   let lightRenderContainer = null;
   let lightMapTexture = null;
   let lightMapSprite = null;
@@ -23,6 +30,7 @@ const Renderer = (() => {
   let currentMap = null;
 
   const charSprites = new Map();
+  const wallTopSprites = []; // raised tile tops, kept in the depth-sorted sprite layer
   const lightSprPool = [];
   const activeLightSprs = [];
   const shadowGraphicsPool = [];
@@ -143,6 +151,30 @@ const Renderer = (() => {
     return Number(currentMap.heights[y * currentMap.width + x] || 0);
   }
 
+  // Pure geometry for the height-extrusion pass: one entry per elevated tile.
+  // `faceUnits` is how far the south wall is exposed over its southern neighbour
+  // (units of height) — that face is the only one visible in the top-down view;
+  // north/east/west faces never show without a tilted camera. Tiles off the south
+  // edge expose their full height. Exposed as Renderer.planWalls for unit testing.
+  function planWalls(map) {
+    const out = [];
+    if (!map || !map.heights) return out;
+    const w = map.width,
+      h = map.height,
+      hts = map.heights;
+    const at = (x, y) =>
+      x < 0 || y < 0 || x >= w || y >= h ? 0 : Number(hts[y * w + x] || 0);
+    for (let ty = 0; ty < h; ty++) {
+      for (let tx = 0; tx < w; tx++) {
+        const e = at(tx, ty);
+        if (e <= 0) continue;
+        const south = at(tx, ty + 1);
+        out.push({ tx, ty, h: e, faceUnits: Math.max(0, e - south) });
+      }
+    }
+    return out;
+  }
+
   function buildShadowForTile(
     graphics,
     lightX,
@@ -235,6 +267,8 @@ const Renderer = (() => {
       mapContainer = new PIXI.Container();
       sceneContainer.addChild(mapContainer);
 
+      wallFaceContainer = new PIXI.Container();
+
       spriteContainer = new PIXI.Container();
       spriteContainer.sortableChildren = true;
       sceneContainer.addChild(spriteContainer);
@@ -261,17 +295,60 @@ const Renderer = (() => {
     }
   }
 
+  // Build raised tops + shaded south faces for every elevated tile. Tops live in
+  // the depth-sorted sprite layer so characters occlude (and are occluded by)
+  // elevation correctly; faces sit just under the sprite layer. Both are textured
+  // from the tile's own prerendered ground pixels, so a stone cliff stays stone.
+  function buildWalls(map) {
+    wallFaceContainer.removeChildren();
+    for (const t of wallTopSprites) t.destroy();
+    wallTopSprites.length = 0;
+    if (!map || !map.heights) return;
+
+    const groundSrc = lowerSpr.texture.source;
+    const plan = planWalls(map);
+    for (const wseg of plan) {
+      const gx = wseg.tx * TILE,
+        gy = wseg.ty * TILE;
+      const rise = wseg.h * ELEV;
+      const tileTex = new PIXI.Texture({
+        source: groundSrc,
+        frame: new PIXI.Rectangle(gx, gy, TILE, TILE),
+      });
+
+      // South (front) wall face, exposed over the southern neighbour.
+      if (wseg.faceUnits > 0) {
+        const faceH = wseg.faceUnits * ELEV;
+        const face = new PIXI.Sprite(tileTex);
+        face.position.set(gx, gy + TILE - rise);
+        face.width = TILE;
+        face.height = faceH;
+        face.tint = WALL_TINT;
+        wallFaceContainer.addChild(face);
+      }
+
+      // Raised top. zIndex keys on the block's base (feet) row so it sorts
+      // against character sprites — same band*100000 + baseY key renderFrame uses.
+      const top = new PIXI.Sprite(tileTex);
+      top.position.set(gx, gy - rise);
+      top.zIndex = 1 * 100000 + (wseg.ty + 1) * TILE;
+      spriteContainer.addChild(top);
+      wallTopSprites.push(top);
+    }
+  }
+
   function setMap(lowerBuf, upperBuf, map) {
     if (!ok) return;
     mapContainer.removeChildren();
     lowerSpr = new PIXI.Sprite(PIXI.Texture.from(lowerBuf));
     upperSpr = new PIXI.Sprite(PIXI.Texture.from(upperBuf));
     mapContainer.addChild(lowerSpr);
+    mapContainer.addChild(wallFaceContainer);
     mapContainer.addChild(upperSpr);
     currentMap = map || null;
-    if (map && map.heights) upperSpr.y -= 16;
     spriteContainer.removeChildren();
     charSprites.clear();
+    buildWalls(currentMap);
   }
 
   function renderFrame(w, h, camX, camY, sprites, extra) {
@@ -306,7 +383,9 @@ const Renderer = (() => {
         }
       }
       spr.position.set(sData.rx * TILE, sData.ry * TILE - 8);
-      spr.zIndex = sData.pr;
+      // Sort by priority band, then by feet row, so characters interleave with
+      // raised wall tops (buildWalls uses the same band*100000 + baseY key).
+      spr.zIndex = sData.pr * 100000 + (sData.ry + 1) * TILE;
     }
     spriteContainer.sortChildren();
 
@@ -429,7 +508,7 @@ const Renderer = (() => {
     return null;
   }
 
-  return { available, setMap, renderFrame };
+  return { available, setMap, renderFrame, planWalls };
 })();
 
 window.Renderer = Renderer;

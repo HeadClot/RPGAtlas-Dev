@@ -6,3 +6,5 @@ src-tauri/gen/
 
 # Build artifacts
 *.log
+.agents/skills/rpgatlas-targeted-testing/SKILL.md
+.agents/skills/rpgatlas-project-workflow/SKILL.md

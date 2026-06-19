@@ -4,6 +4,26 @@
 
 export const PATCH_NOTES = [
   {
+    date: "June 19, 2026",
+    title: "HD-2D Height Extrusion",
+    summary: "Elevation painted with the map editor's Height tool now renders as raised blocks with shaded cliff faces in the HD-2D view, instead of being ignored.",
+    items: [
+      "Tiles with a non-zero height paint as raised platforms — the tile's own art lifts into a top, with a shaded south-facing wall showing the exposed step over lower terrain.",
+      "Taller terrain correctly hides what stands behind it, and characters pass in front of or behind elevation based on where their feet are.",
+      "Block height scales with the painted 0–9 value (about a third of a tile per step), so stepped ridges, plateaus, and pillars read as real depth.",
+      "Replaces the previous placeholder that simply nudged the overhead layer up by a few pixels and otherwise discarded the height layer at render time.",
+    ],
+  },
+  {
+    date: "June 19, 2026",
+    title: "Fixed Message Windows in Exported Games",
+    summary: "Standalone HTML/EXE exports now load the message system correctly, so Show Text boxes and other dialog work in exported games.",
+    items: [
+      "The standalone export now ships runtime/messages.js as a regular script (matching the editor and playtest), instead of an unused import map that left createMessageSystem undefined.",
+      "Added a continuous-integration test workflow and an npm test script so the full test suite runs automatically on every change.",
+    ],
+  },
+  {
     date: "June 18, 2026",
     title: "Reusable Common Events",
     summary: "The Database now includes Common Events for reusable command sequences, explicit calls, and switch-controlled automatic processing.",
