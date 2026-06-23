@@ -131,6 +131,9 @@ const editorI18n = createEditorI18n({
   function varOpts() {
     return [{ v: 0, l: "(none)" }].concat(proj.system.variables.map((n, i) => ({ v: i + 1, l: (i + 1) + ": " + (n || "—") })));
   }
+  function cmpOpts() {
+    return [{ v: ">=", l: "≥" }, { v: "==", l: "=" }, { v: "<=", l: "≤" }, {v: "<", l: "<"}, {v: ">", l: ">"}, {v: "!=", l: "≠"}];
+  }
   function charsetOpts(humansOnly) {
     const o = [{ v: "", l: "(none)" }];
     Assets.charsets.forEach((c) => {
@@ -2222,7 +2225,7 @@ const editorI18n = createEditorI18n({
             sub.appendChild(row(field("Switch", sel(w, "id", switchOpts())), field("Is", sel(w, "val", [{ v: "true", l: "ON" }, { v: "false", l: "OFF" }]))));
           } else if (w.kind === "var") {
             sub.appendChild(row(field("Variable", sel(w, "id", varOpts())),
-              field("Cmp", sel(w, "cmp", [{ v: ">=", l: "≥" }, { v: "==", l: "=" }, { v: "<=", l: "≤" }])),
+              field("Cmp", sel(w, "cmp", cmpOpts())),
               field("Value", nIn(w, "val"))));
           } else if (w.kind === "selfsw") {
             sub.appendChild(field("Self-Switch", sel(w, "key", [{ v: "A", l: "A" }, { v: "B", l: "B" }, { v: "C", l: "C" }, { v: "D", l: "D" }])));
@@ -3204,7 +3207,7 @@ const editorI18n = createEditorI18n({
           propRow("Switch", sel(pg.cond, "switchId", switchOpts(), refreshConditions)),
           propRow("Variable", h("div", { class: "cond-var" },
             sel(pg.cond, "varId", varOpts(), refreshConditions),
-            h("span", { class: "cond-cmp" }, "≥"),
+            sel(pg.cond, "cmp", cmpOpts(), refreshConditions),
             nIn(pg.cond, "varVal"))),
           propRow("Self-Switch", sel(pg.cond, "selfSw",
             [{ v: "", l: "(none)" }, { v: "A", l: "A" }, { v: "B", l: "B" }, { v: "C", l: "C" }, { v: "D", l: "D" }],

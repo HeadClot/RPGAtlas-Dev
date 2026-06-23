@@ -488,10 +488,13 @@ const _createInputSystem = window.createInputSystem;
     if (g === 0) return false;
     return Assets.tiles[g] ? Assets.tiles[g].pass : false;
   }
+  function compareVariable(varId, varVal, cmp) {
+    return eval(`${varId} ${cmp} ${varVal}`);
+  }
   function pageActive(evId, page) {
     const c = page.cond;
     if (c.switchId && !G.switches[c.switchId]) return false;
-    if (c.varId && !((G.vars[c.varId] || 0) >= c.varVal)) return false;
+    if (c.varId && !compareVariable(G.vars[c.varId] || 0, c.varVal, c.cmp || ">=")) return false;
     if (c.selfSw && !G.selfSw[G.mapId + ":" + evId + ":" + c.selfSw]) return false;
     if (c.questId && Quests.status(c.questId) !== (c.questStatus || "active")) return false;
     if (c.objectiveQuestId) {
@@ -1196,7 +1199,7 @@ const _createInputSystem = window.createInputSystem;
     testCond(cond) {
       if (!cond) return true;
       const cmp = (a, b, op) =>
-        op === "==" ? a === b : op === "<=" ? a <= b : a >= b;
+        compareVariable(a, b, op)
       switch (cond.kind) {
         case "switch":
           return !!G.switches[cond.id] === (cond.val !== false);
