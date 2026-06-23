@@ -488,8 +488,17 @@ const _createInputSystem = window.createInputSystem;
     if (g === 0) return false;
     return Assets.tiles[g] ? Assets.tiles[g].pass : false;
   }
-  function compareVariable(varId, varVal, cmp) {
-    return eval(`${varId} ${cmp} ${varVal}`);
+  function compareVariable(a, b, cmp) {
+    switch(cmp) {
+      case "==": return a === b;
+      case "!=": return a !== b;
+      case ">": return a > b;
+      case ">=": return a >= b;
+      case "<": return a < b;
+      case "<=": return a <= b;
+      default:
+        throw new Error("Invalid comparator: " + cmp);
+    }
   }
   function pageActive(evId, page) {
     const c = page.cond;
