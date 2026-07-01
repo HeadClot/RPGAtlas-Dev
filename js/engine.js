@@ -607,7 +607,19 @@ const _createInputSystem = window.createInputSystem;
 
   async function loadMap(mapId) {
     map = RA.byId(proj.maps, mapId);
-    if (!map) throw new Error("Map " + mapId + " not found");
+    if (!map) {
+      map = proj.maps[0];
+      if (!map) throw new Error("Map " + mapId + " not found");
+      mapId = map.id;
+    }
+    // Saved or start positions can point outside this map (deleted/resized
+    // maps, or the fallback above landing on a smaller map) — keep the player
+    // inside the grid or movement and rendering both misbehave.
+    if (G.player) {
+      const px = clamp(G.player.x | 0, 0, map.width - 1);
+      const py = clamp(G.player.y | 0, 0, map.height - 1);
+      if (px !== G.player.x || py !== G.player.y) initPlayer(px, py, G.player.dir);
+    }
     G.mapId = mapId;
     G.encSteps = 0;
     mapFloatTexts.length = 0;
@@ -1764,8 +1776,13 @@ const _createInputSystem = window.createInputSystem;
   async function render() {
     if (!ctx) return;
     if (scene === "title" || scene === "gameover") return; // backdrop persists
+    // hdActive is cached per map-load; if the GL context is lost mid-map, fall
+    // back to the Canvas 2D path for as long as the loss lasts instead of
+    // freezing on the last GL frame (Renderer recovers hdActive's underlying
+    // resources on webglcontextrestored, so this is just a live override).
+    const hdLive = hdActive && !(typeof Renderer !== "undefined" && Renderer.isLost());
     ctx.clearRect(0, 0, SCREEN_W, SCREEN_H);
-    if (!hdActive || scene !== "map") {
+    if (!hdLive || scene !== "map") {
       ctx.fillStyle = "#101018";
       ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
     }
@@ -1805,7 +1822,7 @@ const _createInputSystem = window.createInputSystem;
       if (oa !== ob) return oa - ob;
       return a.ry - b.ry;
     });
-    if (hdActive) {
+    if (hdLive) {
       const sprites = [];
       for (const d of drawables) {
         const idx = d === p ? p.charsetIdx : d.charsetIdx;
@@ -1848,7 +1865,7 @@ const _createInputSystem = window.createInputSystem;
       });
     }
 
-    if (!hdActive) {
+    if (!hdLive) {
       ctx.save();
       ctx.translate(Math.round(shakeX), Math.round(shakeY));
       ctx.scale(cameraZoom, cameraZoom);
@@ -2603,14 +2620,24 @@ const _createInputSystem = window.createInputSystem;
           },
         },
       };
-      localStorage.setItem(saveKey(slot), JSON.stringify(payload));
+      try {
+        localStorage.setItem(saveKey(slot), JSON.stringify(payload));
+      } catch (e) {
+        await showMessage("", "Could not save — storage is full or unavailable.");
+        return false;
+      }
       sysSe("save");
       await showMessage("", "Game saved to slot " + slot + ".");
       return false;
     } else {
       const info = slotInfo(slot);
       if (!info) return false;
-      await applySave(info.data);
+      try {
+        await applySave(info.data);
+      } catch (e) {
+        await showMessage("", "That save could not be loaded — it may be corrupted or reference content that no longer exists.");
+        return false;
+      }
       sysSe("save");
       return true;
     }
@@ -2631,8 +2658,9 @@ const _createInputSystem = window.createInputSystem;
     G.gold = d.gold || 0;
     G.steps = d.steps || 0;
     cameraZoom = clamp(Number(d.cameraZoom) || 1, 0.25, 4);
-    initPlayer(d.player.x, d.player.y, d.player.dir);
-    G.player.transparent = !!d.player.transparent;
+    const p = d.player || {};
+    initPlayer(p.x || 0, p.y || 0, p.dir);
+    G.player.transparent = !!p.transparent;
     await loadMap(d.mapId);
     scene = "map";
   }
@@ -2729,11 +2757,12 @@ const _createInputSystem = window.createInputSystem;
       Music.play(sysBgm("battle"));
 
       const enemies = troop.enemies
-        .map((eid, i) => {
+        .map((eid) => {
           const d = RA.byId(proj.enemies, eid);
-          return d ? { d, hp: d.stats.mhp, i, alive: true } : null;
+          return d ? { d, hp: d.stats.mhp, alive: true } : null;
         })
-        .filter(Boolean);
+        .filter(Boolean)
+        .map((en, i) => ((en.i = i), en));
 
       const sideView = proj.system.battleView === "side";
       const win = el("div", "battlewin" + (sideView ? " side" : ""));

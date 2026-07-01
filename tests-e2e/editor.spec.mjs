@@ -1,0 +1,96 @@
+/* RPGAtlas — tests-e2e/editor.spec.mjs
+   Editor smoke tests: boots cleanly and the map canvas actually paints.
+   GPL-3.0-or-later. */
+
+import { test, expect } from "@playwright/test";
+
+test.describe("editor boot", () => {
+  test("loads index.html with menu bar and map canvas, no console errors", async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", (err) => errors.push(String(err)));
+    page.on("console", (msg) => {
+      if (msg.type() !== "error") return;
+      // js/assets.js discoverExternalAssets() optimistically probes for
+      // img/assets.json and directory-listing fallbacks (img/characters/,
+      // img/facesets/, img/enemies/, img/tilesets/) that don't exist for the
+      // built-in tileset-only project; it catches the failures itself and
+      // falls back gracefully. Chromium still logs the underlying 404
+      // resource loads as console "error" messages even though the app
+      // never calls console.error for this — that's expected noise, not a
+      // real boot failure, so it's excluded here rather than papered over
+      // in application code.
+      if (/Failed to load resource.*404/.test(msg.text())) return;
+      errors.push(msg.text());
+    });
+
+    await page.goto("/index.html");
+
+    await expect(page.locator("#menubar")).toBeVisible();
+    await expect(page.locator("#mapcanvas")).toBeVisible();
+    // Menus are built at boot (buildMenubar) — wait for at least one to exist
+    // rather than sleeping, so this is robust against boot taking longer on
+    // a slow CI runner.
+    await expect(page.locator("#menus > *").first()).toBeAttached();
+    // Palette canvas is populated from the tileset asset once boot finishes.
+    await expect(page.locator("#palette")).toBeVisible();
+
+    expect(errors, `console/page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
+test.describe("editor painting", () => {
+  test("selecting a palette tile and clicking the map canvas changes map data", async ({ page }) => {
+    await page.goto("/index.html");
+
+    // Wait for boot to finish: the autosave indicator only exists once
+    // rebuildAll()/saveNow() have run.
+    const saveIndicator = page.locator("#save-ind");
+    await expect(saveIndicator).toBeVisible();
+
+    const paletteCanvas = page.locator("#palette");
+    const mapCanvas = page.locator("#mapcanvas");
+    await expect(paletteCanvas).toBeVisible();
+    await expect(mapCanvas).toBeVisible();
+
+    // Read the map's serialized state (as persisted to localStorage) before
+    // painting. We assert via the editor's own persistence format rather
+    // than pixel-reading the canvas or reaching into JS closures (editor.js
+    // exposes no debug globals) — this is the same data the app itself
+    // treats as ground truth.
+    const readProject = () =>
+      page.evaluate(() => JSON.parse(localStorage.getItem("rpgatlas_project")));
+
+    // boot() ends with an unconditional saveNow(), so localStorage already
+    // reflects the freshly-loaded project once the indicator reads "saved".
+    // (Avoid Ctrl+S here: it collides with the browser's native Save Page
+    // shortcut in some Chromium configurations.)
+    // NB: match anchored on the leading glyph, not just /saved/ — the
+    // "unsaved" string itself contains "saved" as a substring, so a loose
+    // regex here would also match the pre-save state.
+    await expect(saveIndicator).toHaveText(/^✓ /);
+    const before = await readProject();
+    const mapId = before.system.startMapId || before.maps[0].id;
+    const mapBefore = before.maps.find((m) => m.id === mapId);
+    const layersBefore = JSON.stringify(mapBefore.layers);
+
+    // Pick a palette tile (second swatch, away from 0/empty) then paint a
+    // cell on the map canvas that is very likely empty at map load edges.
+    const paletteBox = await paletteCanvas.boundingBox();
+    await page.mouse.click(paletteBox.x + paletteBox.width * 0.5, paletteBox.y + 8);
+
+    const mapBox = await mapCanvas.boundingBox();
+    // Click near the top-left corner of the drawn map, inside its bounds.
+    await page.mouse.click(mapBox.x + 10, mapBox.y + 10);
+
+    // touch() debounces the autosave by 700ms — wait on the UI's own
+    // "unsaved" -> "saved" transition instead of a fixed sleep.
+    await expect(saveIndicator).toHaveText(/^● /);
+    await expect(saveIndicator).toHaveText(/^✓ /, { timeout: 5000 });
+
+    const after = await readProject();
+    const mapAfter = after.maps.find((m) => m.id === mapId);
+    const layersAfter = JSON.stringify(mapAfter.layers);
+
+    expect(layersAfter).not.toEqual(layersBefore);
+  });
+});

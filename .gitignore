@@ -6,5 +6,16 @@ src-tauri/gen/
 
 # Build artifacts
 *.log
+
+# Vite / toolchain build output & caches
+dist/
+.vite/
+*.tsbuildinfo
 .agents/skills/rpgatlas-targeted-testing/SKILL.md
 .agents/skills/rpgatlas-project-workflow/SKILL.md
+
+# Playwright e2e output (reports/traces/videos) — golden baselines under
+# tests-e2e/__snapshots__/ are intentionally NOT ignored; they're checked in.
+/test-results/
+/playwright-report/
+/blob-report/

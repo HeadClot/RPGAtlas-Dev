@@ -9,14 +9,15 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FRONTEND_INCLUDE } from "../js/build-manifest.mjs";
 
 // scripts/ sits directly under the repo root, regardless of the caller's cwd.
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const dist = join(root, "src-tauri", "dist");
 
-// Everything the editor and player need at runtime. bin/ ships the launcher
-// used by the "Windows EXE" game-export feature.
-const include = ["index.html", "play.html", "css", "js", "img", "bin"];
+// Everything the editor and player need at runtime, from the shared build
+// manifest. bin/ ships the launcher used by the "Windows EXE" export feature.
+const include = FRONTEND_INCLUDE;
 
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });

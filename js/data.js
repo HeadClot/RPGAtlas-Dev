@@ -366,10 +366,35 @@ const RA = {
       { id: 3, name: "Regen", icon: 11, color: "#70e090", restrict: "none", hpTurn: 8, minTurns: 3, maxTurns: 4, removeAtEnd: true },
     ];
   },
+  // --- Explicit schema versioning -------------------------------------
+  // project.meta.formatVersion is an integer schema version. Projects saved
+  // before this field existed are treated as version 0. RA.FORMAT_VERSION is
+  // the current (latest) schema version; RA.migrations is an ordered registry
+  // of { version, migrate(project) } steps, each upgrading from (version - 1)
+  // to `version`. migrateProject() below runs every step whose version is
+  // greater than the project's current formatVersion, in ascending order,
+  // then stamps meta.formatVersion to RA.FORMAT_VERSION.
+  //
+  // Forward-compat guard: if a project's formatVersion is ALREADY GREATER than
+  // RA.FORMAT_VERSION (e.g. the file was saved by a newer build and opened in
+  // an older one), migrateProject() runs NO steps and does NOT touch the
+  // stamped formatVersion (never downgrade it) — the project is returned as-is
+  // so an older build doesn't silently mangle a newer save format.
+  FORMAT_VERSION: 1,
+  migrations: [
+    {
+      // v0 -> v1: the pre-existing ad-hoc migration (decor2 layer, shadows,
+      // passability overrides, heights, plugins, quests, custom characters,
+      // input bindings, type lists, etc). Also adopts pre-rebrand "driftwood"
+      // engine projects. Behavior preserved exactly from the legacy
+      // (unversioned) migrateProject().
+      version: 1,
+      migrate(p) { RA._migrateV0toV1(p); },
+    },
+  ],
   // upgrade older projects in place (adds the decor2 layer, shadows,
   // passability overrides, plugins and custom characters)
-  migrateProject(p) {
-    if (!p || !p.meta) return p;
+  _migrateV0toV1(p) {
     p.meta.engine = "rpgatlas"; // also adopts pre-rebrand "driftwood" projects
     p.meta.version = 3;
     p.plugins = p.plugins || [];
@@ -569,6 +594,19 @@ const RA = {
       }
       p.meta.builtinsSeeded = true;
     }
+  },
+  // Run every registered migration step whose version is greater than the
+  // project's current meta.formatVersion (missing == 0), in ascending order,
+  // then stamp meta.formatVersion to RA.FORMAT_VERSION. See the comment above
+  // RA.FORMAT_VERSION for the forward-compat guard's exact behavior.
+  migrateProject(p) {
+    if (!p || !p.meta) return p;
+    const current = Number(p.meta.formatVersion) || 0;
+    if (current > RA.FORMAT_VERSION) return p; // forward-compat: don't touch it
+    for (const step of RA.migrations) {
+      if (step.version > current) step.migrate(p);
+    }
+    p.meta.formatVersion = RA.FORMAT_VERSION;
     return p;
   },
 };
@@ -931,7 +969,7 @@ const DataDefaults = (() => {
   // ---------- default database ----------
   function newProject() {
     const proj = {
-      meta: { engine: "rpgatlas", version: 3, builtinsSeeded: true },
+      meta: { engine: "rpgatlas", version: 3, builtinsSeeded: true, formatVersion: RA.FORMAT_VERSION },
       plugins: typeof AtlasBuiltins !== "undefined" ? AtlasBuiltins.seed(1) : [],
       quests: [
         {

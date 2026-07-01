@@ -135,13 +135,30 @@ function createInputSystem(deps) {
     if (d) {
       d.addEventListener("keydown", onKeyDown);
       d.addEventListener("keyup", onKeyUp);
+      d.addEventListener("visibilitychange", onVisibilityChange);
     }
     // Connect/disconnect are best-effort hints; the poller also creates/drops slots
     // lazily from getGamepads() so a missed event never strands input.
     if (win && win.addEventListener) {
       win.addEventListener("gamepadconnected", onPadConnected);
       win.addEventListener("gamepaddisconnected", onPadDisconnected);
+      win.addEventListener("blur", clearHeld);
     }
+  }
+  // If focus leaves the window (alt-tab, a native file dialog, switching apps) while a key
+  // or pad button is held, releasing it while unfocused never fires a keyup/poll diff, so
+  // the action would otherwise stay "held" forever. Clear all held state on blur and on the
+  // tab going hidden — the player has to press the key again once focus returns, same as a
+  // fresh press. Bound bindings/capture state are untouched, only the live-held snapshot.
+  function clearHeld() {
+    keyboard.down = {};
+    for (const code in heldCodes) delete heldCodes[code];
+    for (const idx in padSlots) padSlots[idx].down = {};
+    edgeQueue = [];
+    edges = {};
+  }
+  function onVisibilityChange() {
+    if (doc && doc.hidden) clearHeld();
   }
   function onKeyDown(e) {
     // Capture mode (rebinder) takes absolute precedence: grab the next fresh key for a

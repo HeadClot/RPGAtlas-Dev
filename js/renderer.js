@@ -276,9 +276,23 @@ const Renderer = (() => {
       gl = cv.getContext("webgl2", { antialias: false, premultipliedAlpha: true });
       if (gl) {
         init();
-        cv.addEventListener("webglcontextlost", () => {
+        // preventDefault tells the browser we intend to handle recovery, which
+        // is required for a webglcontextrestored event to ever fire.
+        cv.addEventListener("webglcontextlost", (e) => {
+          e.preventDefault();
           console.warn("HD-2D: WebGL context lost — falling back to Canvas 2D.");
           ok = false;
+        });
+        cv.addEventListener("webglcontextrestored", () => {
+          console.warn("HD-2D: WebGL context restored — rebuilding GPU resources.");
+          rt = null; // old FBOs/textures behind this handle are already gone
+          texList = [];
+          terrainBatches = [];
+          overheadBatches = [];
+          spriteTexCache = new WeakMap(); // cached textures are dead too
+          init();
+          ok = true;
+          if (lastMapArgs) setMap(lastMapArgs[0], lastMapArgs[1], lastMapArgs[2]);
         });
       }
       ok = !!gl;
@@ -432,8 +446,11 @@ const Renderer = (() => {
 
   // Rebuild the whole scene for a map: chunk textures plus one static vertex
   // buffer holding the flat ground, extruded blocks and elevated overhead tiles.
+  // Remembered so a webglcontextrestored handler can replay the last call.
+  let lastMapArgs = null;
   function setMap(lowerBuf, upperBuf, map) {
     if (!ok) return;
+    lastMapArgs = [lowerBuf, upperBuf, map];
     texList.forEach((t) => gl.deleteTexture(t));
     texList = [];
     terrainBatches = [];
@@ -529,7 +546,9 @@ const Renderer = (() => {
   // ---------------------------- sprites ----------------------------
   // Assets.charFrameCanvas caches its canvases, so keying GPU textures off the
   // canvas object means each frame is uploaded once and reused.
-  const spriteTexCache = new WeakMap();
+  // `let` (not `const`): swapped for a fresh WeakMap on context restore, since
+  // the cached WebGLTexture handles from before the loss are all dead.
+  let spriteTexCache = new WeakMap();
   function texFor(srcCanvas) {
     let t = spriteTexCache.get(srcCanvas);
     if (!t) { t = makeTexture(srcCanvas); spriteTexCache.set(srcCanvas, t); }
@@ -714,7 +733,14 @@ const Renderer = (() => {
     return cv;
   }
 
-  return { available, setMap, renderFrame, planWalls, planLightOccluders };
+  // True while the GL context is lost (between webglcontextlost and a
+  // successful webglcontextrestored rebuild). Lets the host fall back to the
+  // Canvas 2D path for the duration instead of freezing on the last frame.
+  function isLost() {
+    return !ok || (!!gl && gl.isContextLost());
+  }
+
+  return { available, setMap, renderFrame, isLost, planWalls, planLightOccluders };
 })();
 
 window.Renderer = Renderer;

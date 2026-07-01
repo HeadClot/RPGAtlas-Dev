@@ -8,13 +8,14 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: GPL v3" src="https://img.shields.io/badge/License-GPLv3-blue.svg"></a>
-  <img alt="No dependencies" src="https://img.shields.io/badge/dependencies-none-brightgreen.svg">
-  <img alt="No build step" src="https://img.shields.io/badge/build_step-none-brightgreen.svg">
+  <img alt="Zero-install runtime" src="https://img.shields.io/badge/runtime-zero--install-brightgreen.svg">
+  <img alt="Self-contained exports" src="https://img.shields.io/badge/exports-self--contained-brightgreen.svg">
 </p>
 
 **RPGAtlas** is a complete, original, **free and open source** RPG making engine in the spirit of
-classic 2D RPG makers. No copyrighted assets, no build step — everything (code,
-tiles, sprites, monsters, sound effects, even the music) is generated procedurally in plain JavaScript.
+classic 2D RPG makers. No copyrighted assets, nothing to install for creators or players — everything
+(code, tiles, sprites, monsters, sound effects, even the music) is generated procedurally in plain
+JavaScript, and exported games are single self-contained files.
 
 ## Quick start
 
@@ -138,6 +139,27 @@ every new project:
 - **Atlas_TextCodes** — inline icons with `\i[n]`, `\c[n]` color codes, and BBCode (`[b]`, `[i]`, `[color]`, `[size]`) in messages
 - **Atlas_Transitions** — transfer effects: fade, iris, curtain, slide (`Atlas.transition = 'iris'`)
 - **Atlas_Weather** — rain, storm, snow and fog overlays, per-map or scripted (`Atlas.weather('rain', 6)`)
+
+## Developing the engine
+
+Using RPGAtlas needs no tooling at all — the sections above work by serving the folder as
+static files. Contributing to the engine uses a modern toolchain (Node 20+):
+
+```
+npm install
+npm run dev        # Vite dev server for editor + player
+npm test           # engine test suites (node --test)
+npm run test:unit  # vitest unit tests
+npm run test:e2e   # Playwright smoke + golden-image render tests
+npm run build      # production build in dist/ (verbatim runtime passthrough)
+npm run typecheck  # TypeScript (new code is TS; legacy JS migrates per phase)
+npm run lint
+```
+
+The overhaul currently in progress is mapped in
+[`docs/PRODUCTION_ROADMAP.md`](docs/PRODUCTION_ROADMAP.md) — see it before starting larger
+contributions, and see [`docs/architectural_overview.md`](docs/architectural_overview.md)
+for how the codebase fits together.
 
 ## Code structure
 

@@ -56,6 +56,27 @@ async function fetchBuildSource(path) {
   return response.text();
 }
 
+// The standalone-export file list lives in the shared build manifest so the
+// export, the Tauri staging step, and the packaged exe never drift apart. In the
+// browser (Vite serves js/build-manifest.mjs) a direct dynamic import resolves;
+// in the Node test harness this module is evaluated from a data: URL where a
+// relative import cannot be resolved, so we fall back to fetching the manifest
+// source and importing it as a data: URL.
+async function loadStandaloneExportFiles() {
+  try {
+    return (await import("../build-manifest.mjs")).STANDALONE_EXPORT_FILES;
+  } catch {
+    const source = await fetchBuildSource("js/build-manifest.mjs");
+    // btoa() is Latin1-only; the manifest source has UTF-8 comment characters,
+    // so encode the bytes first. This path only runs in the Node test harness.
+    const base64 = btoa(
+      String.fromCharCode(...new TextEncoder().encode(source)),
+    );
+    const module = await import("data:text/javascript;base64," + base64);
+    return module.STANDALONE_EXPORT_FILES;
+  }
+}
+
 function blobDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -115,14 +136,7 @@ export async function exportProjectFile(project) {
 }
 
 export async function buildStandaloneGame(project, Assets) {
-  const paths = [
-    "css/play.css",
-    "js/assets.js",
-    "js/sfx.js",
-    "js/data.js",
-    "js/runtime/messages.js",
-    "js/engine.js",
-  ];
+  const paths = await loadStandaloneExportFiles();
   const [files, usedAssets, iconSet] = await Promise.all([
     Promise.all(paths.map(fetchBuildSource)),
     Assets.exportUsedExternalAssets(project),

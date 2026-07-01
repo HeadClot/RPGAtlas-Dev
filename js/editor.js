@@ -1243,9 +1243,22 @@ const editorI18n = createEditorI18n({
     if (proj.maps.length <= 1) { alert("A project needs at least one map."); return; }
     const m = curMap();
     confirmBox('Delete map "' + m.name + '"? This cannot be undone.', () => {
+      const danglers = [];
+      for (const om of proj.maps) {
+        if (om.id === m.id) continue;
+        for (const ev of om.events) {
+          walkCommands(ev.pages.flatMap((pg) => pg.commands || []), (c) => {
+            if (c.t === "transfer" && c.mapId === m.id) danglers.push(om.name + " → " + ev.name);
+          });
+        }
+      }
       proj.maps = proj.maps.filter((x) => x.id !== m.id);
+      if (proj.system.startMapId === m.id) proj.system.startMapId = proj.maps[0].id;
       curMapId = proj.maps[0].id;
       rebuildMapList(); renderMap(); touch();
+      if (danglers.length) {
+        alert('Map "' + m.name + '" was deleted, but these events still have a Transfer Player command targeting it and need to be fixed manually:\n\n' + danglers.join("\n"));
+      }
     });
   }
 

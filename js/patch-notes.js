@@ -4,6 +4,22 @@
 
 export const PATCH_NOTES = [
   {
+    date: "July 1, 2026",
+    title: "Atlas HD Phase 0 — Stability & Foundations",
+    summary:
+      "First phase of the Atlas HD overhaul: several crash fixes players could hit in normal use, versioned project files, and a modern engine-development toolchain (using and playing RPGAtlas still needs no install).",
+    items: [
+      "Fixed a battle crash when a troop contained a deleted enemy before a surviving one — attacks and enemy AI now target correctly.",
+      "Deleting a map now reassigns the game's starting map if needed and lists any events whose Transfer Player commands still point at the deleted map.",
+      "Continue and Load no longer crash on saves that reference a deleted map — the game falls back to an existing map and keeps the player inside its bounds.",
+      "In-game saving now shows 'Could not save — storage is full or unavailable.' instead of freezing the event that opened the save menu.",
+      "HD-2D now survives a lost graphics context: the game falls back to classic 2D rendering and automatically rebuilds and resumes HD-2D when the browser restores the GPU.",
+      "Alt-tabbing or losing window focus while holding a key no longer leaves the player walking on their own.",
+      "Project files now carry a formatVersion with a proper migration registry, protecting projects opened across engine versions (newer projects are left untouched by older engines).",
+      "New contributor toolchain: Vite dev server, TypeScript, ESLint, Vitest, Playwright smoke and golden-image render tests, and CI — see the README's 'Developing the engine' section. Exports and the zero-install workflow are unchanged.",
+    ],
+  },
+  {
     date: "June 29, 2026",
     title: "Plugin Metadata Foundation",
     summary: "Plugins now have formal metadata fields, clearer validation, and a more flexible Plugin Manager layout.",
