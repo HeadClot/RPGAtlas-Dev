@@ -7,9 +7,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { Assets, RA, editorState as S } from "../editor-state";
-import { h, tIn } from "../dom";
+import { h, tIn, sel, nIn, field } from "../dom";
 import { modal, confirmBox } from "../modals";
 import { touch } from "../persistence";
+import { flashStatus } from "../map-editor/status";
+import {
+  sharedNumericFields, applyBulk, cloneEntries, writeDbClip, readDbClip, type BulkOp,
+} from "./bulk";
 
 export const STAT_KEYS = ["mhp", "mmp", "atk", "def", "mat", "mdf", "agi"];
 export const PARAM_KEYS = ["atk", "def", "mat", "mdf", "agi"];
@@ -39,25 +43,130 @@ export function traitDefault(type: any) {
 }
 
 export function listFormTab(spec: any) {
-  // spec: {list(), blank(), label(e), form(e, box)}
+  // spec: {list(), blank(), form(e, box), kind?, reorderable?, allowEmpty?}
+  // Stage E upgrades: a search box filters the list; per-row checkboxes drive
+  // multi-select bulk actions (Bulk Edit / Duplicate / Copy / Delete); Copy/
+  // Paste use a cross-project clipboard keyed by `spec.kind`.
+  const kind = spec.kind || "misc";
   const wrap = h("div", { class: "dbtab" });
   const listEl = h("ul", { class: "dblist" });
   const formEl = h("div", { class: "dbform" });
+  const bulkBar = h("div", { class: "dbbulk", style: "display:none" });
   let cur: any = null;
+  let filter = "";
+  const checked = new Set<any>();
+
+  function matches(e: any) {
+    if (!filter) return true;
+    const q = filter.toLowerCase();
+    return String(e.id).includes(q) || String(e.name || "").toLowerCase().includes(q);
+  }
+  function checkedList() { return spec.list().filter((e: any) => checked.has(e)); }
+
   function redrawList() {
     listEl.innerHTML = "";
-    for (const e of spec.list()) {
+    // drop stale checkbox refs (deleted entries)
+    for (const e of [...checked]) if (!spec.list().includes(e)) checked.delete(e);
+    const shown = spec.list().filter(matches);
+    if (!shown.length) {
+      listEl.appendChild(h("li", { class: "db-empty dim" },
+        filter ? "No entries match “" + filter + "”." : "No entries yet."));
+    }
+    for (const e of shown) {
+      const box = h("input", { type: "checkbox", class: "db-entry-check",
+        title: "Select for bulk actions",
+        onclick(ev: any) {
+          ev.stopPropagation();
+          if (ev.target.checked) checked.add(e); else checked.delete(e);
+          redrawBulk();
+        } });
+      if (checked.has(e)) (box as HTMLInputElement).checked = true;
       const li = h("li", { class: e === cur ? "sel" : "", onclick() { cur = e; redrawList(); redrawForm(); } },
-        h("span", { class: "db-entry-id" }, e.id + ":"));
+        box, h("span", { class: "db-entry-id" }, e.id + ":"));
       if (e.icon != null) li.appendChild(Assets.iconSpan(e.icon, "db-entry-icon"));
       li.appendChild(h("span", null, e.name || "—"));
       listEl.appendChild(li);
     }
+    redrawBulk();
   }
   function redrawForm() {
     formEl.innerHTML = "";
     if (cur) spec.form(cur, formEl, () => { redrawList(); });
   }
+
+  function redrawBulk() {
+    const sel = checkedList();
+    const n = sel.length;
+    bulkBar.innerHTML = "";
+    bulkBar.style.display = n ? "" : "none";
+    if (!n) return;
+    bulkBar.appendChild(h("span", { class: "dbbulk-count" }, n + " selected"));
+    bulkBar.appendChild(h("button", { class: "mini", title: "Adjust a shared numeric field on all selected",
+      onclick: () => openBulkEdit(sel) }, "Bulk Edit…"));
+    bulkBar.appendChild(h("button", { class: "mini", title: "Duplicate the selected entries",
+      onclick: () => duplicate(sel) }, "Duplicate"));
+    bulkBar.appendChild(h("button", { class: "mini", title: "Copy to the cross-project clipboard",
+      onclick: () => { writeDbClip(kind, sel); flashStatus("Copied " + n + " " + kind + " to clipboard"); } }, "Copy"));
+    bulkBar.appendChild(h("button", { class: "mini danger", title: "Delete the selected entries",
+      onclick: () => bulkDelete(sel) }, "Delete"));
+    bulkBar.appendChild(h("button", { class: "mini", title: "Clear selection",
+      onclick: () => { checked.clear(); redrawList(); } }, "Clear"));
+  }
+
+  function duplicate(sel: any[]) {
+    if (!sel.length) return;
+    const clones = cloneEntries(sel, spec.list());
+    spec.list().push(...clones);
+    checked.clear(); cur = clones[0]; touch(); redrawList(); redrawForm();
+    flashStatus("Duplicated " + clones.length + (clones.length > 1 ? " entries" : " entry"));
+  }
+  function bulkDelete(sel: any[]) {
+    if (!sel.length) return;
+    const arr = spec.list();
+    if (spec.allowEmpty !== true && arr.length - sel.length < 1) { alert("Keep at least one entry."); return; }
+    confirmBox("Delete " + sel.length + " selected " + (sel.length > 1 ? "entries" : "entry") + "?", () => {
+      spec.list().splice(0, arr.length, ...arr.filter((e: any) => !checked.has(e)));
+      checked.clear();
+      if (!spec.list().includes(cur)) cur = spec.list()[0] || null;
+      touch(); redrawList(); redrawForm();
+    });
+  }
+  function pasteClip() {
+    const clip = readDbClip();
+    if (!clip) { flashStatus("Clipboard is empty — Copy some entries first"); return; }
+    if (clip.kind !== kind) { flashStatus("Clipboard holds " + clip.kind + ", not " + kind); return; }
+    const clones = cloneEntries(clip.entries, spec.list());
+    spec.list().push(...clones);
+    cur = clones[0]; touch(); redrawList(); redrawForm();
+    flashStatus("Pasted " + clones.length + " " + kind);
+  }
+
+  function openBulkEdit(sel: any[]) {
+    const fields = sharedNumericFields(sel);
+    if (!fields.length) { alert("The selected entries share no numeric fields to edit."); return; }
+    const work: any = { field: fields[0], op: "set", value: 0 };
+    const content = h("div", null,
+      h("p", { class: "dim", style: "margin:0 0 8px" }, "Apply to " + sel.length + " selected " + (sel.length > 1 ? "entries" : "entry") + "."),
+      field("Field", sel2(work, "field", fields.map((f) => ({ v: f, l: f })))),
+      row(field("Operation", sel2(work, "op", [
+        { v: "set", l: "Set to" }, { v: "add", l: "Add" }, { v: "mul", l: "Multiply by" }])),
+        field("Value", nIn(work, "value", -99999, 99999, 0.1))));
+    modal({
+      title: "Bulk Edit", content, dialogKeys: true,
+      buttons: [
+        { label: "Apply", primary: true, onClick(c: any) {
+          const n = applyBulk(sel, work.field, work.op as BulkOp, Number(work.value) || 0);
+          touch(); redrawList(); redrawForm(); c();
+          flashStatus("Updated " + work.field + " on " + n + (n > 1 ? " entries" : " entry"));
+        } },
+        { label: "Cancel" },
+      ],
+    });
+  }
+
+  const search = h("input", { type: "search", class: "dbsearch", placeholder: "Search…", spellcheck: "false",
+    oninput(e: any) { filter = e.target.value; redrawList(); } });
+
   const btns = h("div", { class: "dbbtns" },
     h("button", { onclick() {
       const e = spec.blank();
@@ -65,6 +174,7 @@ export function listFormTab(spec: any) {
       spec.list().push(e);
       cur = e; touch(); redrawList(); redrawForm();
     } }, "+ New"),
+    h("button", { class: "mini", title: "Paste entries from the cross-project clipboard", onclick: pasteClip }, "Paste"),
     ...(spec.reorderable ? [
       h("button", { class: "mini", title: "Move earlier", onclick() {
         if (!cur) return;
@@ -98,10 +208,15 @@ export function listFormTab(spec: any) {
   );
   cur = spec.list()[0] || null;
   redrawList(); redrawForm();
-  wrap.appendChild(h("div", { class: "dbside" }, btns, listEl));
+  wrap.appendChild(h("div", { class: "dbside" }, search, btns, bulkBar, listEl));
   wrap.appendChild(formEl);
   return wrap;
 }
+
+// Local aliases so the bulk-edit dialog can build bound selects/rows without
+// colliding with the `sel` set names above.
+function sel2(obj: any, key: any, options: any) { return sel(obj, key, options); }
+function row(...kids: any[]) { return h("div", { class: "frow" }, ...kids); }
 
 export function nameRefresher(e: any, redrawList: any) {
   const inp = tIn(e, "name");

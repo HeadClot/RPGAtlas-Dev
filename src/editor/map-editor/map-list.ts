@@ -664,12 +664,16 @@ import { walkCommands } from "../event-editor/command-list";
     };
     const fogColorIn = h("input", { type: "color", value: hdW.fogColor,
       oninput(e: any) { hdW.fogColor = e.target.value; } });
+    const notesIn = h("textarea", { class: "map-notes", rows: "3",
+      placeholder: "Author notes for this map (shown in the World View)…" });
+    notesIn.value = m.notes || "";
     const content = h("div", null,
       field("Name", tIn(work, "name")),
       row(field("Width", nIn(work, "width", 5, 200)), field("Height", nIn(work, "height", 5, 200))),
       row(field("Tileset", sel(work, "tilesetId", dbOpts(tilesets))), field("Music", sel(work, "music", MUSIC_OPTS()))),
       field("Encounter rate (steps, 0 = off)", nIn(work, "rate", 0, 999)),
       h("div", { class: "fld" }, h("span", null, "Encounter troops"), troopBox),
+      h("div", { class: "fld" }, h("span", null, "Notes (World View)"), notesIn),
       h("div", { class: "fld" }, h("span", null, "HD-2D (3D perspective rendering)")),
       row(field("Enabled", chk(hdW, "enabled")), field("Camera tilt (25–89°)", nIn(hdW, "tilt", 25, 89))),
       row(field("Bloom", chk(hdW, "bloom")), field("Depth of field", chk(hdW, "dof"))),
@@ -706,6 +710,7 @@ import { walkCommands } from "../event-editor/command-list";
           m.tilesetId = work.tilesetId;
           m.music = work.music;
           m.encounters = { rate: work.rate, troops: encTroops };
+          { const nv = String(notesIn.value || ""); if (nv) m.notes = nv; else delete m.notes; }
           m.hd2d = {
             enabled: hdW.enabled, tilt: hdW.tilt,
             bloom: hdW.bloom, dof: hdW.dof,

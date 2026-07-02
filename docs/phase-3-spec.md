@@ -2,6 +2,43 @@
 
 **Status:** IN PROGRESS. Stage log accumulates here, phase-2-spec style.
 
+Stage E COMPLETE (2026-07-02): World View & database upgrades. **World View** — a
+dockable bird's-eye panel (dock id `world`, toggled by F3 / View menu / the
+`worldview` command; lazy `mount` like the HD-2D viewport). It draws the whole
+project as a map-connection graph over a pure, unit-tested core
+(`src/shared/world-graph.ts`: `collectTransfers` walks each map's events —
+recursing if/choices exactly like the editor's `walkCommands` — `buildWorldGraph`
+aggregates directed edges per (from,to) with counts and flags danglers/self-
+loops, `autoLayout` gives a deterministic BFS-column layout per connected
+component, `retargetEdge` rewrites the transfer commands behind one link).
+`src/editor/map-editor/world-view.ts`: SVG edges + DOM nodes on a scaled/scroll
+stage — drag a node to arrange (persists `map.worldPos`, an additive editor-only
+field, snapped to quarter-cells), click to select, double-click to open the map,
+edit per-map notes (`map.notes`) in the inspector, and **drag-to-relink** by
+dragging an arrow's ↻ handle onto another map (hit-tested → `retargetEdge`).
+Rebuilds on show and via `worldDirty()` wired into `touch()` (same pattern as
+`viewportDirty`). **Database list upgrades** — the shared `listFormTab` scaffold
+(`database/shared.ts`) gains a search box, per-row multi-select checkboxes, and a
+bulk bar: **Bulk Edit** a shared numeric field (set/add/mul over dotted paths),
+**Duplicate**, cross-project **Copy/Paste** (localStorage clipboard keyed by a
+new per-tab `kind`), and multi **Delete** — all backed by pure helpers in
+`database/bulk.ts` (`sharedNumericFields`, `applyBulk`, `cloneEntries`,
+`read/writeDbClip`). **Formula fields** are realised as editor-only computed
+previews (no engine/runtime change, per the phase non-goals): the Classes tab
+shows a live stat-curve table (levels 1/25/50/99) via the exact engine curve
+`floor(base + growth·(level−1))`, and the Skills tab an interactive damage
+preview using the engine's phys/magic/heal formulas. `map.notes` also editable in
+Map Properties. Schema: `GameMap.notes?` + `GameMap.worldPos?` (optional,
+absent-is-meaningful → no forced backfill, like `lights?`/`heights?`).
+`editor.css?v=43`, `patch-notes.js?v=10` (+ shim), wiki updated. Verified live
+(World View renders 3 nodes / 4 arrows / re-link handles for the sample game;
+Lv99 Warrior HP preview = 930 = 48+9·98 exact; DB search empties+restores, bulk
+bar on check, cross-project paste) + 15 new pure unit tests (world-graph 7,
+db-bulk 8) + 2 new editor e2e (World View node-per-map + drag-persists-worldPos;
+DB search + bulk-bar). Full gate green: tsc, eslint, node --test (16), vitest
+(75), Playwright editor(8)+golden(11, byte-identical)/player/export/perf (26).
+Next Stage F (unified undo + UI polish, Opus + Fable sign-off).
+
 Stage D2 COMPLETE (2026-07-02): cliff auto-texturing (Phase 2's deferred
 terrain item, split out of Stage D to keep parity risk off that merge). New
 **OFF-by-default `map.hd2d.cliffs` flag** in the three.js renderer

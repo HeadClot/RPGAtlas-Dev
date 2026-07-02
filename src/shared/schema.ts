@@ -682,6 +682,12 @@ export interface GameMap {
   events: MapEvent[];
   hd2d?: Hd2dConfig;
   lights?: MapLight[];
+  /** Free-form author notes for this map (Phase 3 Stage E). Editor-only:
+   *  purely additive, absent = no note; the engine never reads it. */
+  notes?: string;
+  /** Pinned bird's-eye position in the World View, in grid cells (Phase 3
+   *  Stage E). Editor-only; absent ⇒ the view auto-lays the node out. */
+  worldPos?: { x: number; y: number };
 }
 
 // ============================================================================
