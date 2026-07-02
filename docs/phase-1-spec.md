@@ -89,6 +89,17 @@ gate green. A stage may be several commits, but never merges red.
 **Stage A exit:** dev + build + export + exe/Tauri staging all behavior-identical;
 export smoke test added and green; goldens unchanged.
 
+> **Stage A audit finding + integrator decision (2026-07-01):** the standalone export
+> was already broken *before* Phase 0 — `STANDALONE_EXPORT_FILES` omitted
+> `js/quests.js`, `js/journal-view.js`, `js/runtime/input.js`, all hard boot
+> dependencies, so every exported game crashed before the title screen (regression
+> from the "Save & Events Update" commit, which added quests/journal to the engine
+> without updating the export list). Stage A preserved the crash per the freeze rule;
+> Fable then fixed it as an isolated follow-up commit — the freeze protects against
+> refactor-induced regressions, not pre-existing crashes, and Stages B/C need a
+> *booting* export smoke test as their safety net. The export e2e now asserts a
+> working title screen.
+
 ### Stage B — `engine.js` → `src/engine/` (after A)
 
 *Owner: Opus (single agent, sequential — interpreter, battle, save/load are delicate).*

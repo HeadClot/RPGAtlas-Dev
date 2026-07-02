@@ -5,6 +5,16 @@
 export const PATCH_NOTES = [
   {
     date: "July 1, 2026",
+    title: "Standalone Export Fix",
+    summary:
+      "Exported games (Standalone HTML and Windows EXE) work again — a long-standing packaging gap made every exported game crash on startup before showing the title screen.",
+    items: [
+      "Exports now include the quest runtime, quest journal view, and input system the engine requires at startup; exported games boot to the title screen and play normally.",
+      "An automated export smoke test now boots a freshly exported game on every change, so exports can't silently break again.",
+    ],
+  },
+  {
+    date: "July 1, 2026",
     title: "Atlas HD Phase 0 — Stability & Foundations",
     summary:
       "First phase of the Atlas HD overhaul: several crash fixes players could hit in normal use, versioned project files, and a modern engine-development toolchain (using and playing RPGAtlas still needs no install).",

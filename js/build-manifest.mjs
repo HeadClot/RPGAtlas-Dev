@@ -18,18 +18,26 @@ export const PLAYER_BUNDLE_DEV_URL = "/__atlas/player-bundle.js";
 export const PLAYER_BUNDLE_FILE = "player-bundle.js";
 
 /* Ordered list of sources inlined into a single-file standalone game export.
-   Order matters and is positional (project-io.js indexes files[0..5]): the CSS
-   is embedded first as a <style>, the classic runtime scripts run in sequence
-   to populate globals, and the player bundle runs last as a module. This
-   mirrors the classic <script> load order in play.html. The last entry is a
-   placeholder — project-io.js swaps it for the environment-correct player
-   bundle URL (dev vs dist) via resolvePlayerBundleUrl() before fetching. */
+   Order matters: the CSS (first entry) is embedded as a <style>, the classic
+   runtime scripts run in sequence to populate globals, and the player bundle
+   (last entry) runs as a module. This mirrors the classic <script> load order
+   in play.html. The last entry is a placeholder — project-io.js swaps it for
+   the environment-correct player bundle URL (dev vs dist) via
+   resolvePlayerBundleUrl() before fetching.
+
+   js/runtime/input.js, js/quests.js and js/journal-view.js are hard boot
+   dependencies of the engine (createInputSystem, RPGAtlasQuests.create,
+   RPGAtlasJournalView.create); their earlier omission made every exported
+   game crash on boot (bug predating Phase 0, fixed 2026-07-01). */
 export const STANDALONE_EXPORT_FILES = [
   "css/play.css",
   "js/assets.js",
   "js/sfx.js",
   "js/data.js",
   "js/runtime/messages.js",
+  "js/runtime/input.js",
+  "js/quests.js",
+  "js/journal-view.js",
   PLAYER_BUNDLE_FILE,
 ];
 

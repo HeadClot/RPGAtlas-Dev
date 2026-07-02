@@ -97,7 +97,7 @@ async function loadStandaloneExportPaths() {
   const paths = manifest.STANDALONE_EXPORT_FILES.slice();
   // The manifest lists the player bundle by its dist filename; swap in the
   // environment-correct URL (dev middleware vs emitted file). The bundle is
-  // always the last positional entry (files[5]) — see build-manifest.mjs.
+  // always the last positional entry — see build-manifest.mjs.
   const bundleUrl = resolvePlayerBundleUrl(manifest);
   paths[paths.length - 1] = bundleUrl;
   return paths;
@@ -174,6 +174,12 @@ export async function buildStandaloneGame(project, Assets) {
   const gameId = safeFileName(title, "rpgatlas-game").toLowerCase();
   const projectJson = JSON.stringify(project).replace(/</g, "\\u003c");
   const assetsJson = JSON.stringify(usedAssets).replace(/</g, "\\u003c");
+  // files[0] is the CSS and the last entry is the player bundle (module); every
+  // file between them is a classic script inlined in manifest order.
+  const classicScripts = files
+    .slice(1, -1)
+    .map((source) => `  <script>${scriptText(source)}<\/script>`)
+    .join("\n");
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -193,14 +199,11 @@ window.RPGATLAS_ASSETS = JSON.parse(document.getElementById("rpgatlas-assets").t
 window.RPGATLAS_ICON_SET = ${JSON.stringify(iconSet)};
 window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
   <\/script>
-  <script>${scriptText(files[1])}<\/script>
-  <script>${scriptText(files[2])}<\/script>
-  <script>${scriptText(files[3])}<\/script>
-  <script>${scriptText(files[4])}<\/script>
+${classicScripts}
   <script>
 window.RPGAtlasDeps = { Assets, DataDefaults, GLRender: window.GLRender, Music, RA, Sfx };
   <\/script>
-  <script type="module">${scriptText(files[5])}<\/script>
+  <script type="module">${scriptText(files[files.length - 1])}<\/script>
 </body>
 </html>
 `;
