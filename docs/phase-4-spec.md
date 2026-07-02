@@ -1,6 +1,74 @@
 # Phase 4 Spec — Atlas Graph (node-based visual scripting)
 
-**Status:** IN PROGRESS. Stage log accumulates here, phase-2/3-spec style.
+**Status:** COMPLETE (Stages A+B, 2026-07-02). Stage log below, phase-2/3-spec style.
+
+Stage B COMPLETE (2026-07-02): the graph editor.
+`src/editor/event-editor/graph-editor.ts` — the canvas widget on the
+world-view pattern (DOM node cards over an SVG bezier edge layer on a
+translate+scale stage): background-drag pan, wheel zoom-to-cursor, node drag,
+**port drag-to-wire** (drop a wire on empty canvas → pickCommand opens and the
+new node lands there pre-wired), right-click menus (canvas: Add command…/
+comment/frame/reroute; node: Edit/Set as Start/Disconnect/Delete), double-click
+→ the command's own editCommand dialog, edge click + Delete to disconnect,
+comments with resizable frames, reroute dots, a corner **minimap**
+(click-to-jump), fitView on open, and a **live validation banner**
+(validateGraph after every change; errors keep the page's last good compile
+and offer a "Show" jump to the offending node). Every mutation runs
+snapshot → mutate → recompile into page.commands → rerender. Event-editor
+integration (`event-editor.ts`): a **List | Graph toggle** above the center
+pane — Graph on a classic page converts via decompileCommands (then
+recompiles immediately so graph and commands stay in lockstep); while a graph
+owns the page the List view is a read-only compiled preview (buildCmdRows,
+non-interactive) and **Convert to list…** (confirm) detaches the graph keeping
+the compiled commands; per-page Ctrl+Z history snapshots
+**{commands, graph} together** (pageShot) so an undo never desyncs them; the
+inspector reuse is free (onSelect feeds the selected node's cmd through the
+same mountForm path; its commit path calls the widget's redraw, which
+normalizeOut()s ports — so editing a Choices node's options live-reshapes its
+ports); onEvKey treats .graph-wrap like .cmdlist (canvas owns Delete/digits).
+The node library is CMD_DEFS verbatim (+ commandPresets = Script/plugin
+nodes). Verified live in the running editor (Elder page: convert → 4 nodes/
+4 edges/clean banner; node delete heals the chain 4→3 edges; Ctrl+Z restores
+graph+commands together; OK + autosave persists page.graph with commands
+byte-identical to pre-conversion; port drag rewire raises a live
+"Unreachable node" warning; read-only List preview; Cancel discards).
+`editor.css?v=45` (.graph-* + .ev-viewtoggle/.ev-center-host),
+`patch-notes.js?v=12` (+ shim), wiki/Events.md (Atlas Graph section + Loop/
+Break Loop in the command reference). New e2e: convert→verify→OK→persist +
+lossless round-trip on the sample game. Full gate green: tsc, eslint,
+node --test (16), vitest (104), Playwright **29/29** (editor 11 incl. the new
+graph spec; all 11 renderer goldens byte-identical; player/export/perf).
+
+Stage A COMPLETE (2026-07-02): the pure core + the one engine addition.
+Schema: `CmdLoop {t:"loop", body}` / `CmdBreakLoop` join the AnyCommand
+union; `GraphNode`/`EventGraph` IR types; additive `EventPage.graph?`.
+Interpreter: `interp.breakLoop` unwind flag checked by runList after every
+exec (never set unless a loop/break exists → pre-Phase-4 behavior untouched);
+the `loop` handler re-runs its body until the flag, consuming it, and awaits
+one frame every 1000 iterations so a wait-less loop cannot freeze the tab.
+Editor: Loop/Break Loop CMD_DEFS entries (classic lists get them too); the
+command tree renders a "▸ Repeat" branch; every list walker learned
+loop.body (command-list walkCommands/buildCmdRows/ownsArray, world-graph
+walk, js/assets.js export scan — assets.js?v=13). Pure core
+`src/shared/event-graph.ts`: outPortLabels (if=[Then,Else,After],
+choices=[…options,After], loop=[Body,After] — the **After port** is the
+design keystone: structured compile, no join heuristics), normalizeOut,
+addNode/connect/deleteNode (single-out deletes heal the flow through),
+compileGraph (deterministic; reroute pass-through; merges by tail
+duplication; per-path DFS stack rejects cycles; 4096-command overflow guard;
+errors → commands:[] so callers keep the last good compile), validateGraph
+(+ no-entry error, unreachable warnings), decompileCommands (deterministic
+grid layout — chains flow right, branches stack down; branch arrays kept
+EMPTY inside node payloads; **compile(decompile(cmds)) is identity** on
+normalized lists). Tests: 18-test vitest suite (ports, chains, branches,
+loop, diamond merge, cycle, exponential-fan-out guard, healing, layout
+determinism, round-trip) + loop/breakLoop behavior in
+tests/interpreter.test.js.
+
+**Deviations from the plan:** none of substance. Stretch items stayed
+deferred (expression nodes, function graphs, label/jump — the spec's
+non-goals). Loop back-edges are rejected as cycles (the Loop node's Body
+port is the sanctioned repeat), matching the spec.
 
 **Branch:** `phase-4-graph` (off `main` after the Phase 3 Stage F merge)
 **Architect & implementation:** Claude Fable 5 (roadmap assignment: "graph IR +
