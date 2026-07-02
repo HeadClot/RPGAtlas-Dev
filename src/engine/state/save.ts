@@ -14,23 +14,10 @@ import { showList } from "../ui-stack.js";
 import { ctx } from "./engine-context.js";
 import { G, sanitizeEquipment, param } from "./game-state.js";
 import { loadMap, initPlayer } from "../scenes/map-runtime.js";
+import { browserSaveRepository as saves } from "../../platform/browser/save-repository.js";
 
-function saveKey(slot: any): string {
-  const gameId = (window as any).RPGATLAS_GAME_ID;
-  return gameId
-    ? "rpgatlas_" + gameId + "_save_" + slot
-    : "rpgatlas_save_" + slot;
-}
 export function slotInfo(slot: any): any {
-  try {
-    const raw =
-      localStorage.getItem(saveKey(slot)) ||
-      localStorage.getItem(saveKey(slot).replace(/^rpgatlas/, "driftwood")); // pre-rebrand saves
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+  return saves.slotInfo(slot);
 }
 export async function saveLoadMenu(mode: any): Promise<boolean> {
   const slots = [1, 2, 3];
@@ -83,9 +70,7 @@ export async function saveLoadMenu(mode: any): Promise<boolean> {
         },
       },
     };
-    try {
-      localStorage.setItem(saveKey(slot), JSON.stringify(payload));
-    } catch {
+    if (!saves.writeSlot(slot, payload)) {
       await ctx.showMessage("", "Could not save — storage is full or unavailable.");
       return false;
     }

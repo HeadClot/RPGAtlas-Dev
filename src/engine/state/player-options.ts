@@ -13,25 +13,19 @@
 import { Music, Sfx } from "../../shared/deps.js";
 import { clamp } from "../util.js";
 import { ctx } from "./engine-context.js";
+import {
+  browserSaveRepository as saves,
+  optionsKey as savesOptionsKey,
+} from "../../platform/browser/save-repository.js";
 
-export function optionsKey(): string {
-  const gameId = (window as any).RPGATLAS_GAME_ID;
-  return gameId ? "rpgatlas_" + gameId + "_options" : "rpgatlas_options";
-}
+// Re-exported for the key-naming contract; the storage read/write now runs
+// through the SaveRepository (behavior-frozen: same key, same fallbacks).
+export const optionsKey = savesOptionsKey;
 export function loadOptions(): any {
-  try {
-    const raw = localStorage.getItem(optionsKey());
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+  return saves.readOptions();
 }
 export function saveOptions(): void {
-  try {
-    localStorage.setItem(optionsKey(), JSON.stringify(ctx.playerOptions));
-  } catch {
-    /* storage full or unavailable — options simply don't persist */
-  }
+  saves.writeOptions(ctx.playerOptions);
 }
 // ---- player-option setters (mutate playerOptions + persist) ----
 export function audioVol(ch: any): number {

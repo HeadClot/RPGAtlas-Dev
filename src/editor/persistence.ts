@@ -9,16 +9,22 @@ import {
   exportProjectFile,
   exportStandaloneHtml as writeStandaloneHtml,
   exportWindowsExecutable as writeWindowsExecutable,
-  loadStoredProject,
-  saveProject,
 } from "../../js/editor/project-io.js";
 import * as host from "../../js/editor/host.js";
 import { validateProject } from "../shared/schema";
+import { BrowserProjectRepository } from "../platform/browser/project-repository";
 import { Assets, RA, t, editorState as S, editorHooks } from "./editor-state";
 import { $, h } from "./dom";
 import { modal } from "./modals";
 import { flashStatus } from "./map-editor/status";
 import { hdMarkDirty } from "./map-editor/hd-preview";
+
+// The editor's project store over localStorage. The migrator runs the project
+// through RA.migrateProject then the load-boundary schema guard, so both
+// loadStored() and the first-run gate see the same behavior as before.
+const projectRepo = new BrowserProjectRepository(
+  (project: any) => validateProject(RA.migrateProject(project), "load"),
+);
 
   let saveTimer: any = null;
   export function touch() {
@@ -29,7 +35,7 @@ import { hdMarkDirty } from "./map-editor/hd-preview";
   }
   export function saveNow() {
     try {
-      saveProject(localStorage, S.proj);
+      projectRepo.saveProject(S.proj);
       $("save-ind").textContent = "✓ " + t("saved");
     } catch (e: any) {
       $("save-ind").textContent = "⚠ " + t("save failed");
@@ -37,8 +43,7 @@ import { hdMarkDirty } from "./map-editor/hd-preview";
     }
   }
   export function loadStored() {
-    const p = loadStoredProject(localStorage, (project: any) => RA.migrateProject(project));
-    return p == null ? p : validateProject(p, "load");
+    return projectRepo.loadProject();
   }
   // Desktop: the .json file the project is bound to. Save (Ctrl+S) writes here
   // silently once set; the first save — or Export (Save As) — prompts for it.
