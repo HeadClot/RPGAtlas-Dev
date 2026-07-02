@@ -1467,7 +1467,16 @@ export function createThreeRenderer(): any {
         mesh.material = depthMatFor(mesh);
       }
     }
+    // Non-casters (water surface, drop blobs, weather particles) must not
+    // reach the depth passes at all — they'd draw with their own camera-space
+    // shaders and pollute the light's depth map.
+    const wasVisible: Array<[THREE.Group, boolean]> = [];
+    for (const g of [waterGroup, dropGroup, weatherGroup]) {
+      wasVisible.push([g, g.visible]);
+      g.visible = false;
+    }
     fn(meshes);
+    for (const [g, v] of wasVisible) g.visible = v;
     for (const [mesh, mat] of swapped) mesh.material = mat;
   }
 

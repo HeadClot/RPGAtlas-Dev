@@ -61,6 +61,7 @@ export async function saveLoadMenu(mode: any): Promise<boolean> {
         gold: G.gold,
         steps: G.steps,
         cameraZoom: ctx.cameraZoom,
+        timeOfDay: G.timeOfDay,
         mapId: G.mapId,
         player: {
           x: G.player.x,
@@ -110,5 +111,8 @@ async function applySave(d: any): Promise<void> {
   initPlayer(p.x || 0, p.y || 0, p.dir);
   G.player.transparent = !!p.transparent;
   await loadMap(d.mapId);
+  // After loadMap: the saved clock wins over the map's on-entry pin (the
+  // player was already on this map at that time). Old saves lack the field.
+  if (d.timeOfDay != null) G.timeOfDay = clamp(Number(d.timeOfDay) || 0, 0, 24);
   ctx.scene = "map";
 }

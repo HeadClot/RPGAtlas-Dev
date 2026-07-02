@@ -639,6 +639,29 @@ export interface Hd2dConfig {
    *  azimuth: compass degrees clockwise from north (default 35);
    *  elevation: degrees above the horizon (default 55, clamped 15–85). */
   sun?: { azimuth?: number; elevation?: number };
+  /** Point-light shadows (Stage B.2): the 4 lights nearest the camera cast.
+   *  true = full occlusion, or an explicit 0..1 strength. */
+  pointShadows?: boolean | number;
+  /** Animated water surface over water/deepwater/swamp ground tiles
+   *  (Stage C): true = on, or an explicit 0..1 intensity. */
+  water?: boolean | number;
+  /** Auto-generated normal/specular/emissive maps for terrain (Stage C). */
+  materials?: boolean;
+  /** Post stack v2 (Stage D). */
+  aces?: boolean;
+  fxaa?: boolean;
+  ssao?: boolean | number;
+  vignette?: boolean | number;
+  /** Color-grade preset: "warm" | "cool" | "night" | "sepia" | "noir". */
+  lut?: string;
+  /** Day/night cycle (Stage D): lighting follows the in-game clock. */
+  dayNight?: boolean;
+  /** Pin the clock (hours 0–24) when entering this map; null/absent = keep. */
+  timeOfDay?: number | null;
+  /** Weather particles (Stage E): "rain" | "snow" | "motes". */
+  weather?: string;
+  /** Soft blob shadows under characters (Stage E). */
+  dropShadows?: boolean;
 }
 
 export interface GameMap {
