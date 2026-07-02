@@ -32,6 +32,7 @@ import {
   initPlayer,
   refreshPlayerCharset,
 } from "./scenes/map-runtime.js";
+import { render, TICK_MS } from "./render-glue.js";
 // Shared engine context (Phase 1 Stage B): imported as EC because `ctx` here is
 // the game canvas 2d context. The IIFE installs getter/setter bridges onto EC
 // (below, before the boot section) so extracted modules see this closure's
@@ -501,125 +502,8 @@ const _createInputSystem = window.createInputSystem;
   }
 
   // ============================ rendering ============================
-  async function render() {
-    if (!ctx) return;
-    if (scene === "title" || scene === "gameover") return; // backdrop persists
-    // hdActive is cached per map-load; if the GL context is lost mid-map, fall
-    // back to the Canvas 2D path for as long as the loss lasts instead of
-    // freezing on the last GL frame (Renderer recovers hdActive's underlying
-    // resources on webglcontextrestored, so this is just a live override).
-    const hdLive = hdActive && !(typeof Renderer !== "undefined" && Renderer.isLost());
-    ctx.clearRect(0, 0, SCREEN_W, SCREEN_H);
-    if (!hdLive || scene !== "map") {
-      ctx.fillStyle = "#101018";
-      ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
-    }
-    if (scene !== "map" && scene !== "battle") return;
-    if (!map || !G.player) return;
-    const p = G.player;
-    let shakeX = 0,
-      shakeY = 0;
-    if (shakeTimer > 0) {
-      const freq = shakeSpeed * 0.5;
-      const decay = shakeTimer / (shakeDuration || 30);
-      const amp =
-        shakePower * 2.5 * decay *
-        (playerOptions.shakeScale == null ? 1 : playerOptions.shakeScale);
-      shakeX = Math.sin(globalT * freq) * amp;
-      shakeY = Math.cos(globalT * freq * 0.85) * amp;
-    }
-    // blend between the previous and current tick by the loop's leftover time, so motion is
-    // smooth on any refresh rate. Identity when an entity didn't move (prx == rx).
-    const alpha = clamp(loopAcc / TICK_MS, 0, 1);
-    const ip = (pv, cv) => (pv == null ? cv : pv + (cv - pv) * alpha);
-    const pix = ip(p.prx, p.rx), piy = ip(p.pry, p.ry);
-    const viewW = SCREEN_W / cameraZoom, viewH = SCREEN_H / cameraZoom;
-    const camX = clamp(pix * TILE + TILE / 2 - viewW / 2, 0, Math.max(0, map.width * TILE - viewW));
-    const camY = clamp(piy * TILE + TILE / 2 - viewH / 2, 0, Math.max(0, map.height * TILE - viewH));
-    const drawables = [];
-    for (const rt of evRTs) {
-      if (rt.erased || !rt.page || rt.charsetIdx < 0) continue;
-      drawables.push(rt);
-    }
-    if (!p.transparent) drawables.push(p);
-    drawables.sort((a, b) => {
-      const pa = a.page ? a.page.priority : "same",
-        pb = b.page ? b.page.priority : "same";
-      const oa = pa === "below" ? 0 : pa === "above" ? 2 : 1;
-      const ob = pb === "below" ? 0 : pb === "above" ? 2 : 1;
-      if (oa !== ob) return oa - ob;
-      return a.ry - b.ry;
-    });
-    if (hdLive) {
-      const sprites = [];
-      for (const d of drawables) {
-        const idx = d === p ? p.charsetIdx : d.charsetIdx;
-        if (idx < 0) continue;
-        const pri = d.page ? d.page.priority : "same";
-        sprites.push({
-          id: d === p ? "player" : "ev_" + d.ev.id,
-          canvas: Assets.charFrameCanvas(idx, d.dir, walkFrame(d)),
-          rx: ip(d.prx, d.rx), ry: ip(d.pry, d.ry),
-          pr: pri === "below" ? 0 : pri === "above" ? 2 : 1,
-        });
-      }
-      const lights = [];
-      const lightsEnabled = !map.hd2d || map.hd2d.lights !== false;
-      if (lightsEnabled) {
-        // Event lights
-        for (const rt of evRTs) {
-          if (rt.light && !rt.erased && rt.page) {
-            lights.push({ rx: ip(rt.prx, rt.rx), ry: ip(rt.pry, rt.ry), color: rt.light.color, radius: rt.light.radius });
-          }
-        }
-        // Map lights
-        if (map.lights) {
-          for (const l of map.lights) lights.push(l);
-        }
-      }
-      const ambient =
-        map.hd2d && map.hd2d.ambient != null ? Number(map.hd2d.ambient) : 0.45;
-      const tilt =
-        map.hd2d && map.hd2d.tilt != null ? Number(map.hd2d.tilt) : 50;
-      await Renderer.renderFrame(SCREEN_W, SCREEN_H, camX, camY, sprites, {
-        focus: { rx: pix, ry: piy },
-        lights,
-        zoom: cameraZoom,
-        shakeX,
-        shakeY,
-        ambient,
-        tilt,
-        tilePassable,
-      });
-    }
-
-    if (!hdLive) {
-      ctx.save();
-      ctx.translate(Math.round(shakeX), Math.round(shakeY));
-      ctx.scale(cameraZoom, cameraZoom);
-      ctx.drawImage(lowerBuf, -camX, -camY);
-      for (const d of drawables) {
-        const idx = d === p ? p.charsetIdx : d.charsetIdx;
-        Assets.drawChar(ctx, idx, d.dir, walkFrame(d), Math.round(ip(d.prx, d.rx) * TILE - camX), Math.round(ip(d.pry, d.ry) * TILE - 8 - camY));
-      }
-      ctx.drawImage(upperBuf, -camX, -camY);
-      ctx.restore();
-    }
-    drawMapCombatOverlay(ctx, camX, camY, shakeX, shakeY, alpha, pix, piy);
-    if (flashTimer > 0) {
-      const decay = flashTimer / (flashDuration || 15);
-      ctx.save();
-      ctx.fillStyle = flashColor;
-      ctx.globalAlpha = flashOpacity * decay;
-      ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
-      ctx.restore();
-    }
-    if (scene === "map") Plugins.fireRender(ctx, {
-      w: SCREEN_W, h: SCREEN_H, t: globalT, map: map,
-      camX: camX, camY: camY, cameraZoom: cameraZoom,
-      playerX: pix, playerY: piy, alpha: alpha, // interpolated player pos + blend factor
-    });
-  }
+  // render() lives in ../render-glue.ts (Phase 1 Stage B), imported above;
+  // it reads this closure's state through the shared engine context.
 
   // Fixed-timestep loop: update() runs at a steady 60 ticks/sec regardless of refresh rate,
   // render() once per frame (every frame, at full refresh). Keeps the tick-based engine in
@@ -627,7 +511,6 @@ const _createInputSystem = window.createInputSystem;
   // render() is async (WebGL HD-2D path), so we await it to avoid overlapping frames.
 
   let loopLast = 0, loopAcc = 0;
-  const TICK_MS = 1000 / 60;
   async function loop(now) {
     if (loopLast === 0) loopLast = now;   // first frame: establish baseline, no delta
     loopAcc += now - loopLast;
