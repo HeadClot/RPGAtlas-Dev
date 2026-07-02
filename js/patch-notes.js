@@ -4,6 +4,56 @@
 
 export const PATCH_NOTES = [
   {
+    date: "July 2, 2026",
+    title: "Weather, stairs, drop shadows — and the HD-2D overhaul is complete",
+    summary:
+      "Phase 2 of the Atlas HD overhaul wraps up: GPU weather particles fall inside the 3D scene, stairs tiles become real ramps, characters get soft drop shadows, and the renderer is tuned to hold 60 fps at 1080p with every effect enabled.",
+    items: [
+      "New 'Weather particles' setting in Map Properties: Rain, Snow, or floating Ambient motes, rendered inside the HD-2D scene (they fall behind buildings and in front of the ground, not as a flat overlay).",
+      "New 'Soft character drop shadows' toggle: a gentle blob grounds every character even without sun shadows.",
+      "Stairs tiles now render as real sloped ramps between terrain heights in HD-2D.",
+      "Performance: chunk-level view culling plus a CI-enforced frame budget — the sample map with every feature on (shadows, water, materials, rain, day/night, full post stack) holds 60 fps at 1080p on ordinary hardware.",
+      "The Whispering Cave in the sample project is now an HD-2D showcase: point-light shadows off the rock formations, glowing lava and crystal, dust motes, night color grade.",
+      "The old pre-three.js renderer has been retired (?renderer=classic no longer switches); two driver-strict shader bugs found on real GPUs (water at dusk, weather particles) were fixed on the way out.",
+    ],
+  },
+  {
+    date: "July 2, 2026",
+    title: "Cinematic post stack and a day/night cycle",
+    summary:
+      "HD-2D maps gain a film-grade finishing stack — ACES tone mapping, color grades, vignette, ambient occlusion, FXAA — plus a real day/night cycle where the sun arcs across the sky, shadows stretch and fade, and windows light up after dark.",
+    items: [
+      "New Map Properties toggles: ACES filmic tone mapping, FXAA anti-aliasing, SSAO ambient occlusion, vignette, and a color-grade preset (Warm, Cool, Night, Sepia, Noir) — all per map, combinable with bloom/depth-of-field/fog.",
+      "New 'Day/night cycle' toggle: the map's lighting follows an in-game clock — golden dawns and dusks, blue moonlit nights, the sun (and its shadows) sweeping east to west, and emissive windows/torches igniting at night with Auto materials.",
+      "Set each map's 'Time of day on entry', and drive the clock from scripts/plugins with game.setTimeOfDay(hours) / game.getTimeOfDay(); the clock is saved with the game.",
+      "All effects render in the editor's HD-2D preview and in exported games.",
+    ],
+  },
+  {
+    date: "July 2, 2026",
+    title: "Living water and auto materials for HD-2D maps",
+    summary:
+      "Ponds, rivers, and swamps come alive with animated waves, real reflections, and shore foam — and a new auto-material system gives tiles light-reactive relief, specular sparkle, and windows that glow at night.",
+    items: [
+      "New 'Water surface' toggle in Map Properties: water/deep-water/swamp tiles get an animated surface with planar reflections (characters and terrain mirror in the water), refraction ripples, sun glints, and foam along shores.",
+      "New 'Auto materials' toggle: normal maps are auto-generated from every tile's artwork so point lights reveal relief; wet/icy/crystal tiles get specular highlights; windows, torches, lava, and crystals glow as ambient light drops (they ignite automatically with the upcoming day/night cycle).",
+      "Both effects are per-map, off by default, and cost nothing when disabled.",
+      "Works in the editor's live HD-2D preview and in exported games.",
+    ],
+  },
+  {
+    date: "July 2, 2026",
+    title: "Point lights now cast shadows on HD-2D maps",
+    summary:
+      "Torches, lamps, and any other point light can now cast real-time shadows: walls block lamplight and characters throw flickering shadows away from nearby flames.",
+    items: [
+      "New 'Point-light shadows' toggle in Map Properties (HD-2D section); off by default, existing maps are unchanged.",
+      "The 4 lights nearest the camera cast omnidirectional soft shadows (raised terrain, overhead tiles, and characters all occlude).",
+      "Advanced: map.hd2d.pointShadows accepts a 0–1 strength for partially-soft occlusion instead of full darkness.",
+      "Works in the editor's live HD-2D preview and in exported games.",
+    ],
+  },
+  {
     date: "July 1, 2026",
     title: "Real-time sun shadows for HD-2D maps",
     summary:

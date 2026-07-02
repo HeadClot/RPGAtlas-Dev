@@ -49,10 +49,9 @@ export interface SaveRepository {
   writeOptions(options: any): void;
 }
 
-/** The engine↔renderer boundary (src/engine/render-glue.ts over the renderer
- *  selection seam src/renderer/index.ts — three.js by default since Phase 2
- *  Stage A, classic js/renderer.js behind ?renderer=classic until parity
- *  sign-off retires it). */
+/** The engine↔renderer boundary (src/engine/render-glue.ts over the seam
+ *  src/renderer/index.ts — the three.js renderer, sole renderer since the
+ *  classic raw-WebGL2 script retired at Phase 2 exit). */
 export interface RendererAdapter {
   /** Draw one frame from the current game state on the shared engine context
    *  (called once per rAF from the loop's render phase; reads ctx, must not

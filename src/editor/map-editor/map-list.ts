@@ -651,6 +651,15 @@ import { walkCommands } from "../event-editor/command-list";
       lights: !!hd.lights,
       ambient: hd.ambient == null ? 0.45 : Number(hd.ambient),
       shadows: !!hd.shadows,
+      pointShadows: !!hd.pointShadows,
+      water: !!hd.water,
+      materials: !!hd.materials,
+      weather: typeof hd.weather === "string" ? hd.weather : "",
+      dropShadows: !!hd.dropShadows,
+      aces: !!hd.aces, fxaa: !!hd.fxaa, ssao: !!hd.ssao, vignette: !!hd.vignette,
+      lut: typeof hd.lut === "string" ? hd.lut : "",
+      dayNight: !!hd.dayNight,
+      timeOfDay: hd.timeOfDay == null ? "" : String(hd.timeOfDay),
     };
     const fogColorIn = h("input", { type: "color", value: hdW.fogColor,
       oninput(e: any) { hdW.fogColor = e.target.value; } });
@@ -665,7 +674,25 @@ import { walkCommands } from "../event-editor/command-list";
       row(field("Bloom", chk(hdW, "bloom")), field("Depth of field", chk(hdW, "dof"))),
       row(field("Distance fog", chk(hdW, "fog")), field("Fog color", fogColorIn)),
       row(field("Point lights", chk(hdW, "lights")), field("Ambient light (0–2)", nIn(hdW, "ambient", 0, 2, 0.05))),
-      field("Sun shadows (terrain & characters cast real-time shadows)", chk(hdW, "shadows")),
+      row(field("Sun shadows (terrain & characters cast)", chk(hdW, "shadows")),
+        field("Point-light shadows (4 nearest lights cast)", chk(hdW, "pointShadows"))),
+      row(field("Water surface (waves, reflections, foam)", chk(hdW, "water")),
+        field("Auto materials (relief, specular, night glow)", chk(hdW, "materials"))),
+      row(field("Weather particles", sel(hdW, "weather", [
+        { v: "", l: "None" }, { v: "rain", l: "Rain" },
+        { v: "snow", l: "Snow" }, { v: "motes", l: "Ambient motes" },
+      ])),
+        field("Soft character drop shadows", chk(hdW, "dropShadows"))),
+      row(field("ACES filmic tone mapping", chk(hdW, "aces")),
+        field("FXAA anti-aliasing", chk(hdW, "fxaa"))),
+      row(field("Ambient occlusion (SSAO)", chk(hdW, "ssao")),
+        field("Vignette", chk(hdW, "vignette"))),
+      row(field("Color grade", sel(hdW, "lut", [
+        { v: "", l: "None" }, { v: "warm", l: "Warm" }, { v: "cool", l: "Cool" },
+        { v: "night", l: "Night" }, { v: "sepia", l: "Sepia" }, { v: "noir", l: "Noir" },
+      ])),
+        field("Day/night cycle (sun follows the clock)", chk(hdW, "dayNight"))),
+      field("Time of day on entry (hours 0–24, blank = keep current)", tIn(hdW, "timeOfDay")),
       h("div", { class: "dim" }, "Paint elevation in Height mode (H). Lights are events named “light #rrggbb radius”. Preview with Game ▸ HD-2D Preview."),
     );
     modal({
@@ -683,6 +710,17 @@ import { walkCommands } from "../event-editor/command-list";
             fog: hdW.fog ? { color: hdW.fogColor } : false,
             lights: hdW.lights, ambient: hdW.ambient,
             shadows: hdW.shadows,
+            pointShadows: hdW.pointShadows,
+            water: hdW.water,
+            materials: hdW.materials,
+            weather: hdW.weather || "",
+            dropShadows: hdW.dropShadows,
+            aces: hdW.aces, fxaa: hdW.fxaa, ssao: hdW.ssao, vignette: hdW.vignette,
+            lut: hdW.lut || "",
+            dayNight: hdW.dayNight,
+            timeOfDay: String(hdW.timeOfDay).trim() === ""
+              ? null
+              : Math.min(24, Math.max(0, Number(hdW.timeOfDay) || 0)),
           };
           if (work.width !== m.width || work.height !== m.height) resizeMap(m, work.width, work.height);
           close(); rebuildMapList(); renderMap(); touch();

@@ -118,6 +118,8 @@ export async function render(): Promise<void> {
       ambient,
       tilt,
       tilePassable,
+      t: ctx.globalT, // renderer animations (water waves etc.) key off the engine tick
+      timeOfDay: G.timeOfDay == null ? 12 : G.timeOfDay,
     });
   }
 

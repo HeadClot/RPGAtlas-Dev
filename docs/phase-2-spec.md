@@ -1,13 +1,70 @@
 # Phase 2 Spec — Rendering Core v2 (three.js HD-2D)
 
-**Status:** IN PROGRESS — Stage A COMPLETE (2026-07-01, merged to main): parity port green
+**Status:** COMPLETE (2026-07-02). All stages landed; classic renderer retired; perf CI
+check in place. Stage log below; deviations from the roadmap wish-list are recorded at the
+end of the stage log.
+
+Stage A COMPLETE (2026-07-01, merged to main): parity port green
 against unchanged baselines, classic fallback pinned to the same goldens, post-stack golden
 added. Stage B.1 COMPLETE (2026-07-01): directional sun shadow maps (3×3 PCF) behind
 `map.hd2d.shadows` (+ optional `hd2d.sun {azimuth, elevation}`), terrain/sprites/overhead
 cast & receive via a `#define SHADOWS` compile variant — OFF compiles byte-identical to the
 parity shaders, so every Stage A golden still passes; editor Map Properties toggle; new
-three-captured golden `hd2d-shadows-meridian-village.png`. Remaining: B.2 point-light
-shadows, C water/materials, D post stack & day/night, E particles/terrain/perf.
+three-captured golden `hd2d-shadows-meridian-village.png`.
+Stage B.2 COMPLETE (2026-07-02): omnidirectional point-light shadows behind
+`map.hd2d.pointShadows` (`POINT_SHADOWS` define, same byte-identical-when-off discipline).
+The 4 lights nearest the camera target render 6 cube faces each into one shared 2D depth
+atlas (256px faces, 3×2 tiles per light, lights stacked; the face axes are pinned between
+the JS view matrices and an analytic GLSL lookup — no per-fragment matrix indexing), with a
+4-tap PCF + slope bias against the near-grazing ground. Editor Map Properties toggle; new
+three-captured golden `hd2d-pointshadows-meridian-village.png` (injected lights + raised
+wall). Gotcha for future passes: three.js only applies a render target's `.viewport` inside
+`setRenderTarget()`, so per-tile viewport changes must re-call it.
+Stage C COMPLETE (2026-07-02): `map.hd2d.water` — per-chunk water-surface meshes over
+water/deepwater/swamp ground tiles (WATER_Y=3px above ground), refraction = the chunk's own
+prerender with wave-distorted UVs, planar reflection = a half-res mirrored-camera pass
+(mirror about the height-0 plane; a `CLIPY` define discards below-waterline fragments so
+the submerged ground doesn't occlude reflections), analytic sine-sum normals, fresnel,
+sun glints, shore foam carried in the aTint attribute. `map.hd2d.materials` — a `MATERIALS`
+define (terrain chunks only) samples auto-generated DataTextures: Sobel-of-luminance
+world-space normals + tile-class specular in alpha (uMatMap) and luminance-scaled emissive
+(uEmisMap, engages as ambient drops — Stage D's night). All animation keys off `extra.t`
+(engine tick via render-glue / a frame counter in the editor preview) — determinism holds.
+New goldens: `hd2d-water-…` and `hd2d-materials-meridian-village.png`; the byte-identical-
+when-off discipline verified again (no existing golden rewritten).
+Stage D COMPLETE (2026-07-02): post stack v2 — the composite gains SSAO multiply
+(depth-derived, fixed spiral taps, Gaussian-blurred at half res), ACES (Narkowicz fit),
+color-grade presets as mat3+bias (`hd2d.lut`: warm/cool/night/sepia/noir), vignette, and a
+final FXAA resolve pass (`hd2d.fxaa` routes the composite through a full-res target). All
+additions sit behind runtime `if (uniform)` gates that default off, so the Stage A
+bloom/DoF post golden still passes bit-identically. Day/night — `hd2d.dayNight` compiles a
+DAYNIGHT variant (ambient tint), with the hour driving sun azimuth/elevation (refit per
+frame), shadow strength fade, ambient scale/tint curve (gold dawn/dusk, blue night), and
+emissive glow. Time lives in `G.timeOfDay` (save-round-tripped), pinned per map by
+`hd2d.timeOfDay`, scripted via `game.setTimeOfDay/getTimeOfDay` (Phase 5 wires gameplay).
+New goldens: `hd2d-post2-…` and `hd2d-dusk-meridian-village.png`.
+Stage E COMPLETE (2026-07-02): stateless GPU weather particles (`hd2d.weather`:
+rain/snow/motes — positions are pure functions of per-particle seeds + the tick, evaluated
+in the vertex shader; unused particles collapse to a degenerate position), soft character
+drop shadows (`hd2d.dropShadows`, pooled radial blobs), stairs-tile ramps (a stairs tile
+below a higher north neighbour renders a sloped top + side skirts), chunk-level XZ view
+culling applied around the visual passes only (depth passes still see off-screen casters),
+and the perf gate `tests-e2e/renderer-perf.spec.mjs` (all features on, 1080p: ~167 ms/frame
+measured on SwiftShader, 300 ms budget; spot-verified vsync-locked 16.7 ms on this
+machine's real GPU). Classic renderer RETIRED: `js/renderer.js` + its node:test suite
+deleted, script tags and `RPGAtlasDeps.Renderer/GLRender` removed from both pages and the
+export template, `?renderer=classic` now logs and uses three. Hardware verification caught
+two SwiftShader-masked shader bugs (WATER_FS used `uAmbTint` under DAYNIGHT without
+declaring it; `uWMode` precision mismatch VS/FS rejected by ANGLE D3D linkers) — both
+fixed, affected goldens recaptured. Sample-project showcase: the Whispering Cave enables
+pointShadows/materials/motes/vignette/night-grade/fog with crystal + lava lights.
+
+**Deviations from the roadmap wish-list (accepted at phase exit):** cliff auto-texturing
+deferred (extruded walls keep the Stage A tint shading — revisit with Phase 3's autotiles);
+slopes are stairs-tile ramps only (heights stay integers; movement was never
+height-gated); MSAA superseded by the FXAA toggle (multisampled targets don't fit the
+sampled-scene post chain); image-file LUTs shipped as procedural grade presets
+(mat3 + bias) rather than texture LUTs.
 **Branch:** `phase-2-renderer` (off `main` at tag `phase-1`)
 **Architect & Stage A implementation:** Claude Fable 5 (roadmap assignment: "three.js scene
 architecture + parity skeleton"). Stages B–E cores: Claude Opus (high).

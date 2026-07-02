@@ -26,7 +26,7 @@ import { createEditorI18n } from "../../js/editor/i18n.js";
 
 // ---- classic-script deps (window.RPGAtlasDeps is populated by the classic
 // <script> tags in index.html before the module graph evaluates) ----
-export const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } =
+export const { Assets, AtlasBuiltins, DataDefaults, Music, RA, Sfx } =
   (window as any).RPGAtlasDeps;
 
 // ---- i18n (single shared instance; editor.js used to create this) ----

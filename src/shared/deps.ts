@@ -22,8 +22,6 @@ const RPGAtlasDeps: any = w.RPGAtlasDeps;
 export const Assets: any = RPGAtlasDeps.Assets;
 /** Project defaults + newProject() (js/data.js). */
 export const DataDefaults: any = RPGAtlasDeps.DataDefaults;
-/** WebGL2 HD-2D renderer (js/renderer.js). */
-export const Renderer: any = RPGAtlasDeps.Renderer;
 /** Music playback (js/sfx.js). */
 export const Music: any = RPGAtlasDeps.Music;
 /** RPGAtlas data helpers — byId, traits, input bindings, migration (js/data.js). */

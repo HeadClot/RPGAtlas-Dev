@@ -6909,6 +6909,36 @@
       }
      ]
     }
+   ],
+   "hd2d": {
+    "enabled": true,
+    "tilt": 55,
+    "lights": true,
+    "ambient": 0.3,
+    "pointShadows": true,
+    "materials": true,
+    "dropShadows": true,
+    "weather": "motes",
+    "vignette": true,
+    "lut": "night",
+    "fxaa": true,
+    "fog": {
+     "color": "#0a0a14"
+    }
+   },
+   "lights": [
+    {
+     "rx": 8,
+     "ry": 1,
+     "color": "#88eeff",
+     "radius": 220
+    },
+    {
+     "rx": 2,
+     "ry": 9.5,
+     "color": "#ff8844",
+     "radius": 260
+    }
    ]
   },
   {

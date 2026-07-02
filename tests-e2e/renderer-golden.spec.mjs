@@ -14,10 +14,11 @@
      virtual clock we advance by an exact number of milliseconds, so every run
      performs the exact same number of ticks — confirmed byte-identical
      screenshots across repeated runs in development of this harness.
-   - The renderer itself (js/renderer.js) has no internal Math.random()/
-     Date.now()/performance.now() calls — every animated value (light
-     flicker, camera shake, walk-cycle frame) derives from the engine's tick
-     counter (globalT), so freezing the clock freezes the whole scene.
+   - The renderer itself (src/renderer/three-renderer.ts) has no internal
+     Math.random()/Date.now()/performance.now() calls — every animated value
+     (light flicker, camera shake, walk-cycle frame, water waves, weather
+     particles) derives from the engine's tick counter (globalT), so freezing
+     the clock freezes the whole scene.
    - Chromium is launched with software-rendering flags (SwiftShader/ANGLE —
      see playwright.config.mjs) so the WebGL2 HD-2D path rasterizes the same
      way regardless of the host GPU.
@@ -63,18 +64,10 @@ test.describe("renderer golden images", () => {
     await expect(page.locator("#stage")).toHaveScreenshot("hd2d-meridian-village.png");
   });
 
-  // Phase 2: the default HD-2D path above now runs on the three.js renderer;
-  // this spec pins the classic raw-WebGL2 fallback (?renderer=classic) to the
-  // SAME baseline until parity sign-off retires it (docs/phase-2-spec.md).
-  test("classic-renderer fallback (?renderer=classic) matches the same HD-2D golden", async ({ page }) => {
-    await bootToStableMap(page, "1&renderer=classic");
-    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-meridian-village.png");
-  });
-
-  // The sample project keeps bloom/DoF/fog off, so the specs above never run
-  // the post chain. This pair covers it: the baseline was captured from the
-  // CLASSIC renderer (see tests-e2e/README.md), and the default three.js path
-  // must reproduce it — post-stack parity, machine-checked.
+  // The sample project keeps bloom/DoF/fog off, so the spec above never runs
+  // the post chain. This baseline was captured from the CLASSIC renderer
+  // before its retirement (see tests-e2e/README.md), and the three.js path
+  // must keep reproducing it — post-stack parity, machine-checked.
   const withPostStack = (project) => {
     project.maps[0].hd2d = {
       enabled: true, tilt: 50, bloom: true, dof: true,
@@ -88,11 +81,6 @@ test.describe("renderer golden images", () => {
     await expect(page.locator("#stage")).toHaveScreenshot("hd2d-post-meridian-village.png");
   });
 
-  test("classic-renderer fallback matches the same post-stack golden", async ({ page }) => {
-    await bootToStableMap(page, "1&renderer=classic", withPostStack);
-    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-post-meridian-village.png");
-  });
-
   // Stage B: sun shadow maps are a NEW capability (three.js renderer only —
   // no classic reference exists), so this baseline was captured from the
   // three.js renderer itself and guards against regressions from here on.
@@ -102,6 +90,87 @@ test.describe("renderer golden images", () => {
       return project;
     });
     await expect(page.locator("#stage")).toHaveScreenshot("hd2d-shadows-meridian-village.png");
+  });
+
+  // Stage B.2: point-light shadows (three.js renderer only). The transform
+  // injects two big lights and a raised wall so terrain AND sprites occlude.
+  test("HD-2D point-light shadows (map.hd2d.pointShadows) render a stable frame", async ({ page }) => {
+    await bootToStableMap(page, 1, (project) => {
+      const m = project.maps[0];
+      m.hd2d = { enabled: true, tilt: 50, lights: true, ambient: 0.25, pointShadows: true };
+      m.lights = [
+        { rx: 10.5, ry: 10.5, color: "#ffcc88", radius: 320 },
+        { rx: 14, ry: 12, color: "#88bbff", radius: 240 },
+      ];
+      for (let y = 9; y <= 10; y++) m.heights[y * m.width + 8] = 2;
+      return project;
+    });
+    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-pointshadows-meridian-village.png");
+  });
+
+  // Stage C: animated water surface (village pond) — waves/reflection/foam
+  // all derive from the frozen engine tick, so the frame is reproducible.
+  test("HD-2D water surface (map.hd2d.water) renders a stable frame", async ({ page }) => {
+    await bootToStableMap(page, 1, (project) => {
+      project.maps[0].hd2d = { enabled: true, tilt: 50, water: true, lights: true, ambient: 0.45 };
+      return project;
+    });
+    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-water-meridian-village.png");
+  });
+
+  // Stage C: auto materials — relief + specular from lights, emissive glow at
+  // low ambient (village windows). Lights injected near the pond and house A.
+  test("HD-2D auto materials (map.hd2d.materials) render a stable frame", async ({ page }) => {
+    await bootToStableMap(page, 1, (project) => {
+      const m = project.maps[0];
+      m.hd2d = { enabled: true, tilt: 50, materials: true, lights: true, ambient: 0.15 };
+      m.lights = [
+        { rx: 6, ry: 12, color: "#ffcc88", radius: 300 },
+        { rx: 18, ry: 6.5, color: "#ffb060", radius: 260 },
+      ];
+      return project;
+    });
+    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-materials-meridian-village.png");
+  });
+
+  // Stage D: the extended post stack — ACES, warm grade, vignette, SSAO,
+  // FXAA on top of bloom. (The Stage A bloom/DoF golden above still passes
+  // unchanged, proving the new composite is bit-identical with these off.)
+  test("HD-2D post stack v2 (ACES+grade+vignette+SSAO+FXAA) renders a stable frame", async ({ page }) => {
+    await bootToStableMap(page, 1, (project) => {
+      project.maps[0].hd2d = {
+        enabled: true, tilt: 50, bloom: true, lights: true, ambient: 0.45,
+        aces: true, vignette: true, lut: "warm", ssao: true, fxaa: true,
+      };
+      return project;
+    });
+    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-post2-meridian-village.png");
+  });
+
+  // Stage D: day/night at golden hour — low gold-tinted sun, long shadows,
+  // window glow beginning to engage, water glints on the dusk sun.
+  test("HD-2D day/night dusk (map.hd2d.dayNight) renders a stable frame", async ({ page }) => {
+    await bootToStableMap(page, 1, (project) => {
+      project.maps[0].hd2d = {
+        enabled: true, tilt: 50, lights: true, ambient: 0.45,
+        dayNight: true, timeOfDay: 17.5, shadows: true, water: true, materials: true,
+      };
+      return project;
+    });
+    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-dusk-meridian-village.png");
+  });
+
+  // Stage E: stateless GPU weather particles — positions are pure functions
+  // of the frozen tick, so rain streaks land identically every run.
+  test("HD-2D weather particles (map.hd2d.weather rain) render a stable frame", async ({ page }) => {
+    await bootToStableMap(page, 1, (project) => {
+      project.maps[0].hd2d = {
+        enabled: true, tilt: 50, lights: true, ambient: 0.4,
+        weather: "rain", dropShadows: true,
+      };
+      return project;
+    });
+    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-rain-meridian-village.png");
   });
 
   test("classic 2D renderer (?hd2d=0 override) renders a stable frame", async ({ page }) => {

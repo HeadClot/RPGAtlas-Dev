@@ -1,8 +1,8 @@
 /* RPGAtlas — tests-unit/renderer-plan.test.ts
-   Vitest port of tests/wall-extrusion.test.js against the typed helpers in
-   src/renderer/plan.ts (Phase 2 Stage A carry-over). The node:test original
-   keeps guarding the classic js/renderer.js copy until that script retires.
-   GPL-3.0-or-later. */
+   The wall-extrusion / light-occluder suite against the typed helpers in
+   src/renderer/plan.ts (ported from tests/wall-extrusion.test.js at Phase 2
+   Stage A; the node:test original retired with the classic js/renderer.js
+   script at Phase 2 exit). GPL-3.0-or-later. */
 
 import { describe, expect, it } from "vitest";
 import { planLightOccluders, planWalls } from "../src/renderer/plan";
