@@ -93,7 +93,14 @@ export interface InputBindings {
   stickDeadzone?: number;
 }
 
-/** Database ▸ System tab: presentation, party start, audio, input. */
+/** Database ▸ System tab: presentation, party start, audio, input.
+ *
+ *  Fields below the party block are all backfilled by RA._migrateV0toV1 and
+ *  set by DataDefaults.newProject, so they are present on ANY loaded project
+ *  document (migration runs before the schema guard / any read). They are
+ *  typed as required to match how the editor's System tab and the engine's
+ *  applyScreenSettings actually consume them; a raw pre-migration blob is not
+ *  a valid `SystemData` until migrateProject has run. */
 export interface SystemData {
   title: string;
   startMapId: number;
@@ -106,24 +113,24 @@ export interface SystemData {
   /** Parallel arrays: switch/variable display names (index = id - 1). */
   switches: string[];
   variables: string[];
-  startTransparent?: boolean;
-  battleView?: "side" | string;
-  screenWidth?: number;
-  screenHeight?: number;
-  uiWidth?: number;
-  uiHeight?: number;
-  screenScale?: number;
-  fontText?: string;
-  fontMenu?: string;
-  fontSize?: number;
-  windowOpacity?: number;
-  windowColor?: string;
+  startTransparent: boolean;
+  battleView: "side" | string;
+  screenWidth: number;
+  screenHeight: number;
+  uiWidth: number;
+  uiHeight: number;
+  screenScale: number;
+  fontText: string;
+  fontMenu: string;
+  fontSize: number;
+  windowOpacity: number;
+  windowColor: string;
   /** logical system-sound key -> procedural SE name. */
-  sounds?: Record<string, string>;
+  sounds: Record<string, string>;
   /** logical music slot (title/battle/…) -> theme name. */
-  music?: Record<string, string>;
-  types?: SystemTypes;
-  input?: InputBindings;
+  music: Record<string, string>;
+  types: SystemTypes;
+  input: InputBindings;
 }
 
 // ============================================================================
@@ -714,7 +721,8 @@ export interface Project {
   customChars: CustomChar[];
   commandPresets: CommandPreset[];
   commonEvents: CommonEvent[];
-  tilesets?: Tileset[];
+  /** Always present after migration (RA._migrateV0toV1 seeds a Default). */
+  tilesets: Tileset[];
   assets: ProjectAssets;
   actors: Actor[];
   classes: ClassDef[];

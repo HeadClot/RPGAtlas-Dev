@@ -12,7 +12,11 @@ import { modal, confirmBox } from "../modals";
 import { touch } from "../persistence";
 
 export function systemTab() {
-  const s = S.proj.system;
+  // Dynamic form editor over the system blob: indexes s.input[device][action]
+  // and s[key] with runtime-string keys and writes s.party[i] = undefined
+  // before filtering. Kept locally `any` — tightening these dynamic-index sites
+  // is tracked in the Stage D any-debt list, not chased here (behavior-frozen).
+  const s: any = S.proj.system;
   const box = h("div", { class: "dbform single" });
   box.appendChild(field("Game title", tIn(s, "title")));
   box.appendChild(row(field("Start map", sel(s, "startMapId", dbOpts(S.proj.maps))),
@@ -79,7 +83,9 @@ export function systemTab() {
 export function controlsTab() {
   // The project's DEFAULT key/gamepad bindings (proj.system.input) — the controls a NEW
   // player starts with. Mirrors the in-game rebinder; replaces the old localStorage snippet.
-  const s = S.proj.system;
+  // Kept `any`: setBinding/removeBinding index s.input[device][action] with runtime
+  // strings (tracked in the Stage D any-debt list, not chased — behavior-frozen).
+  const s: any = S.proj.system;
   const box = h("div", { class: "dbform single" });
   box.appendChild(h("div", { class: "subhead" }, "Default controls"));
   box.appendChild(h("div", { class: "dim" }, "The key/gamepad bindings a NEW player starts with. Players who change their controls in-game keep their own settings — editing these won't override them."));

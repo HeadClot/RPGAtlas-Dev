@@ -71,7 +71,9 @@ export function typesTab() {
 }
 
 export function nameListTab(key: any, prefix: any, maxEntries: any) {
-  const names = S.proj.system[key];
+  // key is a runtime string ("switches" | "variables"); dynamic index of the
+  // typed SystemData — kept `any` (tracked in the Stage D any-debt list).
+  const names = (S.proj.system as any)[key];
   const box = h("div", { class: "dbform single namegrid" });
   const addBtn = h("button", { class: "namegrid-add" });
 

@@ -21,6 +21,7 @@
    GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import type { Project } from "../shared/schema";
 import { createEditorI18n } from "../../js/editor/i18n.js";
 
 // ---- classic-script deps (window.RPGAtlasDeps is populated by the classic
@@ -46,7 +47,7 @@ export const ZOOMS = [0.25, 1 / 3, 0.5, 2 / 3, 0.75, 1, 1.5, 2];
 // ---- the shared mutable editor state (one field per old closure var,
 // same names, same initial values) ----
 export interface EditorState {
-  proj: any;                 // the loaded project document
+  proj: Project;             // the loaded project document (set at boot)
   curMapId: number;
   layer: string;             // auto | ground | decor | decor2 | over
   tool: string;              // pen | erase | rect | circle | fill | shadow
@@ -82,7 +83,10 @@ export interface EditorState {
 }
 
 export const editorState: EditorState = {
-  proj: null,
+  // Set at boot (loadStored() / newProject()) before any read; the "assigned
+  // before use" pattern mirrors the engine context. Cast to satisfy strict
+  // null checks without weakening the field type.
+  proj: null as unknown as Project,
   curMapId: 1,
   layer: "auto",
   tool: "pen",
