@@ -13,7 +13,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Assets, Music, Renderer, RA } from "../../shared/deps.js";
+import { Assets, Music, RA } from "../../shared/deps.js";
+import { Renderer } from "../../renderer/index.js";
 import { clamp, rnd, compareVariable, sysSe } from "../util.js";
 import { ctx, fns } from "../state/engine-context.js";
 import { G, Quests, objectiveDone, onEnemyKilled, param } from "../state/game-state.js";

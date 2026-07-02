@@ -7,7 +7,10 @@
    Copyright (C) 2026 RPGAtlas contributors - GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Assets, GLRender, TILE, curMap } from "../editor-state";
+import { Assets, TILE, curMap } from "../editor-state";
+// Phase 2: the preview renders through the renderer-selection seam (three.js
+// by default, ?renderer=classic fallback), same as the player.
+import { Renderer as GLRender } from "../../renderer/index.js";
 import { h } from "../dom";
 import { effectivePass } from "./map-render";
 import { flashStatus } from "./status";

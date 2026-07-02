@@ -90,9 +90,19 @@ toolchain, not `127.0.0.1` — the config's `baseURL`/`webServer.url` use
   this is also what a plain boot renders).
 - `classic2d-meridian-village.png` — the Canvas 2D path (`?hd2d=0` forces it
   off on the same map, via the dev override in `js/engine.js` `hdWanted()`).
+- `hd2d-post-meridian-village.png` — the HD-2D path with the full post stack
+  (bloom + DoF + fog) switched on via the fixture's `transformProject` hook
+  (the sample project keeps them off). **Captured from the classic renderer**
+  (`npx playwright test renderer-golden -g "classic-renderer fallback matches
+  the same post-stack" --update-snapshots`) so the default three.js path is
+  held to the classic output, not to itself.
 
 **These exist so the Phase 2 renderer port has a pixel-accuracy contract to
-match.** If a future renderer rewrite changes what gets drawn, `npm run
+match.** Since Phase 2 Stage A the default HD-2D path runs on three.js
+(`src/renderer/`), and each HD-2D golden also runs against the classic
+raw-WebGL2 fallback (`?renderer=classic`) with the SAME baseline — the two
+renderers are pinned to each other until parity sign-off retires the classic
+script. If a future renderer rewrite changes what gets drawn, `npm run
 test:e2e` will fail here with a diff image in the HTML report — that's
 either an intentional visual change (update the baseline, see below) or a
 regression worth investigating before it ships.

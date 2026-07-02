@@ -5,6 +5,17 @@
 export const PATCH_NOTES = [
   {
     date: "July 1, 2026",
+    title: "Atlas HD Phase 2 begins — HD-2D renderer now runs on three.js",
+    summary:
+      "The HD-2D renderer has been ported to the three.js engine with strict visual parity — games look identical (golden-image tests prove it), and the new scene graph is the foundation for upcoming real-time shadows, water, weather, and richer lighting.",
+    items: [
+      "HD-2D maps and the editor's live HD-2D preview now render through three.js by default; visuals, per-map settings (tilt, bloom, depth of field, fog, lights, ambient), and performance are unchanged.",
+      "Temporary escape hatch: add ?renderer=classic to the player URL to run the previous raw-WebGL2 renderer until the parity sign-off retires it.",
+      "New golden-image tests pin the bloom / depth-of-field / fog post-processing stack so both renderers provably match.",
+    ],
+  },
+  {
+    date: "July 1, 2026",
     title: "Standalone Export Fix",
     summary:
       "Exported games (Standalone HTML and Windows EXE) work again — a long-standing packaging gap made every exported game crash on startup before showing the title screen.",

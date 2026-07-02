@@ -49,11 +49,10 @@ export interface SaveRepository {
   writeOptions(options: any): void;
 }
 
-/** The engine↔renderer boundary (today src/engine/render-glue.ts calling the
- *  classic js/renderer.js GLRender global for HD-2D and the 2D canvas path
- *  directly). Phase 2's three.js renderer implements this and the glue stops
- *  reaching into globals; until then the interface documents the surface the
- *  glue actually uses. */
+/** The engine↔renderer boundary (src/engine/render-glue.ts over the renderer
+ *  selection seam src/renderer/index.ts — three.js by default since Phase 2
+ *  Stage A, classic js/renderer.js behind ?renderer=classic until parity
+ *  sign-off retires it). */
 export interface RendererAdapter {
   /** Draw one frame from the current game state on the shared engine context
    *  (called once per rAF from the loop's render phase; reads ctx, must not

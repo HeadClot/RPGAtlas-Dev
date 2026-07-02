@@ -11,7 +11,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Assets, Renderer } from "../shared/deps.js";
+import { Assets } from "../shared/deps.js";
+import { Renderer } from "../renderer/index.js";
 import { clamp } from "./util.js";
 import { ctx } from "./state/engine-context.js";
 import { G } from "./state/game-state.js";

@@ -32,12 +32,24 @@ export function atlasQuestJson() {
  * js/engine.js boot() ever calls requestAnimationFrame(loop) — needed for
  * deterministic golden-image captures (see tests-e2e/renderer-golden.spec.mjs).
  */
-export async function gotoWithAtlasQuest(page, path, { installClock = false } = {}) {
+export async function gotoWithAtlasQuest(
+  page,
+  path,
+  { installClock = false, transformProject = null } = {},
+) {
+  // `transformProject` mutates (or replaces) the parsed project before seeding
+  // — used by the renderer goldens to switch on per-map HD-2D settings the
+  // sample project leaves off (bloom/DoF/fog post stack).
+  let json = atlasQuestJson();
+  if (transformProject) {
+    const project = JSON.parse(json);
+    json = JSON.stringify(transformProject(project) ?? project);
+  }
   // Prime the origin so we can write to its localStorage before boot.
   await page.goto(path);
-  await page.evaluate((json) => {
-    localStorage.setItem("rpgatlas_project", json);
-  }, atlasQuestJson());
+  await page.evaluate((seeded) => {
+    localStorage.setItem("rpgatlas_project", seeded);
+  }, json);
   if (installClock) {
     // Fixed epoch start so any incidental Date.now()/timestamp text in the
     // UI (e.g. save-slot listings) is also reproducible across runs.
