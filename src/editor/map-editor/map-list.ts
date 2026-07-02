@@ -654,6 +654,7 @@ import { walkCommands } from "../event-editor/command-list";
       pointShadows: !!hd.pointShadows,
       water: !!hd.water,
       materials: !!hd.materials,
+      cliffs: !!hd.cliffs,
       weather: typeof hd.weather === "string" ? hd.weather : "",
       dropShadows: !!hd.dropShadows,
       aces: !!hd.aces, fxaa: !!hd.fxaa, ssao: !!hd.ssao, vignette: !!hd.vignette,
@@ -678,6 +679,7 @@ import { walkCommands } from "../event-editor/command-list";
         field("Point-light shadows (4 nearest lights cast)", chk(hdW, "pointShadows"))),
       row(field("Water surface (waves, reflections, foam)", chk(hdW, "water")),
         field("Auto materials (relief, specular, night glow)", chk(hdW, "materials"))),
+      row(field("Cliff auto-texturing (sculpted block walls)", chk(hdW, "cliffs"))),
       row(field("Weather particles", sel(hdW, "weather", [
         { v: "", l: "None" }, { v: "rain", l: "Rain" },
         { v: "snow", l: "Snow" }, { v: "motes", l: "Ambient motes" },
@@ -713,6 +715,7 @@ import { walkCommands } from "../event-editor/command-list";
             pointShadows: hdW.pointShadows,
             water: hdW.water,
             materials: hdW.materials,
+            cliffs: hdW.cliffs,
             weather: hdW.weather || "",
             dropShadows: hdW.dropShadows,
             aces: hdW.aces, fxaa: hdW.fxaa, ssao: hdW.ssao, vignette: hdW.vignette,

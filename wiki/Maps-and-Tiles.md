@@ -91,6 +91,11 @@ automatically if a device can't run it.
 Raised tiles **extrude into 3D blocks** when the map is rendered in HD-2D — instant cliffs, plateaus,
 and raised walkways.
 
+Turn on **Cliff auto-texturing** in Map Properties (HD-2D section) to sculpt those exposed block
+walls into rock cliffs: the faces darken toward the base, keep a sunlit edge along the crest, and pick
+up shaded vertical corners where the wall turns. It's off by default and purely cosmetic — it changes
+no map data, so leaving it off keeps the previous flat-shaded walls.
+
 ### Turning on HD-2D for a map
 
 Enable HD-2D in **Map Properties**, where you'll also find its look-and-feel controls: camera tilt,

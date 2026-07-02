@@ -40,6 +40,17 @@ export function createThreeRenderer(): any {
   const FOV = Math.PI / 4; // 45° vertical field of view
   const TINT_S = 0.62,
     TINT_EW = 0.48; // auto-shading for exposed block walls
+  // Stage D2 (Phase 3): cliff auto-texturing. With map.hd2d.cliffs on, the flat
+  // face tint above is sculpted into a rock cliff entirely in the vertex-tint
+  // pipeline (no new texture, no shader, no save-format change): a top-down
+  // ambient-occlusion gradient darkens each face toward the cliff base, the
+  // crest edge keeps a sunlit lip, and vertical corners darken where the run
+  // ends laterally — the corner test is the same 8-neighbour connectivity the
+  // 47-blob floor autotiles use. OFF by default → wall verts are byte-identical
+  // to Stage E, so every Phase 2 golden holds.
+  const CLIFF_AO = 0.5, // darkest multiplier reached at the cliff base
+    CLIFF_LIP = 1.18, // crest-edge sunlit lip (still ≤1 after the ≤0.62 base)
+    CLIFF_EDGE = 0.72; // outer vertical-corner darkening
   const MAX_LIGHTS = 16;
   // Stage B.2: point-light shadows. Up to MAX_PLS lights (the nearest to the
   // camera target) render omnidirectional depth into one shared 2D atlas —
@@ -1017,6 +1028,37 @@ export function createThreeRenderer(): any {
     );
   }
 
+  // As quad(), but with an independent tint per corner (A=top-left, B=top-right,
+  // C=bottom-left, D=bottom-right) — used for cliff-shaded wall faces. Passing a
+  // single value for all four reproduces quad(...,tint) byte-for-byte, so the
+  // cliffs-off path stays golden-identical.
+  function quad4(
+    verts: number[],
+    ax: number, ay: number, az: number, au: number, av: number, tA: number,
+    bx: number, by: number, bz: number, bu: number, bv: number, tB: number,
+    cx: number, cy: number, cz: number, cu: number, cvv: number, tC: number,
+    dx: number, dy: number, dz: number, du: number, dv: number, tD: number,
+  ) {
+    verts.push(
+      ax, ay, az, au, av, tA, bx, by, bz, bu, bv, tB, cx, cy, cz, cu, cvv, tC,
+      cx, cy, cz, cu, cvv, tC, bx, by, bz, bu, bv, tB, dx, dy, dz, du, dv, tD,
+    );
+  }
+
+  // Cliff-face shade for one wall vertex (Stage D2). `level` is the vertex's
+  // height in tile units, `h` the top of the cliff, `base` the flat face tint,
+  // `foot` the height the exposed run starts at (the outward neighbour's height).
+  // `edge` marks a vertex on a lateral corner (the perpendicular neighbour is
+  // lower) so it reads as a chiselled outer edge.
+  function cliffShade(base: number, level: number, h: number, foot: number, edge: boolean): number {
+    const runH = Math.max(1, h - foot);
+    const frac = (h - level) / runH; // 0 at the crest, 1 at the base
+    let f = 1 - CLIFF_AO * frac;
+    if (level >= h) f *= CLIFF_LIP; // sunlit lip along the very top edge
+    if (edge) f *= CLIFF_EDGE;
+    return base * f;
+  }
+
   // Chop a prerendered map buffer into chunk textures. Each chunk gets its OWN
   // canvas (not a reused scratch): three uploads canvas textures lazily at
   // first render, so the source canvas must stay alive and untouched.
@@ -1173,6 +1215,8 @@ export function createThreeRenderer(): any {
       // Stage C: animated water surface + auto-generated material maps.
       water: c.water === true ? 1 : Math.min(1, Math.max(0, Number(c.water) || 0)),
       materials: !!c.materials,
+      // Stage D2: sculpt exposed block walls into rock cliffs (off → flat tint).
+      cliffs: !!c.cliffs,
       // Stage E: ambient weather particles + soft character drop shadows.
       weather: typeof c.weather === "string" && WEATHER_COUNTS[c.weather] ? c.weather : "",
       dropShadows: !!c.dropShadows,
@@ -1271,22 +1315,41 @@ export function createThreeRenderer(): any {
               x0, top, z0, uv.u0, uv.v0, x1, top, z0, uv.u1, uv.v0,
               x0, top, z1, uv.u0, uv.v1, x1, top, z1, uv.u1, uv.v1, 1);
           }
-          // exposed walls, one tile-unit segment at a time, auto-shaded.
-          // North walls face away from the fixed camera and are never visible.
-          for (let k = hAt(tx, ty + 1); k < h; k++) { // south
-            quad(verts,
-              x0, (k + 1) * TILE, z1, uv.u0, uv.v0, x1, (k + 1) * TILE, z1, uv.u1, uv.v0,
-              x0, k * TILE, z1, uv.u0, uv.v1, x1, k * TILE, z1, uv.u1, uv.v1, TINT_S);
+          // exposed walls, one tile-unit segment at a time, auto-shaded. With
+          // map.hd2d.cliffs on each face is sculpted per-corner (Stage D2); off,
+          // the four corners collapse to the flat face tint and the verts are
+          // byte-identical to Stage E. North walls face away from the fixed
+          // camera and are never visible.
+          const cl = cfg.cliffs;
+          for (let foot = hAt(tx, ty + 1), k = foot; k < h; k++) { // south
+            const eW = cl && hAt(tx - 1, ty) <= k, eE = cl && hAt(tx + 1, ty) <= k;
+            const uT = cl ? cliffShade(TINT_S, k + 1, h, foot, eW) : TINT_S,
+              vT = cl ? cliffShade(TINT_S, k + 1, h, foot, eE) : TINT_S,
+              uB = cl ? cliffShade(TINT_S, k, h, foot, eW) : TINT_S,
+              vB = cl ? cliffShade(TINT_S, k, h, foot, eE) : TINT_S;
+            quad4(verts,
+              x0, (k + 1) * TILE, z1, uv.u0, uv.v0, uT, x1, (k + 1) * TILE, z1, uv.u1, uv.v0, vT,
+              x0, k * TILE, z1, uv.u0, uv.v1, uB, x1, k * TILE, z1, uv.u1, uv.v1, vB);
           }
-          for (let k = hAt(tx + 1, ty); k < h; k++) { // east
-            quad(verts,
-              x1, (k + 1) * TILE, z1, uv.u0, uv.v0, x1, (k + 1) * TILE, z0, uv.u1, uv.v0,
-              x1, k * TILE, z1, uv.u0, uv.v1, x1, k * TILE, z0, uv.u1, uv.v1, TINT_EW);
+          for (let foot = hAt(tx + 1, ty), k = foot; k < h; k++) { // east
+            const eS = cl && hAt(tx, ty + 1) <= k, eN = cl && hAt(tx, ty - 1) <= k;
+            const uT = cl ? cliffShade(TINT_EW, k + 1, h, foot, eS) : TINT_EW,
+              vT = cl ? cliffShade(TINT_EW, k + 1, h, foot, eN) : TINT_EW,
+              uB = cl ? cliffShade(TINT_EW, k, h, foot, eS) : TINT_EW,
+              vB = cl ? cliffShade(TINT_EW, k, h, foot, eN) : TINT_EW;
+            quad4(verts,
+              x1, (k + 1) * TILE, z1, uv.u0, uv.v0, uT, x1, (k + 1) * TILE, z0, uv.u1, uv.v0, vT,
+              x1, k * TILE, z1, uv.u0, uv.v1, uB, x1, k * TILE, z0, uv.u1, uv.v1, vB);
           }
-          for (let k = hAt(tx - 1, ty); k < h; k++) { // west
-            quad(verts,
-              x0, (k + 1) * TILE, z0, uv.u0, uv.v0, x0, (k + 1) * TILE, z1, uv.u1, uv.v0,
-              x0, k * TILE, z0, uv.u0, uv.v1, x0, k * TILE, z1, uv.u1, uv.v1, TINT_EW);
+          for (let foot = hAt(tx - 1, ty), k = foot; k < h; k++) { // west
+            const eN = cl && hAt(tx, ty - 1) <= k, eS = cl && hAt(tx, ty + 1) <= k;
+            const uT = cl ? cliffShade(TINT_EW, k + 1, h, foot, eN) : TINT_EW,
+              vT = cl ? cliffShade(TINT_EW, k + 1, h, foot, eS) : TINT_EW,
+              uB = cl ? cliffShade(TINT_EW, k, h, foot, eN) : TINT_EW,
+              vB = cl ? cliffShade(TINT_EW, k, h, foot, eS) : TINT_EW;
+            quad4(verts,
+              x0, (k + 1) * TILE, z0, uv.u0, uv.v0, uT, x0, (k + 1) * TILE, z1, uv.u1, uv.v0, vT,
+              x0, k * TILE, z0, uv.u0, uv.v1, uB, x0, k * TILE, z1, uv.u1, uv.v1, vB);
           }
         }
       }
