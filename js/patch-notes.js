@@ -5,6 +5,17 @@
 export const PATCH_NOTES = [
   {
     date: "July 2, 2026",
+    title: "Cliff auto-texturing — sculpted rock faces in HD-2D",
+    summary:
+      "Raised terrain blocks can now render as proper cliffs in the HD-2D scene: their exposed walls get a top-down light gradient, a sunlit crest, and shaded vertical corners instead of a single flat tint. Off by default, per map.",
+    items: [
+      "Map Properties ▸ HD-2D ▸ Cliff auto-texturing turns it on for a map. Any tile you raise in Height mode now reads as a carved cliff — darker toward the base, brighter along the top edge, with chiselled corners where the wall turns.",
+      "The look is derived from the same neighbour connectivity as the floor autotiles, and updates live in the HD-2D Viewport as you paint heights.",
+      "Purely a rendering option: it changes no map data, and leaving it off keeps the exact previous flat-shaded walls.",
+    ],
+  },
+  {
+    date: "July 2, 2026",
     title: "Autotiles — paint connected terrain with RPG-Maker sheets",
     summary:
       "Terrain now autotiles: import an RPG-Maker A2 autotile sheet and paint whole regions of grass, water, or path that automatically pick the right edges and corners as you draw. Comes with resizable terrain brushes.",

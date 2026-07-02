@@ -173,6 +173,23 @@ test.describe("renderer golden images", () => {
     await expect(page.locator("#stage")).toHaveScreenshot("hd2d-rain-meridian-village.png");
   });
 
+  // Stage D2: cliff auto-texturing (three.js renderer only, map.hd2d.cliffs).
+  // A 3-tile-tall block exposes south/east/west faces so the top-down ambient-
+  // occlusion gradient, the sunlit crest lip and the chiselled vertical corners
+  // are all in frame. With cliffs OFF these same faces keep the flat Stage E
+  // tint (guarded by every other HD-2D golden here) — this baseline is the
+  // sculpted look, so it also proves the flag actually changes the pixels.
+  test("HD-2D cliff auto-texturing (map.hd2d.cliffs) renders a stable frame", async ({ page }) => {
+    await bootToStableMap(page, 1, (project) => {
+      const m = project.maps[0];
+      m.hd2d = { enabled: true, tilt: 50, cliffs: true, lights: true, ambient: 0.45 };
+      for (let y = 8; y <= 9; y++)
+        for (let x = 9; x <= 10; x++) m.heights[y * m.width + x] = 3;
+      return project;
+    });
+    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-cliffs-meridian-village.png");
+  });
+
   test("classic 2D renderer (?hd2d=0 override) renders a stable frame", async ({ page }) => {
     await bootToStableMap(page, 0);
     await expect(page.locator("#stage")).toHaveScreenshot("classic2d-meridian-village.png");

@@ -2,6 +2,30 @@
 
 **Status:** IN PROGRESS. Stage log accumulates here, phase-2-spec style.
 
+Stage D2 COMPLETE (2026-07-02): cliff auto-texturing (Phase 2's deferred
+terrain item, split out of Stage D to keep parity risk off that merge). New
+**OFF-by-default `map.hd2d.cliffs` flag** in the three.js renderer
+(`src/renderer/three-renderer.ts`). When on, the exposed walls of raised height
+blocks are sculpted into rock cliffs entirely inside the existing vertex-tint
+pipeline — no new texture, no new shader, no save-format change: a top-down
+ambient-occlusion gradient (`CLIFF_AO`) darkens each face toward the cliff base,
+the crest edge keeps a sunlit lip (`CLIFF_LIP`), and vertical corners darken
+(`CLIFF_EDGE`) where the exposed run ends laterally — the corner test is the
+same 8-neighbour connectivity (`hAt(neighbour) <= k`) the 47-blob floor
+autotiles use. The three south/east/west wall loops route through a new
+per-corner `quad4` + pure `cliffShade(base, level, h, foot, edge)`; passing one
+value for all four corners reproduces the old `quad(...,tint)` byte-for-byte, so
+**cliffs OFF is byte-identical to Stage E** and all nine pre-existing HD-2D/
+classic goldens hold. Ramp skirts (stairs) are left flat — cliffs are vertical
+block walls only. Editor: a "Cliff auto-texturing (sculpted block walls)"
+checkbox in Map Properties ▸ HD-2D (`map-list.ts`, read+save `hd.cliffs`),
+resolving live in the HD-2D Viewport (same renderer). New golden
+`hd2d-cliffs-meridian-village.png` (a 3-tall block exposing all faces; also
+proves the flag changes pixels). `patch-notes.js?v=9`; no `editor.css` change
+(no new styles). Verified: full gate green — tsc, eslint, node --test (16),
+vitest (60), Playwright editor(6)+golden(11, cliffs baseline captured)/player/
+export. Phase 2's cliff-auto-texturing deviation is now closed.
+
 Stage D COMPLETE (2026-07-02): autotiles & terrain brushes. **47-blob
 RPG-Maker-A2 autotile engine.** Map layers stay plain integer tile ids — the
 blob shape is resolved at DRAW TIME from 8-neighbour connectivity, so the save

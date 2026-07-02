@@ -60,7 +60,8 @@ fixed, affected goldens recaptured. Sample-project showcase: the Whispering Cave
 pointShadows/materials/motes/vignette/night-grade/fog with crystal + lava lights.
 
 **Deviations from the roadmap wish-list (accepted at phase exit):** cliff auto-texturing
-deferred (extruded walls keep the Stage A tint shading — revisit with Phase 3's autotiles);
+deferred (extruded walls keep the Stage A tint shading — revisit with Phase 3's autotiles;
+**closed in Phase 3 Stage D2** via the OFF-by-default `map.hd2d.cliffs` flag);
 slopes are stairs-tile ramps only (heights stay integers; movement was never
 height-gated); MSAA superseded by the FXAA toggle (multisampled targets don't fit the
 sampled-scene post chain); image-file LUTs shipped as procedural grade presets
