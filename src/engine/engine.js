@@ -5,8 +5,11 @@
 
 import { registerCommand, getCommand } from "./interpreter/registry.js";
 import { registerBuiltinCommands } from "./interpreter/commands/index.js";
-import { el, sleep, clamp, rnd, esc, sysSe, sysBgm, setSysProjectProvider } from "./util.js";
+import { el, sleep, clamp, rnd, esc, sysSe, sysBgm, setSysProjectProvider, compareVariable } from "./util.js";
 import { UIStack, pushUI, removeUI, showList, initUiStack } from "./ui-stack.js";
+import { Interp, initInterpServices } from "./interpreter/interp.js";
+import { scriptApi } from "./script-api.js";
+import { Plugins } from "./plugin-runtime.js";
 // Shared engine context (Phase 1 Stage B): imported as EC because `ctx` here is
 // the game canvas 2d context. The IIFE installs getter/setter bridges onto EC
 // (below, before the boot section) so extracted modules see this closure's
@@ -218,18 +221,7 @@ const _createInputSystem = window.createInputSystem;
     if (g === 0) return false;
     return Assets.tiles[g] ? Assets.tiles[g].pass : false;
   }
-  function compareVariable(a, b, cmp) {
-    switch(cmp) {
-      case "==": return a === b;
-      case "!=": return a !== b;
-      case ">": return a > b;
-      case ">=": return a >= b;
-      case "<": return a < b;
-      case "<=": return a <= b;
-      default:
-        throw new Error("Invalid comparator: " + cmp);
-    }
-  }
+  // compareVariable is imported from ./util.ts (Phase 1 Stage B).
   function pageActive(evId, page) {
     const c = page.cond;
     if (c.switchId && !G.switches[c.switchId]) return false;
@@ -740,261 +732,22 @@ const _createInputSystem = window.createInputSystem;
   }
 
   // ============================ interpreter ============================
-  class Interp {
-    constructor(evRT, commonStack) {
-      this.evRT = evRT;
-      this.commonStack = commonStack || [];
-    }
-    selfKey(key) {
-      return G.mapId + ":" + (this.evRT ? this.evRT.ev.id : 0) + ":" + key;
-    }
-
-    async runList(list) {
-      for (const cmd of list || []) await this.exec(cmd);
-    }
-    async exec(c) {
-      // Every command — built-in and plugin-registered — is dispatched through
-      // the shared registry (src/engine/interpreter/registry.js). An unknown
-      // type resolves to undefined and is a silent no-op, exactly as the old
-      // switch's `default` was when no plugin handler existed. Plugin handlers
-      // register through the plugin bridge below, wrapped in the same try/catch
-      // the old default case used, so their frozen (cmd, interp) signature and
-      // error handling are preserved.
-      const handler = getCommand(c.t);
-      if (handler) await handler(c, { interp: this, state: G, services: EngineServices });
-    }
-    async callCommonEvent(id) {
-      const commonEvent = RA.byId(proj.commonEvents || [], Number(id));
-      if (!commonEvent || !commonEvent.commands.length) return false;
-      if (this.commonStack.includes(commonEvent.id)) {
-        console.warn("Skipped recursive common event call:", commonEvent.id);
-        return false;
-      }
-      this.commonStack.push(commonEvent.id);
-      try {
-        await this.runList(commonEvent.commands);
-      } finally {
-        this.commonStack.pop();
-      }
-      return true;
-    }
-    testCond(cond) {
-      if (!cond) return true;
-      const cmp = (a, b, op) =>
-        compareVariable(a, b, op)
-      switch (cond.kind) {
-        case "switch":
-          return !!G.switches[cond.id] === (cond.val !== false);
-        case "var":
-          return cmp(G.vars[cond.id] || 0, cond.val, cond.cmp || ">=");
-        case "selfsw":
-          return !!G.selfSw[this.selfKey(cond.key)];
-        case "quest":
-          return Quests.status(cond.questId) === (cond.status || "active");
-        case "item":
-          return invCount(cond.itemKind || "item", cond.id) > 0;
-        case "gold":
-          return cmp(G.gold, cond.val, cond.cmp || ">=");
-        case "actor": {
-          const actor = G.party.find((a) => a.actorId === cond.actorId);
-          if (!actor) return false;
-          if (cond.check === "inParty") return true;
-          if (cond.check === "weapon") return actor.weaponId === cond.itemId;
-          if (cond.check === "armor") return actor.armorId === cond.itemId;
-          return true;
-        }
-        default:
-          return true;      }
-    }
-  }
-  const scriptApi = {
-    setSwitch(id, v) {
-      G.switches[id] = !!v;
-      evaluateQuestFailures();
-    },
-    getSwitch(id) {
-      return !!G.switches[id];
-    },
-    setVar(id, v) {
-      G.vars[id] = v;
-      evaluateQuestFailures();
-    },
-    getVar(id) {
-      return G.vars[id] || 0;
-    },
-    addGold(n) {
-      G.gold = clamp(G.gold + n, 0, 9999999);
-    },
-    party() {
-      return G.party;
-    },
-    quest(id) {
-      return Quests.get(id);
-    },
-    questStatus(id) {
-      return Quests.status(id);
-    },
-    startQuest(id) {
-      return Quests.start(id);
-    },
-    advanceQuestObjective(id, index, amount) {
-      return Quests.advanceObjective(id, index, amount);
-    },
-    setQuestObjective(id, index, value) {
-      return Quests.setObjective(id, index, value);
-    },
-    completeQuest(id) {
-      return Quests.complete(id);
-    },
-    failQuest(id) {
-      return Quests.fail(id);
-    },
-    abandonQuest(id) {
-      return Quests.abandon(id);
-    },
-    callCommonEvent(id) {
-      return new Interp(null).callCommonEvent(id);
-    },
-    state() {
-      return G;
-    },
-    setCameraZoom(zoom) {
-      cameraZoom = clamp(Number(zoom) || 1, 0.25, 4);
-    },
-    getCameraZoom() {
-      return cameraZoom;
-    },
-  };
+  // The Interp class lives in ./interpreter/interp.ts and the frozen `game`
+  // Script API in ./script-api.ts (Phase 1 Stage B); both are imported above.
+  // The EngineServices surface handlers receive is injected below via
+  // initInterpServices(), preserving the closure-live getters.
 
   // ============================ plugins ============================
-  const Plugins = {
-    hooks: { mapLoad: [], update: [], render: [] },
-    textProcessors: [], // fn(html) -> html, run on every message/choice string
-    commands: {}, // custom event-command handlers, by command type
-    transition: null, // { out(ms), in(ms) } installed by a transition plugin
-    status: [],
-    pluginId(pl) { return String(pl && (pl.pluginId || pl.key || pl.name || ("plugin." + pl.id)) || "").trim(); },
-    fire(name, arg) {
-      const list = this.hooks[name];
-      for (let i = list.length - 1; i >= 0; i--) {
-        try {
-          list[i](arg);
-        } catch (e) {
-          console.error(
-            "Plugin hook '" + name + "' failed and was disabled:",
-            e,
-          );
-          list.splice(i, 1); // don't spam every frame
-        }
-      }
-    },
-    fireRender(ctx, info) {
-      const list = this.hooks.render;
-      for (let i = list.length - 1; i >= 0; i--) {
-        try {
-          list[i](ctx, info);
-        } catch (e) {
-          console.error("Plugin render hook failed and was disabled:", e);
-          list.splice(i, 1);
-        }
-      }
-    },
-    runAll() {
-      const atlas = {
-        get project() {
-          return proj;
-        },
-        get map() {
-          return map;
-        },
-        get player() {
-          return G.player;
-        },
-        get scene() {
-          return scene;
-        },
-        Assets,
-        Sfx,
-        Music,
-        get SCREEN_W() {
-          return SCREEN_W;
-        },
-        get SCREEN_H() {
-          return SCREEN_H;
-        },
-        TILE,
-        get fader() {
-          return fader;
-        },
-        get stage() {
-          return stage;
-        },
-        get uiLayer() {
-          return uiLayer;
-        },
-        onMapLoad: (fn) => Plugins.hooks.mapLoad.push(fn),
-        onUpdate: (fn) => Plugins.hooks.update.push(fn),
-        onRender: (fn) => Plugins.hooks.render.push(fn),
-        onMessageText: (fn) => Plugins.textProcessors.push(fn),
-        // Plugin commands route onto the same registry as built-ins. The frozen
-        // plugin API is fn(cmd, interp) with per-call error isolation (the old
-        // switch `default` behavior), so adapt the (cmd, ctx) registry handler
-        // to call fn(cmd, ctx.interp) inside the same try/catch.
-        registerCommand: (t, fn) => {
-          Plugins.commands[t] = fn; // kept for introspection / parity
-          registerCommand(t, async (cmd, ic) => {
-            try {
-              await fn(cmd, ic.interp);
-            } catch (e) {
-              console.error("Plugin command '" + t + "' failed:", e);
-            }
-          });
-        },
-        setTransition: (t) => {
-          Plugins.transition = t;
-        },
-        startBattle: (troopId, canEscape) =>
-          Battle.run(troopId, canEscape !== false),
-      };
-      Plugins.atlas = Plugins.dw = atlas; // .dw kept for pre-rebrand plugins
-      Plugins.status = [];
-      const seen = new Set(), loaded = new Set();
-      for (const pl of proj.plugins || []) {
-        const pluginId = Plugins.pluginId(pl);
-        const entry = { id: pl.id, pluginId: pluginId, name: pl.name || pluginId || "?", status: "pending", errors: [] };
-        Plugins.status.push(entry);
-        if (!pl.on) { entry.status = "disabled"; continue; }
-        if (!pluginId) { entry.status = "skipped"; entry.errors.push("Missing plugin ID."); console.warn("Plugin '" + (pl.name || "?") + "' skipped: missing plugin ID."); continue; }
-        if (seen.has(pluginId)) { entry.status = "skipped"; entry.errors.push("Duplicate plugin ID: " + pluginId); console.warn("Plugin '" + (pl.name || pluginId) + "' skipped: duplicate plugin ID '" + pluginId + "'."); continue; }
-        seen.add(pluginId);
-        const missing = (pl.dependencies || []).filter((dep) => !loaded.has(dep));
-        if (missing.length) {
-          entry.status = "skipped";
-          entry.errors.push("Missing dependencies: " + missing.join(", "));
-          console.warn("Plugin '" + (pl.name || pluginId) + "' skipped: missing dependencies " + missing.join(", ") + ".");
-          continue;
-        }
-        try {
-          new Function("atlas", "game", "dw", pl.code)(atlas, scriptApi, atlas);
-          entry.status = "loaded";
-          loaded.add(pluginId);
-        } catch (e) {
-          // "dw" = pre-rebrand alias
-          console.error("Plugin '" + (pl.name || "?") + "' failed:", e);
-          entry.status = "failed";
-          entry.errors.push(e && e.message ? e.message : String(e));
-        }
-      }
-      if (typeof window !== "undefined") window.AtlasPluginStatus = Plugins.status;
-    },
-  };
+  // The plugin runtime lives in ./plugin-runtime.ts (Phase 1 Stage B),
+  // imported above; it self-installs onto fns.Plugins at module evaluation.
+  // Plugins reach the battle scene (still in this file) through fns.Battle,
+  // installed near the EngineServices block below.
 
   // The message-system wiring and the unified-input wiring (including the
   // "\input[action]" glyph text processor) live in ./message.ts and ./input.ts
   // (Phase 1 Stage B). Both init calls run at the exact points the monolith
   // did the wiring; the created values land in this closure's richText /
   // showMessage / setMsgSpeed / Input `let`s through the closure-state bridge.
-  fns.Plugins = Plugins; // message/input modules reach the plugin runtime via fns
   initMessageSystem();
   initInputSystem();
 
@@ -3356,6 +3109,12 @@ const _createInputSystem = window.createInputSystem;
     // battle / shop
     Battle, Shop,
   };
+  // Hand the service surface to the extracted interpreter (Interp.exec passes
+  // it to every command handler), and expose Battle to the plugin runtime's
+  // atlas.startBattle — both still live in this closure until their sections
+  // move out.
+  initInterpServices(EngineServices);
+  fns.Battle = Battle;
   registerBuiltinCommands();
 
   // ============================ boot ============================

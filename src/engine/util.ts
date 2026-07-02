@@ -24,6 +24,18 @@ export function clamp(v: number, a: number, b: number): number {
 export function rnd(n: number): number {
   return Math.floor(Math.random() * n);
 }
+export function compareVariable(a: any, b: any, cmp: any): boolean {
+  switch (cmp) {
+    case "==": return a === b;
+    case "!=": return a !== b;
+    case ">": return a > b;
+    case ">=": return a >= b;
+    case "<": return a < b;
+    case "<=": return a <= b;
+    default:
+      throw new Error("Invalid comparator: " + cmp);
+  }
+}
 export function esc(s: any): string {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;")
