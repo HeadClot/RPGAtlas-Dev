@@ -10,6 +10,28 @@ import { UIStack, pushUI, removeUI, showList, initUiStack } from "./ui-stack.js"
 import { Interp, initInterpServices } from "./interpreter/interp.js";
 import { scriptApi } from "./script-api.js";
 import { Plugins } from "./plugin-runtime.js";
+import {
+  refreshAllPages,
+  loadMap,
+  entityAt,
+  blockingEventAt,
+  tilePassable,
+  canEntityPass,
+  startMove,
+  dirTo,
+  DIRD,
+  setRoute,
+  updateRoute,
+  updateEntityMotion,
+  walkFrame,
+  updateMapCombat,
+  combatChaseDir,
+  combatStaggered,
+  startPlayerAttack,
+  drawMapCombatOverlay,
+  initPlayer,
+  refreshPlayerCharset,
+} from "./scenes/map-runtime.js";
 // Shared engine context (Phase 1 Stage B): imported as EC because `ctx` here is
 // the game canvas 2d context. The IIFE installs getter/setter bridges onto EC
 // (below, before the boot section) so extracted modules see this closure's
@@ -82,9 +104,10 @@ const _createInputSystem = window.createInputSystem;
   let stage, canvas, ctx, uiLayer, fader;
   initUiStack(() => uiLayer); // ui-stack.js showList appends to the live uiLayer
   // Closure functions the extracted modules call through the fns registry.
-  // Function declarations hoist, so installing here (before initQuestRuntime
-  // below) is safe. Entries are removed as their owners move out of this file.
-  fns.refreshAllPages = refreshAllPages;
+  // Function declarations hoist, so installing here is safe. Entries are
+  // removed as their owners move out of this file (fns.refreshAllPages is now
+  // self-installed by scenes/map-runtime.ts; fns.Battle near EngineServices).
+  fns.gameOver = gameOver; // map-runtime's touch-damage defeat path
   let scene = "boot"; // boot | title | map | battle | gameover
   let menuOpen = false;
   let cameraZoom = 1;
@@ -179,25 +202,16 @@ const _createInputSystem = window.createInputSystem;
 
 
   // ============================ map runtime ============================
+  // The map runtime lives in ./scenes/map-runtime.ts (Phase 1 Stage B): map
+  // loading/prerender, passability, event pages/lights, entity queries,
+  // motion, routes, the on-map action-combat system, and player-entity init —
+  // imported above. The map state itself stays in these closure `let`s
+  // (bridged onto the shared context) until the map scene update and
+  // rendering sections move out.
   let map = null;
   let lowerBuf = null,
     upperBuf = null;
   let hdActive = false; // current map renders through the WebGL HD-2D path
-  // dev override until the editor exposes per-map HD-2D settings:
-  // ?hd2d=1 forces the HD-2D renderer on, ?hd2d=0 forces it off
-  const hdOverride = new URLSearchParams(location.search).get("hd2d");
-  function hdMapEnabled(candidateMap) {
-    if (!candidateMap) return false;
-    const hd = candidateMap.hd2d;
-    if (hd && Object.prototype.hasOwnProperty.call(hd, "enabled")) return hd.enabled === true;
-    if (hd && (hd.lights || hd.tilt != null || hd.ambient != null)) return true;
-    return !!(candidateMap.lights && candidateMap.lights.length > 0);
-  }
-  function hdWanted() {
-    if (hdOverride === "1") return true;
-    if (hdOverride === "0") return false;
-    return hdMapEnabled(map);
-  }
   let evRTs = [];
   let blockingRun = false; // an action/touch/autorun interpreter is active
   const parallels = new Map(); // evRT -> running flag
@@ -205,531 +219,6 @@ const _createInputSystem = window.createInputSystem;
   EC.parallels = parallels; // shared with extracted modules (same Map identity)
   EC.commonParallels = commonParallels;
 
-  function tileAt(layer, x, y) {
-    return map.layers[layer][y * map.width + x];
-  }
-  function tilePassable(x, y) {
-    if (x < 0 || y < 0 || x >= map.width || y >= map.height) return false;
-    const ov = map.passOv ? map.passOv[y * map.width + x] : 0;
-    if (ov === 1) return true;
-    if (ov === 2) return false;
-    const d2 = tileAt("decor2", x, y);
-    if (d2 !== 0) return Assets.tiles[d2] ? Assets.tiles[d2].pass : false;
-    const d = tileAt("decor", x, y);
-    if (d !== 0) return Assets.tiles[d] ? Assets.tiles[d].pass : false;
-    const g = tileAt("ground", x, y);
-    if (g === 0) return false;
-    return Assets.tiles[g] ? Assets.tiles[g].pass : false;
-  }
-  // compareVariable is imported from ./util.ts (Phase 1 Stage B).
-  function pageActive(evId, page) {
-    const c = page.cond;
-    if (c.switchId && !G.switches[c.switchId]) return false;
-    if (c.varId && !compareVariable(G.vars[c.varId] || 0, c.varVal, c.cmp || ">=")) return false;
-    if (c.selfSw && !G.selfSw[G.mapId + ":" + evId + ":" + c.selfSw]) return false;
-    if (c.questId && Quests.status(c.questId) !== (c.questStatus || "active")) return false;
-    if (c.objectiveQuestId) {
-      const done = objectiveDone(c.objectiveQuestId, Number(c.objectiveIndex) || 0);
-      if ((c.objectiveStatus || "completed") === "completed" ? !done : done) return false;
-    }
-    return true;
-  }
-  // HD-2D point lights are authored as events named "light [#rrggbb] [radius]",
-  // e.g. "light #ff9944 260". The light follows the event and obeys its pages.
-  function parseLight(name) {
-    if (!/^light\b/i.test(name || "")) return null;
-    const light = { color: "#ffcc88", radius: 180 };
-    for (const tok of String(name).slice(5).trim().split(/\s+/)) {
-      if (/^#[0-9a-fA-F]{6}$/.test(tok)) light.color = tok;
-      else if (/^\d+$/.test(tok)) light.radius = Number(tok);
-    }
-    return light;
-  }
-  function makeEvRT(evData) {
-    const rt = {
-      ev: evData, x: evData.x, y: evData.y, rx: evData.x, ry: evData.y,
-      prx: evData.x, pry: evData.y, // previous-tick render pos (for interpolation)
-      dir: 0, frame: 1, animT: 0, moving: false, tx: 0, ty: 0,
-      page: null, pageIndex: -1, erased: false, locked: false,
-      moveT: 30 + rnd(90), route: null, speed: 0.05, charsetIdx: -1, kind: "",
-      combat: null,
-      light: parseLight(evData.name),
-    };
-    refreshPage(rt);
-    return rt;
-  }
-  function refreshPage(rt) {
-    let pi = -1;
-    for (let i = rt.ev.pages.length - 1; i >= 0; i--) {
-      if (pageActive(rt.ev.id, rt.ev.pages[i])) {
-        pi = i;
-        break;
-      }
-    }
-    if (pi === rt.pageIndex) return;
-    rt.pageIndex = pi;
-    rt.page = pi >= 0 ? rt.ev.pages[pi] : null;
-    if (rt.page) {
-      rt.dir = rt.page.dir || 0;
-      rt.charsetIdx = rt.page.charset
-        ? Assets.charsetIndex(rt.page.charset)
-        : -1;
-      rt.kind = rt.charsetIdx >= 0 ? Assets.charsets[rt.charsetIdx].kind : "";
-    } else {
-      rt.charsetIdx = -1;
-      rt.kind = "";
-    }
-    refreshEventCombat(rt);
-  }
-  function refreshAllPages() {
-    evRTs.forEach((rt) => {
-      if (!rt.erased) refreshPage(rt);
-    });
-  }
-
-  async function prerenderMap() {
-    lowerBuf = document.createElement("canvas");
-    lowerBuf.width = map.width * TILE;
-    lowerBuf.height = map.height * TILE;
-    upperBuf = document.createElement("canvas");
-    upperBuf.width = lowerBuf.width;
-    upperBuf.height = lowerBuf.height;
-    const lg = lowerBuf.getContext("2d"),
-      ug = upperBuf.getContext("2d");
-    lg.fillStyle = "#101018";
-    lg.fillRect(0, 0, lowerBuf.width, lowerBuf.height);
-    for (let y = 0; y < map.height; y++) {
-      for (let x = 0; x < map.width; x++) {
-        Assets.drawTile(lg, tileAt("ground", x, y), x * TILE, y * TILE);
-        Assets.drawTile(lg, tileAt("decor", x, y), x * TILE, y * TILE);
-        Assets.drawTile(lg, tileAt("decor2", x, y), x * TILE, y * TILE);
-        Assets.drawTile(ug, tileAt("over", x, y), x * TILE, y * TILE);
-      }
-    }
-    // quadrant shadows (drawn into the lower buffer, under characters)
-    if (map.shadows) {
-      const H = TILE / 2;
-      lg.fillStyle = "rgba(10,10,26,0.35)";
-      for (let y = 0; y < map.height; y++) {
-        for (let x = 0; x < map.width; x++) {
-          const m2 = map.shadows[y * map.width + x];
-          if (!m2) continue;
-          if (m2 & 1) lg.fillRect(x * TILE, y * TILE, H, H);
-          if (m2 & 2) lg.fillRect(x * TILE + H, y * TILE, H, H);
-          if (m2 & 4) lg.fillRect(x * TILE, y * TILE + H, H, H);
-          if (m2 & 8) lg.fillRect(x * TILE + H, y * TILE + H, H, H);
-        }
-      }
-    }
-    hdActive =
-      hdWanted() &&
-      typeof Renderer !== "undefined" &&
-      (await Renderer.available());
-    if (hdActive) await Renderer.setMap(lowerBuf, upperBuf, map);
-  }
-
-  async function loadMap(mapId) {
-    map = RA.byId(proj.maps, mapId);
-    if (!map) {
-      map = proj.maps[0];
-      if (!map) throw new Error("Map " + mapId + " not found");
-      mapId = map.id;
-    }
-    // Saved or start positions can point outside this map (deleted/resized
-    // maps, or the fallback above landing on a smaller map) — keep the player
-    // inside the grid or movement and rendering both misbehave.
-    if (G.player) {
-      const px = clamp(G.player.x | 0, 0, map.width - 1);
-      const py = clamp(G.player.y | 0, 0, map.height - 1);
-      if (px !== G.player.x || py !== G.player.y) initPlayer(px, py, G.player.dir);
-    }
-    G.mapId = mapId;
-    G.encSteps = 0;
-    mapFloatTexts.length = 0;
-    evRTs = map.events.map(makeEvRT);
-    parallels.clear();
-    await prerenderMap();
-    Music.play(map.music || "none");
-    Plugins.fire("mapLoad", map);
-  }
-
-  function entityAt(x, y, exclude) {
-    return evRTs.filter(
-      (rt) =>
-        rt !== exclude && !rt.erased && rt.page && rt.x === x && rt.y === y,
-    );
-  }
-  function blockingEventAt(x, y) {
-    return entityAt(x, y).find(
-      (rt) => rt.page.priority === "same" && !rt.page.through,
-    );
-  }
-  function canEntityPass(rt, nx, ny) {
-    if (rt.page && rt.page.through) return true;
-    if (!tilePassable(nx, ny)) return false;
-    if (blockingEventAt(nx, ny)) return false;
-    if (
-      G.player &&
-      G.player.x === nx &&
-      G.player.y === ny &&
-      (!rt.page || rt.page.priority === "same")
-    )
-      return false;
-    return true;
-  }
-  function eventBlocksChaseTile(mover, other, x, y) {
-    if (mover && mover.page && mover.page.through) return false;
-    if (!other || other === mover || other.erased || !other.page) return false;
-    if (other.page.priority !== "same" || other.page.through) return false;
-    if (other.x === x && other.y === y) return true;
-    return !!(other.moving && other.tx === x && other.ty === y);
-  }
-  function canCombatChasePass(rt, nx, ny) {
-    if (!canEntityPass(rt, nx, ny)) return false;
-    return !evRTs.some((other) => eventBlocksChaseTile(rt, other, nx, ny));
-  }
-  function startMove(ent, dir) {
-    ent.dir = dir;
-    const dx = dir === 1 ? -1 : dir === 2 ? 1 : 0;
-    const dy = dir === 0 ? 1 : dir === 3 ? -1 : 0;
-    ent.tx = ent.x + dx;
-    ent.ty = ent.y + dy;
-    ent.moving = true;
-  }
-  function dirTo(fx, fy, tx, ty) {
-    const dx = tx - fx,
-      dy = ty - fy;
-    if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 2 : 1;
-    return dy > 0 ? 0 : 3;
-  }
-  const DIRD = { 0: [0, 1], 1: [-1, 0], 2: [1, 0], 3: [0, -1] };
-  const mapFloatTexts = [];
-
-  function combatConfig(page) {
-    const cfg = page && page.combat;
-    return cfg && cfg.enabled ? cfg : null;
-  }
-  function combatEnemy(cfg) {
-    return RA.byId(proj.enemies || [], Number(cfg && cfg.enemyId) || 0);
-  }
-  function combatMaxHp(cfg, enemy) {
-    return Math.max(1, Number(cfg && cfg.hp) || Number(enemy && enemy.stats && enemy.stats.mhp) || 1);
-  }
-  function combatAi(cfg) {
-    return cfg && cfg.ai === "chase" ? "chase" : "none";
-  }
-  function refreshEventCombat(rt) {
-    const cfg = combatConfig(rt.page);
-    const enemy = cfg && combatEnemy(cfg);
-    if (!cfg || !enemy) {
-      rt.combat = null;
-      return;
-    }
-    if (rt.combat && rt.combat.pageIndex === rt.pageIndex && rt.combat.enemyId === enemy.id) return;
-    rt.combat = {
-      pageIndex: rt.pageIndex,
-      enemyId: enemy.id,
-      hp: combatMaxHp(cfg, enemy),
-      invuln: 0,
-      hurtFlash: 0,
-      attackCooldown: 0,
-      stagger: 0,
-      knockback: false,
-      dead: false,
-    };
-  }
-  function combatReady(rt) {
-    return !!(rt && rt.page && rt.combat && !rt.combat.dead && combatConfig(rt.page));
-  }
-  function rectsOverlap(a, b) {
-    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-  }
-  function entityHurtbox(ent) {
-    return { x: ent.rx + 0.12, y: ent.ry + 0.10, w: 0.76, h: 0.86 };
-  }
-  function swordHitboxAt(x, y, dir) {
-    if (dir === 3) return { x: x + 0.10, y: y - 0.48, w: 0.80, h: 0.62 };
-    if (dir === 1) return { x: x - 0.48, y: y + 0.14, w: 0.62, h: 0.78 };
-    if (dir === 2) return { x: x + 0.86, y: y + 0.14, w: 0.62, h: 0.78 };
-    return { x: x + 0.10, y: y + 0.86, w: 0.80, h: 0.62 };
-  }
-  function swordHitsEntity(attacker, target, dir) {
-    if (!attacker || !target) return false;
-    const hitbox = swordHitboxAt(attacker.rx, attacker.ry, dir);
-    if (rectsOverlap(hitbox, entityHurtbox(target))) return true;
-    const [dx, dy] = DIRD[dir] || [0, 0];
-    return target.x === attacker.x + dx && target.y === attacker.y + dy;
-  }
-  function tileDistance(a, b) {
-    if (!a || !b) return Infinity;
-    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-  }
-  function attackFrame(attack) {
-    return attack ? attack.total - attack.framesLeft : 999;
-  }
-  function attackIsActive(attack) {
-    const frame = attackFrame(attack);
-    return !!attack && frame >= 3 && frame <= 11;
-  }
-  function addMapFloatText(text, x, y, color) {
-    mapFloatTexts.push({
-      text,
-      x,
-      y,
-      color: color || "#ffffff",
-      life: 46,
-      total: 46,
-    });
-  }
-  function startPlayerAttack() {
-    const p = G.player;
-    if (!p || p.attack || p.moving) return false;
-    p.attack = { total: 18, framesLeft: 18, dir: p.dir, hitIds: new Set() };
-    p.animT = (p.animT || 0) + 1;
-    sysSe("miss");
-    return true;
-  }
-  function mapAttackDamage(enemy) {
-    const a = G.party[0];
-    const atk = a ? param(a, "atk") : 10;
-    const def = Number(enemy && enemy.stats && enemy.stats.def) || 0;
-    return Math.max(1, Math.floor(atk * 1.35 - def * 0.6));
-  }
-  function applyEnemyKnockback(rt, dir, tiles) {
-    if (!rt || rt.moving || tiles <= 0) return;
-    const [dx, dy] = DIRD[dir] || [0, 0];
-    const nx = rt.x + dx;
-    const ny = rt.y + dy;
-    if (!canEntityPass(rt, nx, ny)) return;
-    rt.combat.knockback = true;
-    rt.combat.stagger = Math.max(rt.combat.stagger || 0, 14);
-    startMove(rt, dir);
-  }
-  function defeatMapEnemy(rt, cfg) {
-    if (!combatReady(rt)) return;
-    rt.combat.dead = true;
-    rt.combat.hp = 0;
-    onEnemyKilled(rt.combat.enemyId);
-    addMapFloatText("DEFEATED", rt.rx + 0.5, rt.ry - 0.1, "#f6e27a");
-    sysSe("crit");
-    const sw = cfg.defeatSelfSwitch;
-    if (sw) {
-      G.selfSw[G.mapId + ":" + rt.ev.id + ":" + sw] = true;
-      refreshAllPages();
-    } else {
-      rt.erased = true;
-    }
-  }
-  function damageMapEnemy(rt) {
-    if (!combatReady(rt) || rt.combat.invuln > 0) return;
-    const cfg = combatConfig(rt.page);
-    const enemy = combatEnemy(cfg);
-    const dmg = mapAttackDamage(enemy);
-    rt.combat.hp = Math.max(0, rt.combat.hp - dmg);
-    rt.combat.invuln = Math.max(1, Number(cfg.invulnFrames) || 0);
-    rt.combat.hurtFlash = 12;
-    rt.combat.stagger = Math.max(rt.combat.stagger || 0, 10);
-    addMapFloatText("-" + dmg, rt.rx + 0.5, rt.ry - 0.15, "#ffd86a");
-    sysSe("hit");
-    if (rt.combat.hp <= 0) {
-      defeatMapEnemy(rt, cfg);
-    } else {
-      applyEnemyKnockback(rt, G.player.attack.dir, Number(cfg.knockbackTiles) || 0);
-    }
-  }
-  function damagePlayerFromEnemy(rt) {
-    const p = G.player;
-    const cfg = combatConfig(rt.page);
-    const dmg = Number(cfg && cfg.touchDamage) || 0;
-    const a = G.party[0];
-    if (!p || !a || dmg <= 0 || (p.hurtInvuln || 0) > 0) return;
-    if ((rt.combat.attackCooldown || 0) > 0) return;
-    if (!rectsOverlap(entityHurtbox(p), entityHurtbox(rt)) && tileDistance(p, rt) > 1) return;
-    rt.combat.attackCooldown = 45;
-    rt.dir = dirTo(rt.x, rt.y, p.x, p.y);
-    a.hp = Math.max(0, a.hp - dmg);
-    p.hurtInvuln = 60;
-    addMapFloatText("-" + dmg, p.rx + 0.5, p.ry - 0.2, "#ff8a8a");
-    sysSe("hit");
-    shakePower = 3;
-    shakeSpeed = 6;
-    shakeTimer = 12;
-    shakeDuration = 12;
-    if (a.hp <= 0) {
-      (async () => { await gameOver(); })();
-    }
-  }
-  function updateMapCombat() {
-    const p = G.player;
-    if (p && p.hurtInvuln > 0) p.hurtInvuln--;
-    if (p && p.attack) {
-      if (attackIsActive(p.attack)) {
-        for (const rt of evRTs) {
-          if (!combatReady(rt) || p.attack.hitIds.has(rt.ev.id)) continue;
-          if (!swordHitsEntity(p, rt, p.attack.dir)) continue;
-          p.attack.hitIds.add(rt.ev.id);
-          damageMapEnemy(rt);
-        }
-      }
-      p.attack.framesLeft--;
-      if (p.attack.framesLeft <= 0) p.attack = null;
-    }
-    for (const rt of evRTs) {
-      if (!combatReady(rt)) continue;
-      if (rt.combat.invuln > 0) rt.combat.invuln--;
-      if (rt.combat.hurtFlash > 0) rt.combat.hurtFlash--;
-      if (rt.combat.attackCooldown > 0) rt.combat.attackCooldown--;
-      if (rt.combat.stagger > 0) rt.combat.stagger--;
-      damagePlayerFromEnemy(rt);
-    }
-    for (let i = mapFloatTexts.length - 1; i >= 0; i--) {
-      mapFloatTexts[i].life--;
-      if (mapFloatTexts[i].life <= 0) mapFloatTexts.splice(i, 1);
-    }
-  }
-  function combatStaggered(rt) {
-    return !!(rt && rt.combat && rt.combat.stagger > 0);
-  }
-  function combatChaseDir(rt) {
-    const p = G.player;
-    if (!combatReady(rt) || !p || !rt.page) return -1;
-    const cfg = combatConfig(rt.page);
-    if (combatAi(cfg) !== "chase") return -1;
-    if (combatStaggered(rt) || rt.locked || blockingRun) return -1;
-    const dx = p.x - rt.x;
-    const dy = p.y - rt.y;
-    const dist = Math.abs(dx) + Math.abs(dy);
-    if (dist <= 1 || dist > 5) return -1;
-    const xDir = dx > 0 ? 2 : dx < 0 ? 1 : -1;
-    const yDir = dy > 0 ? 0 : dy < 0 ? 3 : -1;
-    const dirs = Math.abs(dx) >= Math.abs(dy) ? [xDir, yDir] : [yDir, xDir];
-    for (const dir of dirs) {
-      if (dir < 0) continue;
-      const [mx, my] = DIRD[dir];
-      if (canCombatChasePass(rt, rt.x + mx, rt.y + my)) return dir;
-    }
-    return -1;
-  }
-  function drawSwordSlash(g, hitbox, dir) {
-    const x = hitbox.x * TILE;
-    const y = hitbox.y * TILE;
-    const w = hitbox.w * TILE;
-    const h = hitbox.h * TILE;
-    g.save();
-    g.globalAlpha = 0.85;
-    g.strokeStyle = "#e8f6ff";
-    g.lineWidth = 5;
-    g.lineCap = "round";
-    g.beginPath();
-    if (dir === 3) {
-      g.arc(x + w / 2, y + h, w * 0.55, Math.PI * 1.12, Math.PI * 1.88);
-    } else if (dir === 0) {
-      g.arc(x + w / 2, y, w * 0.55, Math.PI * 0.12, Math.PI * 0.88);
-    } else if (dir === 1) {
-      g.arc(x + w, y + h / 2, h * 0.55, Math.PI * 0.62, Math.PI * 1.38);
-    } else {
-      g.arc(x, y + h / 2, h * 0.55, Math.PI * -0.38, Math.PI * 0.38);
-    }
-    g.stroke();
-    g.restore();
-  }
-  function drawMapCombatOverlay(g, camX, camY, shakeX, shakeY, alpha, playerX, playerY) {
-    g.save();
-    g.translate(Math.round(shakeX), Math.round(shakeY));
-    g.scale(cameraZoom, cameraZoom);
-    g.translate(-camX, -camY);
-    const p = G.player;
-    if (p && p.attack && attackIsActive(p.attack)) {
-      drawSwordSlash(g, swordHitboxAt(playerX, playerY, p.attack.dir), p.attack.dir);
-    }
-    for (const rt of evRTs) {
-      if (!combatReady(rt) || rt.combat.hurtFlash <= 0) continue;
-      const rx = (rt.prx == null ? rt.rx : rt.prx + (rt.rx - rt.prx) * alpha) * TILE;
-      const ry = (rt.pry == null ? rt.ry : rt.pry + (rt.ry - rt.pry) * alpha) * TILE;
-      g.fillStyle = "rgba(255,255,255,0.36)";
-      g.fillRect(rx + 6, ry - 6, TILE - 12, TILE);
-    }
-    g.font = "700 14px " + (proj.system.fontMenu || "sans-serif");
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    for (const ft of mapFloatTexts) {
-      const t = ft.life / ft.total;
-      g.globalAlpha = clamp(t * 1.4, 0, 1);
-      g.fillStyle = "rgba(0,0,0,0.75)";
-      g.fillText(ft.text, ft.x * TILE + 1, (ft.y - (1 - t) * 0.55) * TILE + 1);
-      g.fillStyle = ft.color;
-      g.fillText(ft.text, ft.x * TILE, (ft.y - (1 - t) * 0.55) * TILE);
-    }
-    g.restore();
-    g.globalAlpha = 1;
-  }
-
-  function updateEntityMotion(ent, speed) {
-    if (!ent.moving) return false;
-    const sx = Math.sign(ent.tx - ent.rx),
-      sy = Math.sign(ent.ty - ent.ry);
-    ent.rx += sx * speed;
-    ent.ry += sy * speed;
-    if (
-      (sx !== 0 && Math.sign(ent.tx - ent.rx) !== sx) ||
-      (sy !== 0 && Math.sign(ent.ty - ent.ry) !== sy) ||
-      (sx === 0 && sy === 0)
-    ) {
-      ent.rx = ent.tx;
-      ent.ry = ent.ty;
-      ent.x = ent.tx;
-      ent.y = ent.ty;
-      ent.moving = false;
-      return true; // arrived
-    }
-    ent.animT++;
-    return false;
-  }
-  function walkFrame(ent) {
-    if (!ent.moving && ent.kind !== "object") return 1;
-    const seq = [0, 1, 2, 1];
-    const speed = ent.kind === "object" ? 24 : 8;
-    return seq[Math.floor((ent.animT || globalT) / speed) % 4];
-  }
-
-  // ---- routes ----
-  function setRoute(ent, steps, onDone) {
-    ent.route = { steps, idx: 0, wait: 0, onDone };
-  }
-  function updateRoute(ent) {
-    const r = ent.route;
-    if (!r || ent.moving) return;
-    if (r.wait > 0) {
-      r.wait--;
-      return;
-    }
-    if (r.idx >= r.steps.length) {
-      ent.route = null;
-      if (r.onDone) r.onDone();
-      return;
-    }
-    const s = r.steps[r.idx++];
-    const dirs = { up: 3, down: 0, left: 1, right: 2 };
-    if (s in dirs) {
-      const d = dirs[s];
-      ent.dir = d;
-      const [dx, dy] = DIRD[d];
-      const ok2 =
-        ent === G.player
-          ? tilePassable(ent.x + dx, ent.y + dy) &&
-            !blockingEventAt(ent.x + dx, ent.y + dy)
-          : canEntityPass(ent, ent.x + dx, ent.y + dy);
-      if (ok2) startMove(ent, d);
-    } else if (s === "forward") {
-      r.steps.splice(r.idx, 0, ["down", "left", "right", "up"][ent.dir]);
-    } else if (s.startsWith("turn_")) {
-      ent.dir = dirs[s.slice(5)];
-    } else if (s === "wait15") {
-      r.wait = 15;
-    } else if (s === "wait60") {
-      r.wait = 60;
-    }
-  }
 
   // ============================ interpreter ============================
   // The Interp class lives in ./interpreter/interp.ts and the frozen `game`
@@ -2906,19 +2395,7 @@ const _createInputSystem = window.createInputSystem;
   };
 
   // ============================ title / gameover ============================
-  function initPlayer(x, y, dir) {
-    G.player = {
-      x, y, rx: x, ry: y, prx: x, pry: y, tx: x, ty: y, dir: dir == null ? 0 : dir,
-      moving: false, animT: 0, frame: 1, route: null, kind: "human",
-      charsetIdx: 0, page: null, attack: null, hurtInvuln: 0,
-    };
-    refreshPlayerCharset();
-  }
-  function refreshPlayerCharset() {
-    const lead = G.party[0];
-    if (lead)
-      G.player.charsetIdx = Math.max(0, Assets.charsetIndex(lead.charset));
-  }
+  // initPlayer / refreshPlayerCharset live in ./scenes/map-runtime.ts.
 
   async function newGame() {
     commonParallels.clear();

@@ -18,30 +18,36 @@ function evaluate(source) {
 }
 
 const engineSource = fs.readFileSync("src/engine/engine.js", "utf8");
+const mapRuntimeSource = fs.readFileSync("src/engine/scenes/map-runtime.ts", "utf8");
 
-function extractFunction(source, name) {
-  const start = source.indexOf("function " + name + "(");
-  assert.notEqual(start, -1, name + " exists");
-  const bodyStart = source.indexOf("{", start);
-  let depth = 0;
-  for (let i = bodyStart; i < source.length; i++) {
-    if (source[i] === "{") depth++;
-    if (source[i] === "}") depth--;
-    if (depth === 0) return source.slice(start, i + 1);
-  }
-  throw new Error("Could not extract " + name);
-}
-
-const combatHelpers = Function(`
-  const DIRD = { 0: [0, 1], 1: [-1, 0], 2: [1, 0], 3: [0, -1] };
-  ${extractFunction(engineSource, "rectsOverlap")}
-  ${extractFunction(engineSource, "entityHurtbox")}
-  ${extractFunction(engineSource, "swordHitboxAt")}
-  ${extractFunction(engineSource, "swordHitsEntity")}
-  ${extractFunction(engineSource, "tileDistance")}
-  ${extractFunction(engineSource, "eventBlocksChaseTile")}
-  return { rectsOverlap, entityHurtbox, swordHitboxAt, swordHitsEntity, tileDistance, eventBlocksChaseTile };
-`)();
+// Phase 1 Stage B: the combat geometry helpers moved to
+// src/engine/scenes/map-runtime.ts. Bundle the real module with esbuild and
+// drive its exports instead of extracting function text out of the monolith.
+// The deps seam reads window.RPGAtlasDeps at module evaluation and the module
+// reads the ?hd2d dev override off location.search, so both are stubbed.
+const combatHelpers = (() => {
+  const { buildSync } = require("esbuild");
+  const path = require("node:path");
+  const root = path.resolve(__dirname, "..");
+  const entry = `export {
+    rectsOverlap, entityHurtbox, swordHitboxAt, swordHitsEntity,
+    tileDistance, eventBlocksChaseTile,
+  } from ${JSON.stringify(
+    path.join(root, "src/engine/scenes/map-runtime.ts").replace(/\\/g, "/"),
+  )};`;
+  const out = buildSync({
+    stdin: { contents: entry, resolveDir: root, loader: "ts" },
+    bundle: true, format: "cjs", write: false, platform: "node", logLevel: "silent",
+  }).outputFiles[0].text;
+  const mod = { exports: {} };
+  vm.runInNewContext(out, {
+    module: mod, exports: mod.exports, require, console,
+    window: { RPGAtlasDeps: { Assets: { TILE: 48 }, RA: {} } },
+    location: { search: "" },
+    URLSearchParams,
+  });
+  return mod.exports;
+})();
 
 const page = evaluate("DataDefaults.newPage()");
 assert.deepEqual(JSON.parse(JSON.stringify(page.combat)), {
@@ -164,14 +170,16 @@ assert.equal(
 );
 
 // Map action combat must consume the named Attack action, not inspect a physical key.
-// Pin both sides of the integration: engine.js asks Input for "attack", and the input
-// layer resolves a project-defined replacement binding.
+// Pin both sides of the integration: the map update loop (engine.js) asks Input for
+// "attack", and the input layer resolves a project-defined replacement binding. The
+// combat/chase internals moved to scenes/map-runtime.ts (Phase 1 Stage B).
 assert.match(engineSource, /Input\.consume\(["']attack["']\)/, "map update consumes the Attack action");
 assert.doesNotMatch(engineSource, /case\s+["']KeyJ["']/, "engine has no hardcoded J attack branch");
-assert.match(engineSource, /tileDistance\(p, rt\) > 1/, "touch damage can strike from an adjacent tile");
-assert.match(engineSource, /function combatChaseDir\(rt\)/, "action-combat enemies have chase AI");
-assert.match(engineSource, /combatAi\(cfg\) !== ["']chase["']/, "chase AI is gated by the page combat AI setting");
-assert.match(engineSource, /canCombatChasePass\(rt, rt\.x \+ mx, rt\.y \+ my\)/, "chase AI checks event destination reservations");
+assert.doesNotMatch(mapRuntimeSource, /case\s+["']KeyJ["']/, "map runtime has no hardcoded J attack branch");
+assert.match(mapRuntimeSource, /tileDistance\(p, rt\) > 1/, "touch damage can strike from an adjacent tile");
+assert.match(mapRuntimeSource, /function combatChaseDir\(rt/, "action-combat enemies have chase AI");
+assert.match(mapRuntimeSource, /combatAi\(cfg\) !== ["']chase["']/, "chase AI is gated by the page combat AI setting");
+assert.match(mapRuntimeSource, /canCombatChasePass\(rt, rt\.x \+ mx, rt\.y \+ my\)/, "chase AI checks event destination reservations");
 assert.match(engineSource, /const chaseDir = combatChaseDir\(rt\)/, "event movement uses chase AI before random wandering");
 
 const handlers = {};
