@@ -5,6 +5,17 @@
 export const PATCH_NOTES = [
   {
     date: "July 2, 2026",
+    title: "Command Palette — press Ctrl+P and type what you want",
+    summary:
+      "Phase 3 of the Atlas overhaul (the editor platform) begins: a fuzzy-searching Command Palette puts every editor action one keystroke away, backed by a new command registry and a declarative keyboard map.",
+    items: [
+      "New Command Palette — open with Ctrl+P, Ctrl+Shift+P, or Tools ▸ Command Palette…, type a few letters of any command (save, playtest, database, height mode, zoom…), and press Enter to run it.",
+      "Every palette entry shows where the command lives in the menus and its keyboard shortcut; commands that can't run right now (like Undo with nothing to undo) are hidden.",
+      "All existing shortcuts behave exactly as before; under the hood they now run through one declarative key map that upcoming editor features (dockable panels, live HD-2D viewport) will extend.",
+    ],
+  },
+  {
+    date: "July 2, 2026",
     title: "Weather, stairs, drop shadows — and the HD-2D overhaul is complete",
     summary:
       "Phase 2 of the Atlas HD overhaul wraps up: GPU weather particles fall inside the 3D scene, stairs tiles become real ramps, characters get soft drop shadows, and the renderer is tuned to hold 60 fps at 1080p with every effect enabled.",

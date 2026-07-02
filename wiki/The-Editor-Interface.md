@@ -16,7 +16,7 @@ This page is your map of the map-maker.
 | **Draw** | Choose a drawing tool (Pen, Eraser, Rectangle, Circle, Fill, Shadow Pen) |
 | **Layer** | Choose which layer you're painting (Auto, Ground, Decor, Decor 2, Overhead) |
 | **Scale** | Zoom level for the canvas |
-| **Tools** | The big managers: Database, Plugin Manager, Audio Manager, Event Searcher, Resource Manager, Character Generator |
+| **Tools** | The big managers: Database, Plugin Manager, Audio Manager, Event Searcher, Resource Manager, Character Generator — plus the **Command Palette** |
 | **Game** | Set Start Position, Playtest, and game-wide settings |
 | **Help** | Newest-first Patch Notes, Quick Help, and About RPGAtlas |
 
@@ -78,6 +78,7 @@ control over what stacks on what, or to use the Overhead layer for things the pl
 | `0` | Auto layer · `1`–`4` choose layer |
 | `+` / `-` | Zoom out/in · `Ctrl`+wheel zoom · `Ctrl+0` reset to 1:1 |
 | **Right-click** | Pick the tile under the cursor |
+| `Ctrl+P` | **Command Palette** — type a few letters of any editor command and press Enter to run it |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / Redo (full-map history) |
 | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` | Cut / Copy / Paste |
 | **Shift+drag** | Select a tile region (all layers + shadows + heights) |

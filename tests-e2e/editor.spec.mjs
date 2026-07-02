@@ -94,3 +94,32 @@ test.describe("editor painting", () => {
     expect(layersAfter).not.toEqual(layersBefore);
   });
 });
+
+test.describe("command palette", () => {
+  test("Ctrl+P opens it, fuzzy search + Enter runs a command, Escape closes it", async ({ page }) => {
+    await page.goto("/index.html");
+    await expect(page.locator("#save-ind")).toBeVisible(); // boot finished
+
+    // Open with the keyboard (the binding preventDefaults the browser print dialog).
+    await page.keyboard.press("Control+p");
+    const input = page.locator(".cmdpal-input");
+    await expect(input).toBeVisible();
+    await expect(input).toBeFocused();
+    // Unfiltered list shows commands with their menu-derived category prefixes.
+    await expect(page.locator(".cmdpal-item").first()).toBeVisible();
+
+    // Escape closes without running anything.
+    await page.keyboard.press("Escape");
+    await expect(input).not.toBeAttached();
+
+    // Reopen via the second chord, search, and run: "database" must select the
+    // Database command (Tools menu) and Enter must open the Database modal.
+    await page.keyboard.press("Control+Shift+p");
+    await expect(input).toBeVisible();
+    await input.fill("database");
+    await expect(page.locator(".cmdpal-item.sel")).toContainText("Database");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".cmdpal-overlay")).not.toBeAttached();
+    await expect(page.locator(".db-modal")).toBeVisible();
+  });
+});

@@ -1,7 +1,19 @@
 # Phase 3 Spec — Editor Platform
 
-**Status:** IN PROGRESS. Stage A (this doc's detailed section) is the current work.
-Stage log will accumulate at the top of this section as stages land, phase-2-spec style.
+**Status:** IN PROGRESS. Stage log accumulates here, phase-2-spec style.
+
+Stage A COMPLETE (2026-07-02): command registry typed (`EditorCommand`,
+`registerCommand`, `commandEntries()` with menu-derived categories); the boot.ts keydown
+cascade is now a declarative `KeyBinding[]` dispatched by the new pure `keymap.ts`
+(tri-state modifiers; a bare `{ctrl:true}` barrier preserves "unmatched Ctrl chords
+never fall through"; height-digits-over-layer-digits order kept); command palette
+(`command-palette.ts` + pure `fuzzy.ts`) on Ctrl+P / Ctrl+Shift+P / Tools menu — fuzzy
+scoring is substring > word-start subsequence > scattered subsequence, taking the best
+of a word-start-greedy and a plain-greedy walk (word-start-greedy alone can jump past
+text a later query char needs). Palette mounts in #modal-root so the existing
+modal-open key guard covers it; disabled commands are hidden. Verified live (palette
+open/search/run/Esc; W/Q tools, Tab cycle, Ctrl+K inertness) + unit suites for
+keymap/fuzzy + a palette e2e spec.
 
 **Branch:** `phase-3-editor` (off `main` at tag `phase-2`)
 **Architect & Stage A implementation:** Claude Fable 5 (roadmap assignment: "workspace

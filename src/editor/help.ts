@@ -9,7 +9,7 @@
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { PATCH_NOTES } from "../../js/patch-notes.js?v=4";
+import { PATCH_NOTES } from "../../js/patch-notes.js?v=5";
 import { editorI18n } from "./editor-state";
 import { $, h, field } from "./dom";
 import { modal } from "./modals";
@@ -150,7 +150,7 @@ export function openKeyboardShortcuts() {
     line(keys("+", "−"), "zoom in / out  (Ctrl + wheel also zooms)"),
     line(keys(aKey("zoom1")), "zoom to 100%"),
   ]);
-  section("Application", ["db", "hdpreview", "play"].map((id) => line(keys(aKey(id)), aLabel(id))));
+  section("Application", ["db", "hdpreview", "play", "cmdpal"].map((id) => line(keys(aKey(id)), aLabel(id))));
   section("Selection & events", [
     line(keys("Shift", "drag"), "select an area of tiles"),
     line(keys("Del"), "delete the selected event (Event mode)"),
