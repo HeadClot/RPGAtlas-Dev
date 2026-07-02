@@ -5,6 +5,7 @@
 
 import { registerCommand, getCommand } from "./interpreter/registry.js";
 import { registerBuiltinCommands } from "./interpreter/commands/index.js";
+import { el, sleep, clamp, rnd, esc, sysSe, sysBgm, setSysProjectProvider } from "./util.js";
 
 const _Assets = window.RPGAtlasDeps.Assets;
 const _DataDefaults = window.RPGAtlasDeps.DataDefaults;
@@ -31,6 +32,7 @@ const _createInputSystem = window.createInputSystem;
     SCREEN_H = 13 * TILE;
 
   let proj = null;
+  setSysProjectProvider(() => proj); // util.js sys* helpers read the live project
   let stage, canvas, ctx, uiLayer, fader;
   let scene = "boot"; // boot | title | map | battle | gameover
   let menuOpen = false;
@@ -47,36 +49,9 @@ const _createInputSystem = window.createInputSystem;
   let flashTimer = 0;
 
   // ============================ utils ============================
-  function el(tag, cls, html) {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (html != null) e.innerHTML = html;
-    return e;
-  }
-  function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
-  }
-  function clamp(v, a, b) {
-    return v < a ? a : v > b ? b : v;
-  }
-  function rnd(n) {
-    return Math.floor(Math.random() * n);
-  }
-  function esc(s) {
-    return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  }
-  // system-tab sound/music lookups (logical key -> chosen SE / theme)
-  function sysSe(key) {
-    const m = (proj && proj.system && proj.system.sounds) || {};
-    Sfx.play(m[key] || key);
-  }
-  function sysBgm(key) {
-    const m = (proj && proj.system && proj.system.music) || {};
-    return m[key] || key;
-  }
+  // el / sleep / clamp / rnd / esc / sysSe / sysBgm are imported from
+  // ./util.js (Phase 1 Stage B). The sys* helpers read the live project through
+  // a provider installed at boot (setSysProjectProvider below).
 
   // ============================ input / UI stack ============================
   const UIStack = [];
