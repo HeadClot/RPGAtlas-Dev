@@ -5,6 +5,20 @@
 export const PATCH_NOTES = [
   {
     date: "July 2, 2026",
+    title: "Weather, stairs, drop shadows — and the HD-2D overhaul is complete",
+    summary:
+      "Phase 2 of the Atlas HD overhaul wraps up: GPU weather particles fall inside the 3D scene, stairs tiles become real ramps, characters get soft drop shadows, and the renderer is tuned to hold 60 fps at 1080p with every effect enabled.",
+    items: [
+      "New 'Weather particles' setting in Map Properties: Rain, Snow, or floating Ambient motes, rendered inside the HD-2D scene (they fall behind buildings and in front of the ground, not as a flat overlay).",
+      "New 'Soft character drop shadows' toggle: a gentle blob grounds every character even without sun shadows.",
+      "Stairs tiles now render as real sloped ramps between terrain heights in HD-2D.",
+      "Performance: chunk-level view culling plus a CI-enforced frame budget — the sample map with every feature on (shadows, water, materials, rain, day/night, full post stack) holds 60 fps at 1080p on ordinary hardware.",
+      "The Whispering Cave in the sample project is now an HD-2D showcase: point-light shadows off the rock formations, glowing lava and crystal, dust motes, night color grade.",
+      "The old pre-three.js renderer has been retired (?renderer=classic no longer switches); two driver-strict shader bugs found on real GPUs (water at dusk, weather particles) were fixed on the way out.",
+    ],
+  },
+  {
+    date: "July 2, 2026",
     title: "Cinematic post stack and a day/night cycle",
     summary:
       "HD-2D maps gain a film-grade finishing stack — ACES tone mapping, color grades, vignette, ambient occlusion, FXAA — plus a real day/night cycle where the sun arcs across the sky, shadows stretch and fade, and windows light up after dark.",

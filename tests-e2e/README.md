@@ -55,7 +55,8 @@ toolchain, not `127.0.0.1` — the config's `baseURL`/`webServer.url` use
     and checking it isn't a blank/uniform frame (PNG size heuristic — see
     the comment by `isNonBlankPng`). This deliberately doesn't read
     `#gamecanvas` pixels directly: the sample's start map has HD-2D enabled,
-    which renders through a separate WebGL `#glcanvas` that `js/renderer.js`
+    which renders through a separate WebGL `#glcanvas` that the three.js
+    renderer (`src/renderer/three-renderer.ts`)
     inserts *behind* `#gamecanvas` (which the engine leaves transparent over
     the map in that mode) — screenshotting the composited stage covers both
     render paths uniformly.
@@ -90,22 +91,25 @@ toolchain, not `127.0.0.1` — the config's `baseURL`/`webServer.url` use
   this is also what a plain boot renders).
 - `classic2d-meridian-village.png` — the Canvas 2D path (`?hd2d=0` forces it
   off on the same map, via the dev override in `js/engine.js` `hdWanted()`).
-- `hd2d-post-meridian-village.png` — the HD-2D path with the full post stack
-  (bloom + DoF + fog) switched on via the fixture's `transformProject` hook
-  (the sample project keeps them off). **Captured from the classic renderer**
-  (`npx playwright test renderer-golden -g "classic-renderer fallback matches
-  the same post-stack" --update-snapshots`) so the default three.js path is
-  held to the classic output, not to itself.
+- `hd2d-post-meridian-village.png` — the HD-2D path with the classic post
+  stack (bloom + DoF + fog) switched on via the fixture's `transformProject`
+  hook (the sample project keeps them off). **Captured from the classic
+  raw-WebGL2 renderer before its retirement**, so the three.js path is held
+  to the classic output, not to itself.
+- The Phase 2 feature goldens (`hd2d-shadows-…`, `hd2d-pointshadows-…`,
+  `hd2d-water-…`, `hd2d-materials-…`, `hd2d-post2-…`, `hd2d-dusk-…`,
+  `hd2d-rain-…`) were captured from the three.js renderer itself — no
+  classic reference exists for the new capabilities; they guard against
+  regressions from their capture point onward.
 
-**These exist so the Phase 2 renderer port has a pixel-accuracy contract to
-match.** Since Phase 2 Stage A the default HD-2D path runs on three.js
-(`src/renderer/`), and each HD-2D golden also runs against the classic
-raw-WebGL2 fallback (`?renderer=classic`) with the SAME baseline — the two
-renderers are pinned to each other until parity sign-off retires the classic
-script. If a future renderer rewrite changes what gets drawn, `npm run
-test:e2e` will fail here with a diff image in the HTML report — that's
-either an intentional visual change (update the baseline, see below) or a
-regression worth investigating before it ships.
+**These began as the Phase 2 renderer port's pixel-accuracy contract.**
+The port reached strict parity on these baselines (Stage A, 2026-07-01) and
+the classic raw-WebGL2 renderer was retired at Phase 2 exit — the three.js
+renderer (`src/renderer/`) is now the only HD-2D renderer, still pinned to
+the classic-era baselines above. If a change makes these fail, `npm run
+test:e2e` shows a diff image in the HTML report — that's either an
+intentional visual change (update the baseline, see below) or a regression
+worth investigating before it ships.
 
 ### Determinism
 
@@ -122,11 +126,12 @@ that down instead of relying on being "close enough":
    the title-click fade-in/out and a fixed settle period. Every run performs
    the exact same number of engine ticks — verified byte-identical
    screenshots across repeated runs while building this harness.
-2. **No hidden randomness in the renderer.** `js/renderer.js` has no
-   internal `Math.random()`/`Date.now()`/`performance.now()` — light
-   flicker, camera shake, and walk-cycle frame selection are all derived
-   from the engine's own tick counter (`globalT`), which the frozen clock
-   makes reproducible.
+2. **No hidden randomness in the renderer.** `src/renderer/three-renderer.ts`
+   has no internal `Math.random()`/`Date.now()`/`performance.now()` — light
+   flicker, camera shake, walk-cycle frame selection, water waves, and
+   weather particles are all derived from the engine's own tick counter
+   (`globalT`, passed in as `extra.t`), which the frozen clock makes
+   reproducible.
 3. **Forced software GPU rendering.** `playwright.config.mjs` launches
    Chromium with `--use-gl=angle --use-angle=swiftshader
    --enable-unsafe-swiftshader`, so the WebGL2 HD-2D path rasterizes via

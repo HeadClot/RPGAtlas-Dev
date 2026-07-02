@@ -871,6 +871,20 @@ const DataDefaults = (() => {
     fillRect(m, "ground", 1, 9, 3, 10, T.lava);
     set(m, "ground", 6, 2, T.mushroom); set(m, "ground", 10, 9, T.mushroom);
 
+    // HD-2D showcase (Phase 2): the cave demos the new renderer features —
+    // point-light shadows off the rock formations, auto materials (the lava
+    // pool and crystal glow in the dark), dust motes, vignette + night grade.
+    m.hd2d = {
+      enabled: true, tilt: 55, lights: true, ambient: 0.3,
+      pointShadows: true, materials: true, dropShadows: true,
+      weather: "motes", vignette: true, lut: "night", fxaa: true,
+      fog: { color: "#0a0a14" },
+    };
+    m.lights = [
+      { rx: 8, ry: 1, color: "#88eeff", radius: 220 }, // the crystal
+      { rx: 2, ry: 9.5, color: "#ff8844", radius: 260 }, // lava glow
+    ];
+
     ev(m, 8, 2, "Guardian", (e) => {
       e.pages[0] = page({ charset: "flame", trigger: "action" }, [
         { t: "text", name: "???", text: "A hulking orc blocks the way\nto the glowing crystal!" },

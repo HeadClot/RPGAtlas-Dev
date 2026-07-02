@@ -14,10 +14,11 @@
      virtual clock we advance by an exact number of milliseconds, so every run
      performs the exact same number of ticks — confirmed byte-identical
      screenshots across repeated runs in development of this harness.
-   - The renderer itself (js/renderer.js) has no internal Math.random()/
-     Date.now()/performance.now() calls — every animated value (light
-     flicker, camera shake, walk-cycle frame) derives from the engine's tick
-     counter (globalT), so freezing the clock freezes the whole scene.
+   - The renderer itself (src/renderer/three-renderer.ts) has no internal
+     Math.random()/Date.now()/performance.now() calls — every animated value
+     (light flicker, camera shake, walk-cycle frame, water waves, weather
+     particles) derives from the engine's tick counter (globalT), so freezing
+     the clock freezes the whole scene.
    - Chromium is launched with software-rendering flags (SwiftShader/ANGLE —
      see playwright.config.mjs) so the WebGL2 HD-2D path rasterizes the same
      way regardless of the host GPU.
@@ -63,18 +64,10 @@ test.describe("renderer golden images", () => {
     await expect(page.locator("#stage")).toHaveScreenshot("hd2d-meridian-village.png");
   });
 
-  // Phase 2: the default HD-2D path above now runs on the three.js renderer;
-  // this spec pins the classic raw-WebGL2 fallback (?renderer=classic) to the
-  // SAME baseline until parity sign-off retires it (docs/phase-2-spec.md).
-  test("classic-renderer fallback (?renderer=classic) matches the same HD-2D golden", async ({ page }) => {
-    await bootToStableMap(page, "1&renderer=classic");
-    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-meridian-village.png");
-  });
-
-  // The sample project keeps bloom/DoF/fog off, so the specs above never run
-  // the post chain. This pair covers it: the baseline was captured from the
-  // CLASSIC renderer (see tests-e2e/README.md), and the default three.js path
-  // must reproduce it — post-stack parity, machine-checked.
+  // The sample project keeps bloom/DoF/fog off, so the spec above never runs
+  // the post chain. This baseline was captured from the CLASSIC renderer
+  // before its retirement (see tests-e2e/README.md), and the three.js path
+  // must keep reproducing it — post-stack parity, machine-checked.
   const withPostStack = (project) => {
     project.maps[0].hd2d = {
       enabled: true, tilt: 50, bloom: true, dof: true,
@@ -85,11 +78,6 @@ test.describe("renderer golden images", () => {
 
   test("HD-2D post stack (bloom+DoF+fog) renders a stable frame", async ({ page }) => {
     await bootToStableMap(page, 1, withPostStack);
-    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-post-meridian-village.png");
-  });
-
-  test("classic-renderer fallback matches the same post-stack golden", async ({ page }) => {
-    await bootToStableMap(page, "1&renderer=classic", withPostStack);
     await expect(page.locator("#stage")).toHaveScreenshot("hd2d-post-meridian-village.png");
   });
 
@@ -170,6 +158,19 @@ test.describe("renderer golden images", () => {
       return project;
     });
     await expect(page.locator("#stage")).toHaveScreenshot("hd2d-dusk-meridian-village.png");
+  });
+
+  // Stage E: stateless GPU weather particles — positions are pure functions
+  // of the frozen tick, so rain streaks land identically every run.
+  test("HD-2D weather particles (map.hd2d.weather rain) render a stable frame", async ({ page }) => {
+    await bootToStableMap(page, 1, (project) => {
+      project.maps[0].hd2d = {
+        enabled: true, tilt: 50, lights: true, ambient: 0.4,
+        weather: "rain", dropShadows: true,
+      };
+      return project;
+    });
+    await expect(page.locator("#stage")).toHaveScreenshot("hd2d-rain-meridian-village.png");
   });
 
   test("classic 2D renderer (?hd2d=0 override) renders a stable frame", async ({ page }) => {

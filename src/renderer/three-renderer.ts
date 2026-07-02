@@ -159,7 +159,9 @@ export function createThreeRenderer(): any {
     "      vec2 t = uv + (vec2(float(tx), float(ty)) - 0.5) * " + (2 / PL_FACE).toFixed(6) + ";\n" +
     "      t = clamp(t, " + (1.5 / PL_FACE).toFixed(6) + ", " + (1 - 1.5 / PL_FACE).toFixed(6) + ");\n" +
     "      vec2 at = vec2((col + t.x) / 3.0, (row + t.y) / " + (MAX_PLS * 2).toFixed(1) + ");\n" +
-    "      vis += (zv - bias) <= plLinZ(texture(uPLMap, at).r, range) ? 1.0 : 0.0;\n" +
+    // textureLod: this runs inside the light loop (non-uniform control flow),
+    // where implicit-derivative sampling is undefined; the map has no mips.
+    "      vis += (zv - bias) <= plLinZ(textureLod(uPLMap, at, 0.0).r, range) ? 1.0 : 0.0;\n" +
     "    }\n" +
     "  }\n" +
     "  return vis * 0.25;\n" +
@@ -284,6 +286,9 @@ export function createThreeRenderer(): any {
     "uniform vec3 uLightCol[" + MAX_LIGHTS + "];\n" +
     "uniform vec4 uFog;\n" +
     "uniform vec2 uFogRange;\n" +
+    "#ifdef DAYNIGHT\n" +
+    "uniform vec3 uAmbTint;\n" +
+    "#endif\n" +
     "out vec4 outColor;\n" +
     "vec3 waveN(vec2 p, float t) {\n" + // analytic normal of 3 summed sines
     "  vec2 d = vec2(cos(p.x * 0.130 + t * 1.7) * 0.286, 0.0);\n" +
@@ -320,6 +325,77 @@ export function createThreeRenderer(): any {
     "    rgb = mix(rgb, uFog.rgb, f);\n" +
     "  }\n" +
     "  outColor = vec4(rgb, 1.0);\n" +
+    "}";
+
+  // GPU weather particles (Stage E): stateless — every particle's position is
+  // a pure function of its per-particle seeds and uTime, evaluated in the
+  // vertex shader. No CPU simulation, no state, fully deterministic under the
+  // frozen-clock goldens. One static buffer holds WEATHER_MAX quads; unused
+  // particles collapse to a degenerate position.
+  const WEATHER_VS =
+    "layout(location=0) in vec3 aSeed;\n" +
+    "layout(location=1) in vec2 aCorner;\n" +
+    "layout(location=2) in float aId;\n" +
+    "uniform mat4 uMVP;\n" +
+    "uniform float uTime;\n" +
+    "uniform vec4 uArea;\n" + // cx, cz, halfW, halfH (world px around the camera)
+    "uniform float uWCount, uWMode;\n" + // 0 rain, 1 snow, 2 motes
+    "out vec2 vUV; out float vA;\n" +
+    "void main() {\n" +
+    "  if (aId >= uWCount) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vUV = vec2(0.0); vA = 0.0; return; }\n" +
+    "  const float H = 380.0;\n" + // fall-column height, px
+    "  vec3 p; vec2 sz; float a;\n" +
+    "  float px = uArea.x + (aSeed.x * 2.0 - 1.0) * uArea.z;\n" +
+    "  float pz = uArea.y + (fract(aSeed.x * 7.31 + aSeed.y * 3.7) * 2.0 - 1.0) * uArea.w;\n" +
+    "  if (uWMode < 0.5) {\n" + // rain: fast fall, slight slant
+    "    float y = H - mod(aSeed.y * H + uTime * (620.0 + aSeed.z * 260.0), H + 30.0);\n" +
+    "    p = vec3(px + (H - y) * 0.12, y, pz);\n" +
+    "    sz = vec2(1.4, 16.0); a = 0.38;\n" +
+    "  } else if (uWMode < 1.5) {\n" + // snow: slow fall, sway
+    "    float y = H - mod(aSeed.y * H + uTime * (42.0 + aSeed.z * 34.0), H + 12.0);\n" +
+    "    p = vec3(px + sin(uTime * 0.9 + aSeed.z * 6.28) * 14.0, y, pz);\n" +
+    "    sz = vec2(3.0, 3.0); a = 0.8;\n" +
+    "  } else {\n" + // ambient motes: hovering drift + pulse
+    "    float y = 16.0 + aSeed.y * 110.0 + sin(uTime * 0.5 + aSeed.z * 6.28) * 9.0;\n" +
+    "    p = vec3(px + sin(uTime * 0.23 + aSeed.z * 12.6) * 22.0, y, pz + cos(uTime * 0.31 + aSeed.x * 9.4) * 18.0);\n" +
+    "    sz = vec2(2.6, 2.6); a = 0.3 * (0.55 + 0.45 * sin(uTime * 1.7 + aSeed.z * 17.0));\n" +
+    "  }\n" +
+    "  vec3 world = p + vec3(aCorner.x * sz.x, aCorner.y * sz.y, 0.0);\n" +
+    "  gl_Position = uMVP * vec4(world, 1.0);\n" +
+    "  vUV = aCorner + 0.5; vA = a;\n" +
+    "}";
+  const WEATHER_FS =
+    "precision mediump float;\n" +
+    "in vec2 vUV; in float vA;\n" +
+    // highp to match the vertex stage's default precision — strict linkers
+    // (ANGLE D3D) reject a mediump/highp mismatch on a shared uniform.
+    "uniform highp float uWMode;\n" +
+    "out vec4 outColor;\n" +
+    "void main() {\n" +
+    "  float d; vec3 col;\n" +
+    "  if (uWMode < 0.5) {\n" + // soft vertical streak
+    "    d = (1.0 - abs(vUV.x - 0.5) * 2.0) * (1.0 - abs(vUV.y - 0.5) * 1.6);\n" +
+    "    col = vec3(0.62, 0.72, 0.92);\n" +
+    "  } else {\n" +
+    "    float r = length(vUV - 0.5) * 2.0;\n" +
+    "    d = clamp(1.0 - r, 0.0, 1.0);\n" +
+    "    if (uWMode < 1.5) { col = vec3(0.96); d = smoothstep(0.0, 0.7, d); }\n" +
+    "    else { col = vec3(1.0, 0.95, 0.7); d *= d; }\n" +
+    "  }\n" +
+    "  float alpha = clamp(d, 0.0, 1.0) * vA;\n" +
+    "  outColor = vec4(col * alpha, alpha);\n" + // premultiplied
+    "}";
+  // Soft character drop shadows (Stage E): a radial-gradient blob under each
+  // sprite, faded slightly by distance — cheap grounding when the real sun
+  // shadows are off (and harmless alongside them).
+  const DROP_FS =
+    "precision mediump float;\n" +
+    "in vec2 vUV; in float vFoam; in vec3 vWorld;\n" +
+    "uniform sampler2D uTex;\n" +
+    "out vec4 outColor;\n" +
+    "void main() {\n" +
+    "  float a = texture(uTex, vUV).a * 0.34;\n" +
+    "  outColor = vec4(0.04 * a, 0.04 * a, 0.09 * a, a);\n" +
     "}";
 
   // Fullscreen triangle: same three clip-space vertices the classic
@@ -545,10 +621,14 @@ export function createThreeRenderer(): any {
   const scene = new THREE.Scene();
   const terrainGroup = new THREE.Group();
   const waterGroup = new THREE.Group(); // after terrain, before sprites: sprites blend over water
+  const dropGroup = new THREE.Group(); // soft blob shadows under sprites
   const spriteGroup = new THREE.Group();
   const overheadGroup = new THREE.Group();
-  scene.add(terrainGroup, waterGroup, spriteGroup, overheadGroup);
-  [scene, terrainGroup, waterGroup, spriteGroup, overheadGroup].forEach((o) => (o.matrixAutoUpdate = false));
+  const weatherGroup = new THREE.Group(); // particles draw last, over everything
+  scene.add(terrainGroup, waterGroup, dropGroup, spriteGroup, overheadGroup, weatherGroup);
+  [scene, terrainGroup, waterGroup, dropGroup, spriteGroup, overheadGroup, weatherGroup].forEach(
+    (o) => (o.matrixAutoUpdate = false),
+  );
 
   function sceneMaterial(
     tex: THREE.Texture,
@@ -1093,6 +1173,9 @@ export function createThreeRenderer(): any {
       // Stage C: animated water surface + auto-generated material maps.
       water: c.water === true ? 1 : Math.min(1, Math.max(0, Number(c.water) || 0)),
       materials: !!c.materials,
+      // Stage E: ambient weather particles + soft character drop shadows.
+      weather: typeof c.weather === "string" && WEATHER_COUNTS[c.weather] ? c.weather : "",
+      dropShadows: !!c.dropShadows,
       // Stage D: post-stack toggles + day/night cycle.
       aces: !!c.aces,
       vignette: c.vignette === true ? 0.5 : Math.min(1, Math.max(0, Number(c.vignette) || 0)),
@@ -1147,20 +1230,47 @@ export function createThreeRenderer(): any {
         ty0 = ch.y / TILE;
       const tx1 = Math.min(mapW, (ch.x + ch.w) / TILE),
         ty1 = Math.min(mapH, (ch.y + ch.h) / TILE);
+      const Lyr = map.layers || {};
+      const stairsAt = (tx: number, ty: number) => {
+        if (T.stairs == null) return false;
+        const i = ty * mapW + tx;
+        return (
+          (Lyr.ground && Lyr.ground[i] === T.stairs) ||
+          (Lyr.decor && Lyr.decor[i] === T.stairs) ||
+          (Lyr.decor2 && Lyr.decor2[i] === T.stairs)
+        );
+      };
       for (let ty = ty0; ty < ty1; ty++) {
         for (let tx = tx0; tx < tx1; tx++) {
           const h = hAt(tx, ty);
-          if (h <= 0) continue;
+          // Stage E ramps: a stairs tile below a higher north neighbour slopes
+          // up to it instead of rendering a flat top.
+          const hN = hAt(tx, ty - 1);
+          const ramp = hN > h && stairsAt(tx, ty);
+          if (h <= 0 && !ramp) continue;
           const uv = tileUV(ch, tx, ty);
           const x0 = tx * TILE,
             x1 = x0 + TILE,
             z0 = ty * TILE,
             z1 = z0 + TILE,
             top = h * TILE;
-          // top face, textured with the tile's own prerendered appearance
-          quad(verts,
-            x0, top, z0, uv.u0, uv.v0, x1, top, z0, uv.u1, uv.v0,
-            x0, top, z1, uv.u0, uv.v1, x1, top, z1, uv.u1, uv.v1, 1);
+          if (ramp) {
+            const yN = hN * TILE;
+            // sloped surface: north edge lifted to the neighbour's height
+            quad(verts,
+              x0, yN, z0, uv.u0, uv.v0, x1, yN, z0, uv.u1, uv.v0,
+              x0, top, z1, uv.u0, uv.v1, x1, top, z1, uv.u1, uv.v1, 1);
+            // triangular side skirts so the ramp reads as solid from the side
+            verts.push(
+              x1, yN, z0, uv.u1, uv.v0, TINT_EW, x1, top, z1, uv.u1, uv.v1, TINT_EW, x1, top, z0, uv.u1, uv.v1, TINT_EW,
+              x0, yN, z0, uv.u0, uv.v0, TINT_EW, x0, top, z0, uv.u0, uv.v1, TINT_EW, x0, top, z1, uv.u0, uv.v1, TINT_EW,
+            );
+          } else {
+            // top face, textured with the tile's own prerendered appearance
+            quad(verts,
+              x0, top, z0, uv.u0, uv.v0, x1, top, z0, uv.u1, uv.v0,
+              x0, top, z1, uv.u0, uv.v1, x1, top, z1, uv.u1, uv.v1, 1);
+          }
           // exposed walls, one tile-unit segment at a time, auto-shaded.
           // North walls face away from the fixed camera and are never visible.
           for (let k = hAt(tx, ty + 1); k < h; k++) { // south
@@ -1217,6 +1327,7 @@ export function createThreeRenderer(): any {
           const wmesh = new THREE.Mesh(geo, waterMaterial(ch.tex, ch.w, ch.h));
           wmesh.frustumCulled = false;
           wmesh.matrixAutoUpdate = false;
+          wmesh.userData.rect = { x0: ch.x, z0: ch.y, x1: ch.x + ch.w, z1: ch.y + ch.h };
           waterGroup.add(wmesh);
           // ch.tex is disposed with the terrain mesh above — only our own here.
           mapDisposables.push(wmesh.geometry, wmesh.material as THREE.Material);
@@ -1504,6 +1615,8 @@ export function createThreeRenderer(): any {
   function renderReflection(r: THREE.WebGLRenderer, mvp: number[], clear: number[]) {
     ensureReflectRT(sizedW, sizedH);
     waterGroup.visible = false;
+    dropGroup.visible = false;
+    weatherGroup.visible = false;
     U.uClipY.value[0] = 1;
     U.uClipY.value[1] = WATER_Y + 0.5;
     U.uMVP.value.fromArray(mul(mvp, MIRROR_Y));
@@ -1514,7 +1627,138 @@ export function createThreeRenderer(): any {
     U.uMVP.value.fromArray(mvp);
     U.uClipY.value[0] = 0;
     waterGroup.visible = true;
+    dropGroup.visible = true;
+    weatherGroup.visible = true;
     U.uReflect.value = reflectRT!.texture;
+  }
+
+  // Coarse XZ view culling (Stage E): chunk-granular, applied only around the
+  // reflection + scene passes so off-screen chunks still cast shadows in the
+  // depth passes. Margins absorb the tilt (the camera sees further north) and
+  // tall geometry near the edges.
+  function setViewCull(camX: number, camY: number, viewW: number, viewH: number, on: boolean) {
+    const m = 6 * TILE;
+    const x0 = camX - m,
+      x1 = camX + viewW + m;
+    const z0 = camY - 10 * TILE,
+      z1 = camY + viewH + m;
+    for (const g of [terrainGroup, waterGroup, overheadGroup]) {
+      for (const child of g.children) {
+        const rect = child.userData.rect;
+        if (!rect) continue;
+        child.visible =
+          !on || !(rect.x1 < x0 || rect.x0 > x1 || rect.z1 < z0 || rect.z0 > z1);
+      }
+    }
+  }
+
+  // ---------------------- weather & drop shadows (Stage E) ----------------------
+  const WEATHER_MAX = 800;
+  const WEATHER_COUNTS: Record<string, [number, number]> = {
+    rain: [0, 700],
+    snow: [1, 420],
+    motes: [2, 140],
+  };
+  const weatherU = {
+    uMVP: U.uMVP,
+    uTime: U.uTime,
+    uArea: { value: new Float32Array(4) },
+    uWCount: { value: 0 },
+    uWMode: { value: 0 },
+  };
+  let weatherMesh: THREE.Mesh | null = null;
+
+  function ensureWeatherMesh() {
+    if (weatherMesh) return;
+    // Deterministic per-particle seeds from a fixed LCG.
+    let s = 48271;
+    const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0), s / 4294967296);
+    const CORNERS = [-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5];
+    const data = new Float32Array(WEATHER_MAX * 6 * 6); // aSeed(3) aCorner(2) aId(1)
+    let o = 0;
+    for (let i = 0; i < WEATHER_MAX; i++) {
+      const s0 = rnd(), s1 = rnd(), s2 = rnd();
+      for (let v = 0; v < 6; v++) {
+        data[o++] = s0;
+        data[o++] = s1;
+        data[o++] = s2;
+        data[o++] = CORNERS[v * 2];
+        data[o++] = CORNERS[v * 2 + 1];
+        data[o++] = i;
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    const buf = new THREE.InterleavedBuffer(data, 6);
+    const seed = new THREE.InterleavedBufferAttribute(buf, 3, 0);
+    geo.setAttribute("aSeed", seed);
+    geo.setAttribute("position", seed); // sizes the draw (see batchGeometry)
+    geo.setAttribute("aCorner", new THREE.InterleavedBufferAttribute(buf, 2, 3));
+    geo.setAttribute("aId", new THREE.InterleavedBufferAttribute(buf, 1, 5));
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Infinity);
+    const m = new THREE.RawShaderMaterial({
+      vertexShader: WEATHER_VS,
+      fragmentShader: WEATHER_FS,
+      uniforms: weatherU,
+    });
+    m.glslVersion = THREE.GLSL3;
+    m.blending = THREE.CustomBlending;
+    m.blendEquation = THREE.AddEquation;
+    m.blendSrc = THREE.OneFactor;
+    m.blendDst = THREE.OneMinusSrcAlphaFactor;
+    m.depthTest = true;
+    m.depthWrite = false;
+    m.side = THREE.DoubleSide;
+    m.transparent = false;
+    weatherMesh = new THREE.Mesh(geo, m);
+    weatherMesh.frustumCulled = false;
+    weatherMesh.matrixAutoUpdate = false;
+    weatherGroup.add(weatherMesh);
+  }
+
+  // Radial blob texture for drop shadows, generated once.
+  let dropTex: THREE.CanvasTexture | null = null;
+  function ensureDropTex() {
+    if (dropTex) return;
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d")!;
+    const grad = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.7, "rgba(255,255,255,0.55)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    dropTex = makeTexture(c);
+    dropTex.magFilter = THREE.LinearFilter;
+    dropTex.minFilter = THREE.LinearFilter;
+  }
+
+  const dropPool: Array<{ mesh: THREE.Mesh; buf: THREE.InterleavedBuffer }> = [];
+  function poolDrop(i: number) {
+    ensureDropTex();
+    while (dropPool.length <= i) {
+      const { geo, buf } = batchGeometry(new Array(36).fill(0), true);
+      const m = new THREE.RawShaderMaterial({
+        vertexShader: WATER_VS, // pos/uv/tint passthrough
+        fragmentShader: DROP_FS,
+        uniforms: { uMVP: U.uMVP, uTex: { value: dropTex } },
+      });
+      m.glslVersion = THREE.GLSL3;
+      m.blending = THREE.CustomBlending;
+      m.blendEquation = THREE.AddEquation;
+      m.blendSrc = THREE.OneFactor;
+      m.blendDst = THREE.OneMinusSrcAlphaFactor;
+      m.depthTest = true;
+      m.depthWrite = false;
+      m.side = THREE.DoubleSide;
+      m.transparent = false;
+      const mesh = new THREE.Mesh(geo, m);
+      mesh.frustumCulled = false;
+      mesh.matrixAutoUpdate = false;
+      dropGroup.add(mesh);
+      dropPool.push({ mesh, buf });
+    }
+    return dropPool[i];
   }
 
   // ---------------------------- sprites ----------------------------
@@ -1663,8 +1907,40 @@ export function createThreeRenderer(): any {
       p.mat.uniforms.uTex.value = texFor(s.canvas);
       p.mesh.userData.bound = [x0 + sw / 2, z, Math.max(sw, sh)]; // XZ cull circle
       p.mesh.visible = true;
+      if (cfg.dropShadows) { // soft blob under the feet
+        const d = poolDrop(i);
+        const dw = sw * 0.72,
+          dh = sw * 0.42;
+        const cx = x0 + sw / 2,
+          cz2 = z - 4,
+          dy = base + 1.5;
+        (d.buf.array as Float32Array).set([
+          cx - dw / 2, dy, cz2 - dh / 2, 0, 0, 1, cx + dw / 2, dy, cz2 - dh / 2, 1, 0, 1, cx - dw / 2, dy, cz2 + dh / 2, 0, 1, 1,
+          cx - dw / 2, dy, cz2 + dh / 2, 0, 1, 1, cx + dw / 2, dy, cz2 - dh / 2, 1, 0, 1, cx + dw / 2, dy, cz2 + dh / 2, 1, 1, 1,
+        ]);
+        d.buf.needsUpdate = true;
+        d.mesh.visible = true;
+      }
     }
     for (let i = sprites.length; i < spritePool.length; i++) spritePool[i].mesh.visible = false;
+    for (let i = cfg.dropShadows ? sprites.length : 0; i < dropPool.length; i++) {
+      dropPool[i].mesh.visible = false;
+    }
+
+    // ---- weather particles (Stage E) ----
+    if (cfg.weather) {
+      ensureWeatherMesh();
+      const [mode, count] = WEATHER_COUNTS[cfg.weather];
+      weatherU.uWMode.value = mode;
+      weatherU.uWCount.value = count;
+      weatherU.uArea.value[0] = tX;
+      weatherU.uArea.value[1] = tZ - 40;
+      weatherU.uArea.value[2] = w / zoom / 2 + 100;
+      weatherU.uArea.value[3] = h / zoom / 2 + 200;
+      weatherMesh!.visible = true;
+    } else if (weatherMesh) {
+      weatherMesh.visible = false;
+    }
 
     // ---- sun depth pass (only when this map casts shadows; none at night) ----
     if (cfg.shadows > 0 && sunDl > 0.003) renderSunDepth(r, sunDl);
@@ -1683,6 +1959,10 @@ export function createThreeRenderer(): any {
     // top, transparent over the map), so clear opaque.
     const clear = cfg.fog ? cfg.fog.color : [16 / 255, 16 / 255, 24 / 255];
 
+    // Chunk-level view culling for the visual passes (shadow passes above saw
+    // the full scene, so off-screen casters still shadow the view).
+    setViewCull(camX + shX, camY + shZ, w / zoom, h / zoom, true);
+
     // ---- planar-reflection pass (only when this map has water) ----
     if (cfg.water > 0 && waterGroup.children.length) renderReflection(r, mvp, clear);
 
@@ -1699,6 +1979,7 @@ export function createThreeRenderer(): any {
     r.setClearColor(new THREE.Color(clear[0], clear[1], clear[2]), 1);
     r.clear(true, true, false);
     r.render(scene, camera);
+    setViewCull(0, 0, 0, 0, false); // restore chunk visibility for the next frame's depth passes
 
     // ---- post passes ----
     if (post) {

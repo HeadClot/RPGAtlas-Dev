@@ -201,7 +201,7 @@ window.RPGATLAS_GAME_ID = ${JSON.stringify(gameId)};
   <\/script>
 ${classicScripts}
   <script>
-window.RPGAtlasDeps = { Assets, DataDefaults, GLRender: window.GLRender, Music, RA, Sfx };
+window.RPGAtlasDeps = { Assets, DataDefaults, Music, RA, Sfx };
   <\/script>
   <script type="module">${scriptText(files[files.length - 1])}<\/script>
 </body>

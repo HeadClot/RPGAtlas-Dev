@@ -1,6 +1,10 @@
 # Phase 2 Spec — Rendering Core v2 (three.js HD-2D)
 
-**Status:** IN PROGRESS — Stage A COMPLETE (2026-07-01, merged to main): parity port green
+**Status:** COMPLETE (2026-07-02). All stages landed; classic renderer retired; perf CI
+check in place. Stage log below; deviations from the roadmap wish-list are recorded at the
+end of the stage log.
+
+Stage A COMPLETE (2026-07-01, merged to main): parity port green
 against unchanged baselines, classic fallback pinned to the same goldens, post-stack golden
 added. Stage B.1 COMPLETE (2026-07-01): directional sun shadow maps (3×3 PCF) behind
 `map.hd2d.shadows` (+ optional `hd2d.sun {azimuth, elevation}`), terrain/sprites/overhead
@@ -39,7 +43,28 @@ frame), shadow strength fade, ambient scale/tint curve (gold dawn/dusk, blue nig
 emissive glow. Time lives in `G.timeOfDay` (save-round-tripped), pinned per map by
 `hd2d.timeOfDay`, scripted via `game.setTimeOfDay/getTimeOfDay` (Phase 5 wires gameplay).
 New goldens: `hd2d-post2-…` and `hd2d-dusk-meridian-village.png`.
-Remaining: E particles/terrain/perf, classic retirement, 60 fps CI check.
+Stage E COMPLETE (2026-07-02): stateless GPU weather particles (`hd2d.weather`:
+rain/snow/motes — positions are pure functions of per-particle seeds + the tick, evaluated
+in the vertex shader; unused particles collapse to a degenerate position), soft character
+drop shadows (`hd2d.dropShadows`, pooled radial blobs), stairs-tile ramps (a stairs tile
+below a higher north neighbour renders a sloped top + side skirts), chunk-level XZ view
+culling applied around the visual passes only (depth passes still see off-screen casters),
+and the perf gate `tests-e2e/renderer-perf.spec.mjs` (all features on, 1080p: ~167 ms/frame
+measured on SwiftShader, 300 ms budget; spot-verified vsync-locked 16.7 ms on this
+machine's real GPU). Classic renderer RETIRED: `js/renderer.js` + its node:test suite
+deleted, script tags and `RPGAtlasDeps.Renderer/GLRender` removed from both pages and the
+export template, `?renderer=classic` now logs and uses three. Hardware verification caught
+two SwiftShader-masked shader bugs (WATER_FS used `uAmbTint` under DAYNIGHT without
+declaring it; `uWMode` precision mismatch VS/FS rejected by ANGLE D3D linkers) — both
+fixed, affected goldens recaptured. Sample-project showcase: the Whispering Cave enables
+pointShadows/materials/motes/vignette/night-grade/fog with crystal + lava lights.
+
+**Deviations from the roadmap wish-list (accepted at phase exit):** cliff auto-texturing
+deferred (extruded walls keep the Stage A tint shading — revisit with Phase 3's autotiles);
+slopes are stairs-tile ramps only (heights stay integers; movement was never
+height-gated); MSAA superseded by the FXAA toggle (multisampled targets don't fit the
+sampled-scene post chain); image-file LUTs shipped as procedural grade presets
+(mat3 + bias) rather than texture LUTs.
 **Branch:** `phase-2-renderer` (off `main` at tag `phase-1`)
 **Architect & Stage A implementation:** Claude Fable 5 (roadmap assignment: "three.js scene
 architecture + parity skeleton"). Stages B–E cores: Claude Opus (high).
