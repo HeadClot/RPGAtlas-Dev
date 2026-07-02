@@ -12,6 +12,8 @@ import { UIStack, pushUI, removeUI, showList, initUiStack } from "./ui-stack.js"
 // (below, before the boot section) so extracted modules see this closure's
 // live state; fns carries the closure functions extracted modules call.
 import { ctx as EC, fns } from "./state/engine-context.js";
+import { fadeTo, initMessageSystem } from "./message.js";
+import { initInputSystem, actionLabel } from "./input.js";
 import {
   G,
   expForLevel,
@@ -151,16 +153,10 @@ const _createInputSystem = window.createInputSystem;
 
 
   // ============================ message window ============================
-  // Substitute control codes, HTML-escape, then let text-code plugins add markup.
-  // With no plugins this returns the escaped plain text — identical to before.
-  // Typewriter that reveals an HTML string one visible character at a time by
-  // walking its text nodes — so plugin markup (colour spans, bold) stays intact.
-
-  async function fadeTo(opacity, ms) {
-    fader.style.transitionDuration = ms + "ms";
-    fader.style.opacity = opacity;
-    await sleep(ms + 30);
-  }
+  // fadeTo and the message-system wiring live in ./message.ts (Phase 1
+  // Stage B); the message system itself is js/runtime/messages.js as before.
+  // initMessageSystem() below assigns richText/showMessage/setMsgSpeed through
+  // the closure-state bridge, so this closure's `let`s stay live.
 
   // ============================ game state ============================
   // G and the actor/param/exp/inventory helpers live in ./state/game-state.ts
@@ -984,52 +980,14 @@ const _createInputSystem = window.createInputSystem;
     },
   };
 
-  ({ richText, showMessage, setTextSpeed: setMsgSpeed } = createMessageSystem({
-    Assets,
-    el,
-    esc,
-    getPlugins: () => Plugins,
-    getProject: () => proj,
-    getState: () => G,
-    getUiLayer: () => uiLayer,
-    pushUI,
-    removeUI,
-  }));
-
-  // Unified input (keyboard + gamepad). Engine + menu code reads named actions through
-  // this; the in-game Controls menu rebinds them via Input.beginCapture. Menu navigation
-  // is gated here: while any UI is open a press is routed to UIStack.top.onKey and never
-  // queued as a map edge.
-  Input = createInputSystem({
-    defaultBindings: RA.defaultInput(),
-    isMenuOpen: () => UIStack.length > 0,
-    onMenuNav: (action, repeat) => {
-      if (UIStack.length) UIStack[UIStack.length - 1].onKey(action, repeat);
-    },
-  });
-  Input.attachDOM(document);
-
-  // Inline input-prompt glyphs in messages: "\input[ok]" renders the glyph for whatever is bound
-  // to that action on the device in use *when the message opens* (a snapshot via activeDevice(),
-  // not live mid-message). Registered as a text processor so it runs post-esc like \i[n] and may
-  // emit the <img> glyph; it lives in the engine because it needs the live Input bindings. Falls
-  // back to the other device's primary binding, then to a plain text label.
-  function inputPromptGlyph(action) {
-    const act = String(action).toLowerCase();
-    if (!RA.INPUT_ACTIONS.some((a) => a.key === act)) return "";
-    const b = Input.getBindings();
-    let device = Input.activeDevice() === "gamepad" ? "gamepad" : "keyboard";
-    let arr = (b[device] && b[device][act]) || [];
-    if (!arr.length) {
-      device = device === "gamepad" ? "keyboard" : "gamepad";
-      arr = (b[device] && b[device][act]) || [];
-    }
-    if (!arr.length) return esc(actionLabel(act));
-    const family = device === "gamepad" && Input.padFamily ? Input.padFamily() : "xbox";
-    return Assets.inputGlyphHtml(device, arr[0], family, "msg-icon");
-  }
-  Plugins.textProcessors.push((html) =>
-    html.replace(/\\input\[(\w+)\]/gi, (_m, action) => inputPromptGlyph(action)));
+  // The message-system wiring and the unified-input wiring (including the
+  // "\input[action]" glyph text processor) live in ./message.ts and ./input.ts
+  // (Phase 1 Stage B). Both init calls run at the exact points the monolith
+  // did the wiring; the created values land in this closure's richText /
+  // showMessage / setMsgSpeed / Input `let`s through the closure-state bridge.
+  fns.Plugins = Plugins; // message/input modules reach the plugin runtime via fns
+  initMessageSystem();
+  initInputSystem();
 
   let frameWaiters = [];
   function frameWait() { return new Promise((r) => frameWaiters.push(r)); }
@@ -1648,10 +1606,7 @@ const _createInputSystem = window.createInputSystem;
   // / remove), audio mixer + game settings, reset. Built on showList/UIStack; capture uses
   // Input.beginCapture (ignore-held-until-release + conflict prompt). Player overrides
   // persist to the options store and apply live via Input.setBindings.
-  function actionLabel(key) {
-    const a = RA.INPUT_ACTIONS.find((x) => x.key === key);
-    return a ? a.label : key;
-  }
+  // (actionLabel is imported from ./input.ts.)
   // Build a 10-segment volume bar like "▰▰▰▰▰▱▱▱▱▱".
   function volBar(v) {
     const n = Math.max(0, Math.min(10, Math.round(v * 10)));
