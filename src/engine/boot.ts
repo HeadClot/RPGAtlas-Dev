@@ -13,6 +13,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { Assets, DataDefaults, Music, RA, Sfx } from "../shared/deps.js";
+import { validateProject } from "../shared/schema.js";
 import { registerBuiltinCommands } from "./interpreter/commands/index.js";
 import { initInterpServices } from "./interpreter/interp.js";
 import { scriptApi } from "./script-api.js";
@@ -111,7 +112,10 @@ async function loop(now: any): Promise<void> {
 // ============================ boot ============================
 function loadProject(): any {
   if ((window as any).RPGATLAS_PROJECT)
-    return RA.migrateProject(RA.clone((window as any).RPGATLAS_PROJECT));
+    return validateProject(
+      RA.migrateProject(RA.clone((window as any).RPGATLAS_PROJECT)),
+      "load",
+    );
   try {
     const raw =
       localStorage.getItem("rpgatlas_project") ||
@@ -123,7 +127,7 @@ function loadProject(): any {
         p.meta &&
         (p.meta.engine === "rpgatlas" || p.meta.engine === "driftwood")
       )
-        return RA.migrateProject(p);
+        return validateProject(RA.migrateProject(p), "load");
     }
   } catch (e) {
     console.warn("Stored project unreadable, using sample.", e);

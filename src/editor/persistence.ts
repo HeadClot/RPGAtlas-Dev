@@ -13,6 +13,7 @@ import {
   saveProject,
 } from "../../js/editor/project-io.js";
 import * as host from "../../js/editor/host.js";
+import { validateProject } from "../shared/schema";
 import { Assets, RA, t, editorState as S, editorHooks } from "./editor-state";
 import { $, h } from "./dom";
 import { modal } from "./modals";
@@ -36,7 +37,8 @@ import { hdMarkDirty } from "./map-editor/hd-preview";
     }
   }
   export function loadStored() {
-    return loadStoredProject(localStorage, (project: any) => RA.migrateProject(project));
+    const p = loadStoredProject(localStorage, (project: any) => RA.migrateProject(project));
+    return p == null ? p : validateProject(p, "load");
   }
   // Desktop: the .json file the project is bound to. Save (Ctrl+S) writes here
   // silently once set; the first save — or Export (Save As) — prompts for it.
@@ -110,7 +112,7 @@ import { hdMarkDirty } from "./map-editor/hd-preview";
       try {
         const p = JSON.parse(r.result);
         if (!p || !p.meta || (p.meta.engine !== "rpgatlas" && p.meta.engine !== "driftwood")) throw new Error("Not an RPGAtlas project file.");
-        S.proj = RA.migrateProject(p);
+        S.proj = validateProject(RA.migrateProject(p), "import");
         Assets.registerCustomChars(S.proj.customChars);
         await Assets.loadExternalAssets(S.proj);
         S.curMapId = S.proj.maps[0].id;
