@@ -8,7 +8,6 @@ import { execSync } from "node:child_process";
 import { copyFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FRONTEND_INCLUDE } from "../js/build-manifest.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const win = process.platform === "win32";
@@ -17,10 +16,11 @@ const outName = win ? "RPGAtlas-Desktop.exe" : "RPGAtlas-Desktop";
 
 const run = (cmd) => execSync(cmd, { cwd: root, stdio: "inherit" });
 
-// The frontend embedded in the exe is the shared manifest's file set, staged by
-// stage-frontend.mjs. Referencing it here keeps this consumer bound to the same
-// single source of truth (kills the packaging-drift risk).
-console.log("[package-exe] embedding frontend: " + FRONTEND_INCLUDE.join(", "));
+// The frontend embedded in the exe is the Vite build output, staged into
+// src-tauri/dist by stage-frontend.mjs (which runs `vite build` itself). That
+// keeps this consumer bound to the same single build pipeline that produces the
+// web/preview output, killing the packaging-drift risk.
+console.log("[package-exe] building + staging frontend via stage-frontend.mjs");
 run("node scripts/stage-frontend.mjs");
 run("cargo build --release --manifest-path src-tauri/Cargo.toml");
 
