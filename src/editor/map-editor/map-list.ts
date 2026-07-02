@@ -6,7 +6,7 @@
    Copyright (C) 2026 RPGAtlas contributors - GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Assets, DataDefaults, RA, LAYER_ORDER, editorState as S, curMap, editorHooks } from "../editor-state";
+import { Assets, DataDefaults, RA, LAYER_ORDER, editorState as S, curMap } from "../editor-state";
 import { $, h, tIn, nIn, sel, chk, field, row, dbOpts, MUSIC_OPTS } from "../dom";
 import { modal, confirmBox } from "../modals";
 import { touch } from "../persistence";
@@ -14,6 +14,7 @@ import { renderMap } from "./map-render";
 import { heightsOf } from "./painting";
 import { setStatus, flashStatus } from "./status";
 import { hdMarkDirty } from "./hd-preview";
+import { walkCommands } from "../event-editor/command-list";
 
   // ============================ map list ============================
   export function rebuildMapList() {
@@ -44,7 +45,7 @@ import { hdMarkDirty } from "./hd-preview";
       for (const om of S.proj.maps) {
         if (om.id === m.id) continue;
         for (const ev of om.events) {
-          editorHooks.walkCommands(ev.pages.flatMap((pg: any) => pg.commands || []), (c) => {
+          walkCommands(ev.pages.flatMap((pg: any) => pg.commands || []), (c: any) => {
             if (c.t === "transfer" && c.mapId === m.id) danglers.push(om.name + " → " + ev.name);
           });
         }

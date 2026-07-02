@@ -133,8 +133,7 @@ export interface EditorHooks {
   refreshToolbar: () => void;                              // actions/toolbar section
   setMode: (m: string) => void;                            // modes/zoom section
   rebuildAll: () => void;                                  // boot/wiring section
-  openEventEditor: (ev: any, onCommitNew?: () => void) => void; // event editor (Package 2)
-  walkCommands: (list: any[], cb: (c: any) => void) => void; // event searcher (Package 3 uses; dissolved to a real export in Package 2 event-editor)
+  eventIcon: () => string;                                 // ICONS.event glyph (icons section, Package 3) — read lazily by the event editor
 }
 
 export const editorHooks = {} as EditorHooks;

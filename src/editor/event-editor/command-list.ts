@@ -14,6 +14,17 @@ import { touch } from "../persistence";
 import { flashStatus } from "../map-editor/status";
 import { cmdSummary, editCommand, pickCommand } from "./command-defs";
 
+  // Depth-first walk of a command list (recursing into if/choices branches),
+  // calling cb for every command. Shared by the event searcher and map-delete
+  // dangling-transfer scan. (Was in the editor.js event-searcher section.)
+  export function walkCommands(list: any, cb: any) {
+    for (const c of list || []) {
+      cb(c);
+      if (c.t === "if") { walkCommands(c.then, cb); walkCommands(c.else, cb); }
+      else if (c.t === "choices") (c.branches || []).forEach((b: any) => walkCommands(b, cb));
+    }
+  }
+
   // ============================ command list widget ============================
   export function buildCmdRows(list: any, depth: any, out: any) {
     list.forEach((c: any, i: any) => {

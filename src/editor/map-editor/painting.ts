@@ -14,6 +14,7 @@ import { pushUndo } from "./history";
 import { stampPaste, cancelPaste, copySelection } from "./clipboard";
 import { setStatus, flashStatus } from "./status";
 import { quickTransfer, quickSign, quickChest } from "../event-editor/quick-events";
+import { openEventEditor } from "../event-editor/event-editor";
 
   // ============================ painting ============================
   export function cellFromMouse(e: any) {
@@ -127,14 +128,14 @@ import { quickTransfer, quickSign, quickChest } from "../event-editor/quick-even
       // Existing event → edit in place; commits on OK, unchanged behavior.
       S.selectedEvent = existing;
       renderMap(); editorHooks.refreshToolbar();
-      editorHooks.openEventEditor(existing);
+      openEventEditor(existing);
       return existing;
     }
     // Brand-new event: build it detached and only insert into the map when the editor is confirmed
     // (via the onCommitNew hook). Cancelling the first edit leaves nothing behind — same as the
     // quick-event builders. The editor edits a clone, so the detached object is untouched until OK.
     const ev = DataDefaults.newEvent(RA.nextId(curMap().events), cell.x, cell.y);
-    editorHooks.openEventEditor(ev, () => {
+    openEventEditor(ev, () => {
       curMap().events.push(ev);
       S.selectedEvent = ev;
       editorHooks.refreshToolbar();
@@ -165,7 +166,7 @@ import { quickTransfer, quickSign, quickChest } from "../event-editor/quick-even
     const ev = S.selectedEvent;
     if (ev) {
       showPopupMenu(e.clientX, e.clientY, [
-        { label: "Edit Event", onClick: () => editorHooks.openEventEditor(ev) },
+        { label: "Edit Event", onClick: () => openEventEditor(ev) },
         { label: "Cut", key: "Ctrl+X", onClick: () => copySelection(true) },
         { label: "Copy", key: "Ctrl+C", onClick: () => copySelection(false) },
         { label: "Delete", onClick: () => deleteSelectedEvent() },
