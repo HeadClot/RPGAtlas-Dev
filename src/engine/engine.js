@@ -15,6 +15,15 @@ import { ctx as EC, fns } from "./state/engine-context.js";
 import { fadeTo, initMessageSystem } from "./message.js";
 import { initInputSystem, actionLabel } from "./input.js";
 import {
+  loadOptions,
+  saveOptions,
+  audioVol,
+  setOptAudio,
+  setOpt,
+  setOptTextSpeed,
+  wantsDash,
+} from "./state/player-options.js";
+import {
   G,
   expForLevel,
   actorClass,
@@ -1547,60 +1556,13 @@ const _createInputSystem = window.createInputSystem;
   }
 
   // ---- player options (per-player overrides: input rebinds + audio/game settings) ----
-  // Stored separately from the project so author defaults stay intact and a player's
-  // remaps/preferences persist across sessions. Per-game namespaced like saveKey().
+  // The option store and its setters live in ./state/player-options.ts (Phase 1
+  // Stage B); they mutate this closure's playerOptions/dash state through the
+  // closure-state bridge, so the `let`s below stay the single source of truth
+  // for the code remaining in this file.
   let playerOptions = {};
-  function optionsKey() {
-    const gameId = window.RPGATLAS_GAME_ID;
-    return gameId ? "rpgatlas_" + gameId + "_options" : "rpgatlas_options";
-  }
-  function loadOptions() {
-    try {
-      const raw = localStorage.getItem(optionsKey());
-      return raw ? JSON.parse(raw) : {};
-    } catch (e) {
-      return {};
-    }
-  }
-  function saveOptions() {
-    try {
-      localStorage.setItem(optionsKey(), JSON.stringify(playerOptions));
-    } catch (e) {}
-  }
-  // ---- player-option setters (mutate playerOptions + persist) ----
-  function audioVol(ch) {
-    const a = playerOptions.audio || {};
-    return a[ch] == null ? 1 : a[ch];
-  }
-  function setOptAudio(ch, v) {
-    v = clamp(v, 0, 1);
-    playerOptions.audio = playerOptions.audio || {};
-    playerOptions.audio[ch] = v;
-    if (ch === "master") Sfx.setMasterVolume(v);
-    else if (ch === "bgm") {
-      Sfx.setBgmVolume(v);
-      if (v > 0 && !Music.enabled) Music.setEnabled(true);
-    } else if (ch === "se") Sfx.setSeVolume(v);
-    saveOptions();
-  }
-  function setOpt(key, v) {
-    playerOptions[key] = v;
-    saveOptions();
-  }
-  function setOptTextSpeed(v) {
-    playerOptions.textSpeed = v;
-    saveOptions();
-    if (setMsgSpeed) setMsgSpeed(v);
-  }
-  // Dash mode (Options): Hold = held button; Toggle = tap to latch; Always On = always run.
   let dashLatch = false;
   let dashPrev = false;
-  function wantsDash() {
-    const m = playerOptions.dashMode || "hold";
-    if (m === "always") return true;
-    if (m === "toggle") return dashLatch;
-    return Input.pressed("dash");
-  }
 
   // In-game Options: rebind keyboard / gamepad per action (editable list — add / replace
   // / remove), audio mixer + game settings, reset. Built on showList/UIStack; capture uses
