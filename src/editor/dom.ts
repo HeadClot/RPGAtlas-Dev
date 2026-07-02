@@ -11,7 +11,7 @@ import { touch } from "./persistence";
 export const $ = (id: any): any => document.getElementById(id);
 
   // ============================ tiny DOM builder ============================
-  export function h(tag: any, attrs: any, ...kids: any[]): any {
+  export function h(tag: any, attrs?: any, ...kids: any[]): any {
     const e = document.createElement(tag);
     if (attrs) for (const [k, v] of Object.entries(attrs)) {
       if (k === "class") e.className = v;
