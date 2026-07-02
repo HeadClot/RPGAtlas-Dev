@@ -42,11 +42,13 @@ const legacy = evaluate(`RA.migrateProject({
 })`);
 assert.equal(legacy.system.windowColor, "#12182e", "migration backfills legacy projects");
 
-const editorSource = fs.readFileSync("src/editor/editor.js", "utf8");
-// applyScreenSettings moved to src/engine/boot.ts in Phase 1 Stage B.
+const systemTabSource = fs.readFileSync("src/editor/database/system-tab.ts", "utf8");
+// applyScreenSettings and the window palette moved to src/engine/boot.ts in
+// Phase 1 Stage B; the System tab editor moved to database/system-tab.ts in
+// Stage C Package 3.
 const engineSource = fs.readFileSync("src/engine/boot.ts", "utf8");
 const playCss = fs.readFileSync("css/play.css", "utf8");
-assert.match(editorSource, /field\("Window color"/, "System tab exposes the color picker");
+assert.match(systemTabSource, /field\("Window color"/, "System tab exposes the color picker");
 assert.match(engineSource, /RA\.windowColorPalette\(s\.windowColor\)/,
   "runtime derives its window palette from the project setting");
 assert.match(playCss, /\.win\s*\{[\s\S]*?--win-top-rgb/,

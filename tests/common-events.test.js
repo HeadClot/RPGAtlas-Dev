@@ -46,9 +46,10 @@ assert.equal(evaluate("RA.commonEventEnabled({ switchId: 3 }, { 3: true })"), tr
 assert.equal(evaluate("RA.commonEventEnabled({ switchId: 3 }, { 3: false })"), false,
   "selected switch OFF disables automatic processing");
 
-const editorSource = fs.readFileSync("src/editor/editor.js", "utf8");
-assert.match(editorSource, /\{ label: "Common Events"/, "Database exposes the Common Events tab");
-assert.match(editorSource, /t: "commonEvent", label: "Call Common Event"/,
+const dbIndexSource = fs.readFileSync("src/editor/database/index.ts", "utf8");
+const commandDefsSource = fs.readFileSync("src/editor/event-editor/command-defs.ts", "utf8");
+assert.match(dbIndexSource, /\{ label: "Common Events"/, "Database exposes the Common Events tab");
+assert.match(commandDefsSource, /t: "commonEvent", label: "Call Common Event"/,
   "event command picker exposes Call Common Event");
 // The `commonEvent` interpreter command moved to the extracted registry
 // (src/engine/interpreter/commands/flow.ts) in Phase 1 Stage B. Assert the

@@ -3,30 +3,31 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const editorSource = fs.readFileSync("src/editor/editor.js", "utf8");
+const workspaceSource = fs.readFileSync("src/editor/workspace.ts", "utf8");
+const mapRenderSource = fs.readFileSync("src/editor/map-editor/map-render.ts", "utf8");
 const indexSource = fs.readFileSync("index.html", "utf8");
 
 assert.match(
-  editorSource,
+  workspaceSource,
   /function playtestUrl\(\) \{ return "play\.html\?playtest=" \+ Date\.now\(\); \}/,
   "browser playtests use a fresh play.html URL",
 );
 
 assert.match(
-  editorSource,
+  workspaceSource,
   /window\.open\(playtestUrl\(\), "rpgatlas_play"\)/,
   "Playtest command opens the cache-busted browser URL",
 );
 
 assert.match(
-  editorSource,
-  /if \(mode !== "pass" && mode !== "height"\) \{/,
+  mapRenderSource,
+  /if \(S\.mode !== "pass" && S\.mode !== "height"\) \{/,
   "editor draws event pins outside Event mode",
 );
 
 assert.match(
-  editorSource,
-  /const interactiveEvents = mode === "event" \|\| mode === "start";/,
+  mapRenderSource,
+  /const interactiveEvents = S\.mode === "event" \|\| S\.mode === "start";/,
   "event editing states still get the stronger interactive marker treatment",
 );
 
