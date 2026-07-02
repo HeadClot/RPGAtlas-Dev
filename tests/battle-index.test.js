@@ -7,20 +7,21 @@
 // `sprs[en.i]` lookup on the shifted enemy indexed past the end and crashed
 // the battle. The fix assigns `.i` from the FILTERED array, the same source
 // `sprs` is built from. This test evaluates the actual enemy-list construction
-// statement extracted from js/engine.js (mirrors the source-extraction
-// harness in tests/action-combat.test.js) and pins the invariant
+// statement extracted from the battle scene (src/engine/scenes/battle.ts
+// since Phase 1 Stage B — the statement is verbatim JS, with Battle.run
+// capturing `const proj = ctx.proj` above it) and pins the invariant
 // enemies[k].i === k regardless of stale ids in the troop.
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const engineSource = fs.readFileSync("src/engine/engine.js", "utf8");
+const engineSource = fs.readFileSync("src/engine/scenes/battle.ts", "utf8");
 
 // Extract the `const enemies = troop.enemies ... ;` statement from Battle.run.
 const startMarker = "const enemies = troop.enemies";
 const endMarker = "const sideView";
 const start = engineSource.indexOf(startMarker);
-assert.notEqual(start, -1, "enemy-list construction exists in engine.js");
+assert.notEqual(start, -1, "enemy-list construction exists in the battle scene");
 const end = engineSource.indexOf(endMarker, start);
 assert.notEqual(end, -1, "end marker after enemy-list construction exists");
 const snippet = engineSource.slice(start, end).trim();
