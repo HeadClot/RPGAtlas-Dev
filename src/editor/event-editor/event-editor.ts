@@ -4,12 +4,13 @@
    per-page command undo/redo, and OK/Cancel commit of the working clone.
    Verbatim move from the editor monolith (Phase 1 Stage C, Package 2):
    logic unchanged, closure vars routed through editor-state.ts. The header
-   event glyph (ICONS.event, still owned by editor.js' icons section) is read
-   through the editorHooks.eventIcon slot.
+   event glyph (ICONS.event) is imported directly from icons.ts (Package 3);
+   the editorHooks.eventIcon slot it used to read through is dissolved.
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Assets, DataDefaults, RA, t, editorState as S, editorHooks } from "../editor-state";
+import { Assets, DataDefaults, RA, t, editorState as S } from "../editor-state";
+import { ICONS } from "../icons";
 import {
   h, tIn, sel, chk, nIn, esc,
   dbOpts, switchOpts, varOpts, cmpOpts, charsetOpts, DIR_OPTS, stringSelOpts,
@@ -347,7 +348,7 @@ import { mountForm } from "./command-defs";
     }
 
     const evIcon = h("span", { class: "event-icon" });
-    evIcon.innerHTML = editorHooks.eventIcon();   // the person glyph used by the Event tool in the main editor
+    evIcon.innerHTML = ICONS.event;   // the person glyph used by the Event tool in the main editor
     const closeX = h("button", { class: "event-close", title: t("Close") }, "✕");
     head.appendChild(h("div", { class: "event-topbar" },
       h("div", { class: "event-topbar-id" },

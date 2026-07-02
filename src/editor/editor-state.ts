@@ -133,7 +133,6 @@ export interface EditorHooks {
   refreshToolbar: () => void;                              // actions/toolbar section
   setMode: (m: string) => void;                            // modes/zoom section
   rebuildAll: () => void;                                  // boot/wiring section
-  eventIcon: () => string;                                 // ICONS.event glyph (icons section, Package 3) — read lazily by the event editor
 }
 
 export const editorHooks = {} as EditorHooks;
