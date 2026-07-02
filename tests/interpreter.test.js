@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const assert = require("node:assert/strict");
 
-const code = fs.readFileSync("js/engine.js", "utf8");
+const code = fs.readFileSync("src/engine/engine.js", "utf8");
 
 // Verify that the code has our new interpreter commands
 assert.ok(code.includes('case "shake":'), "engine.js should handle shake command");

@@ -8,17 +8,29 @@
    step, and the packaged exe all read from here, which removes the
    packaging-drift risk called out in the production roadmap. GPL-3.0-or-later. */
 
+/* Filenames for the single-file player runtime bundle (Phase 1). The engine no
+   longer ships as one fetchable classic script (js/engine.js moved into ES
+   modules under src/engine/); the Vite plugin `atlas-player-bundle` produces a
+   single inlinable IIFE instead. project-io.js resolves which URL to fetch:
+   PLAYER_BUNDLE_DEV_URL under `npm run dev` (middleware, always fresh) vs
+   PLAYER_BUNDLE_FILE from a built/preview/Tauri/EXE app (emitted into dist). */
+export const PLAYER_BUNDLE_DEV_URL = "/__atlas/player-bundle.js";
+export const PLAYER_BUNDLE_FILE = "player-bundle.js";
+
 /* Ordered list of sources inlined into a single-file standalone game export.
-   Order matters: the CSS is embedded first as a <style>, the classic runtime
-   scripts run in sequence to populate globals, and engine.js runs last as a
-   module. This mirrors the classic <script> load order in play.html. */
+   Order matters and is positional (project-io.js indexes files[0..5]): the CSS
+   is embedded first as a <style>, the classic runtime scripts run in sequence
+   to populate globals, and the player bundle runs last as a module. This
+   mirrors the classic <script> load order in play.html. The last entry is a
+   placeholder — project-io.js swaps it for the environment-correct player
+   bundle URL (dev vs dist) via resolvePlayerBundleUrl() before fetching. */
 export const STANDALONE_EXPORT_FILES = [
   "css/play.css",
   "js/assets.js",
   "js/sfx.js",
   "js/data.js",
   "js/runtime/messages.js",
-  "js/engine.js",
+  PLAYER_BUNDLE_FILE,
 ];
 
 /* Top-level paths (files and directories) that make up the complete frontend

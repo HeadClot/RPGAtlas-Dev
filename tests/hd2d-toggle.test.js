@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const engineSource = fs.readFileSync("js/engine.js", "utf8");
+const engineSource = fs.readFileSync("src/engine/engine.js", "utf8");
 
 function extractFunction(source, name) {
   const start = source.indexOf("function " + name + "(");

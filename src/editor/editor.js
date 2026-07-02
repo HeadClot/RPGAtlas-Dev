@@ -9,10 +9,10 @@ import {
   exportWindowsExecutable as writeWindowsExecutable,
   loadStoredProject,
   saveProject,
-} from "./editor/project-io.js";
-import * as host from "./editor/host.js";
-import { createEditorI18n } from "./editor/i18n.js";
-import { PATCH_NOTES } from "./patch-notes.js?v=4";
+} from "../../js/editor/project-io.js";
+import * as host from "../../js/editor/host.js";
+import { createEditorI18n } from "../../js/editor/i18n.js";
+import { PATCH_NOTES } from "../../js/patch-notes.js?v=4";
 
 const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
 const editorI18n = createEditorI18n({

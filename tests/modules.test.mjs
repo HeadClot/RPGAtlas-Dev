@@ -143,10 +143,31 @@ const messages = createMessageSystem({
 assert.equal(messages.convertText("\\n[2] has \\v[4]."), "Mira has 12.");
 assert.equal(messages.richText("\\g"), "90 <b>Gold</b>");
 
+// The engine no longer ships as a fetchable classic script; the standalone
+// export inlines the single-file player bundle (PLAYER_BUNDLE_FILE) that the
+// Vite atlas-player-bundle plugin produces. Bundle src/engine/main.ts here with
+// esbuild the same way the plugin does, and serve it from the fetch shim so the
+// export template exercises the real bundled engine (not a stub).
+const { build } = await import("esbuild");
+const playerBundle = (await build({
+  entryPoints: [path.join(root, "src", "engine", "main.ts")],
+  bundle: true,
+  format: "iife",
+  minify: false,
+  write: false,
+  platform: "browser",
+  logLevel: "silent",
+})).outputFiles[0].text;
+
 const originalFetch = globalThis.fetch;
 const originalFileReader = globalThis.FileReader;
 globalThis.fetch = async (resource) => {
-  const filePath = path.join(root, String(resource).replace(/\//g, path.sep));
+  const url = String(resource);
+  // Match how a built/dist editor fetches the player bundle (relative filename).
+  if (url === "player-bundle.js" || url.endsWith("/player-bundle.js")) {
+    return new Response(playerBundle, { status: 200 });
+  }
+  const filePath = path.join(root, url.replace(/\//g, path.sep));
   try {
     const bytes = await fs.readFile(filePath);
     return new Response(bytes, { status: 200 });

@@ -62,9 +62,9 @@ async function fetchBuildSource(path) {
 // in the Node test harness this module is evaluated from a data: URL where a
 // relative import cannot be resolved, so we fall back to fetching the manifest
 // source and importing it as a data: URL.
-async function loadStandaloneExportFiles() {
+async function loadBuildManifest() {
   try {
-    return (await import("../build-manifest.mjs")).STANDALONE_EXPORT_FILES;
+    return await import("../build-manifest.mjs");
   } catch {
     const source = await fetchBuildSource("js/build-manifest.mjs");
     // btoa() is Latin1-only; the manifest source has UTF-8 comment characters,
@@ -72,9 +72,35 @@ async function loadStandaloneExportFiles() {
     const base64 = btoa(
       String.fromCharCode(...new TextEncoder().encode(source)),
     );
-    const module = await import("data:text/javascript;base64," + base64);
-    return module.STANDALONE_EXPORT_FILES;
+    return import("data:text/javascript;base64," + base64);
   }
+}
+
+// The player runtime is fetched from a different URL depending on where the
+// editor is running: under `npm run dev` the atlas-player-bundle plugin serves
+// a freshly-bundled IIFE at PLAYER_BUNDLE_DEV_URL, whereas a built / previewed /
+// Tauri / EXE editor loads the emitted PLAYER_BUNDLE_FILE sitting next to
+// index.html. import.meta.env.DEV (injected by Vite) is the discriminator; it
+// is absent in the Node test harness (data: URL), where we keep the dist path.
+function resolvePlayerBundleUrl(manifest) {
+  let isDev = false;
+  try {
+    isDev = Boolean(import.meta.env && import.meta.env.DEV);
+  } catch {
+    isDev = false;
+  }
+  return isDev ? manifest.PLAYER_BUNDLE_DEV_URL : manifest.PLAYER_BUNDLE_FILE;
+}
+
+async function loadStandaloneExportPaths() {
+  const manifest = await loadBuildManifest();
+  const paths = manifest.STANDALONE_EXPORT_FILES.slice();
+  // The manifest lists the player bundle by its dist filename; swap in the
+  // environment-correct URL (dev middleware vs emitted file). The bundle is
+  // always the last positional entry (files[5]) — see build-manifest.mjs.
+  const bundleUrl = resolvePlayerBundleUrl(manifest);
+  paths[paths.length - 1] = bundleUrl;
+  return paths;
 }
 
 function blobDataUrl(blob) {
@@ -136,7 +162,7 @@ export async function exportProjectFile(project) {
 }
 
 export async function buildStandaloneGame(project, Assets) {
-  const paths = await loadStandaloneExportFiles();
+  const paths = await loadStandaloneExportPaths();
   const [files, usedAssets, iconSet] = await Promise.all([
     Promise.all(paths.map(fetchBuildSource)),
     Assets.exportUsedExternalAssets(project),

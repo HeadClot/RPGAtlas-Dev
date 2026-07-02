@@ -6,17 +6,26 @@ import { describe, expect, it } from "vitest";
 // The manifest is plain ESM under js/; imported here at runtime for the test.
 import {
   STANDALONE_EXPORT_FILES,
+  PLAYER_BUNDLE_FILE,
+  PLAYER_BUNDLE_DEV_URL,
   FRONTEND_INCLUDE,
   HTML_ENTRIES,
   PASSTHROUGH_DIRS,
 } from "../js/build-manifest.mjs";
 
 describe("build-manifest", () => {
-  it("lists standalone export files, engine.js included, css first", () => {
+  it("lists standalone export files, css first, player bundle last", () => {
     expect(Array.isArray(STANDALONE_EXPORT_FILES)).toBe(true);
     expect(STANDALONE_EXPORT_FILES.length).toBeGreaterThan(0);
-    expect(STANDALONE_EXPORT_FILES).toContain("js/engine.js");
     expect(STANDALONE_EXPORT_FILES[0]).toBe("css/play.css");
+    // Phase 1: the engine ships as the single-file player bundle (last entry),
+    // no longer as a fetchable js/engine.js classic script.
+    expect(STANDALONE_EXPORT_FILES).not.toContain("js/engine.js");
+    expect(STANDALONE_EXPORT_FILES[STANDALONE_EXPORT_FILES.length - 1]).toBe(
+      PLAYER_BUNDLE_FILE,
+    );
+    expect(PLAYER_BUNDLE_FILE).toBe("player-bundle.js");
+    expect(PLAYER_BUNDLE_DEV_URL).toBe("/__atlas/player-bundle.js");
   });
 
   it("lists the full frontend include set and HTML entries", () => {

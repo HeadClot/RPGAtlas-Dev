@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const editorSource = fs.readFileSync("js/editor.js", "utf8");
+const editorSource = fs.readFileSync("src/editor/editor.js", "utf8");
 const indexSource = fs.readFileSync("index.html", "utf8");
 
 assert.match(
@@ -32,8 +32,8 @@ assert.match(
 
 assert.match(
   indexSource,
-  /js\/editor\.js\?v=62/,
-  "index.html bumps the editor module cache key",
+  /<script type="module" src="\/src\/editor\/main\.ts"><\/script>/,
+  "index.html loads the editor via the Vite module entry (cache-busting is handled by Vite: native serving in dev, content-hashed asset in build)",
 );
 
 console.log("Editor playtest sync tests passed.");
