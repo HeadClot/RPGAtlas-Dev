@@ -11,57 +11,35 @@ import {
   saveProject,
 } from "../../js/editor/project-io.js";
 import * as host from "../../js/editor/host.js";
-import { createEditorI18n } from "../../js/editor/i18n.js";
 import { PATCH_NOTES } from "../../js/patch-notes.js?v=4";
-
-const { Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx } = window.RPGAtlasDeps;
-const editorI18n = createEditorI18n({
-  storage: window.localStorage,
-  document,
-  browserLocale: navigator.language,
-});
+import {
+  Assets, AtlasBuiltins, DataDefaults, GLRender, Music, RA, Sfx,
+  editorI18n,
+  TILE, LAYER_ORDER, LAYER_LABELS, TOOL_LABELS, ZOOMS,
+  editorState as S,
+  editorHooks,
+  curMap,
+} from "./editor-state";
 
 (() => {
   const t = editorI18n.t;
-  const TILE = Assets.TILE;
-  const LAYER_ORDER = ["ground", "decor", "decor2", "over"];
-  const LAYER_LABELS = { auto: "Auto layer", ground: "Layer 1 (Ground)", decor: "Layer 2 (Decor)", decor2: "Layer 3 (Decor 2)", over: "Layer 4 (Overhead)" };
-  const TOOL_LABELS = { pen: "Pen", erase: "Eraser", rect: "Rectangle", circle: "Circle", fill: "Fill", shadow: "Shadow Pen" };
-  const ZOOMS = [0.25, 1 / 3, 0.5, 2 / 3, 0.75, 1, 1.5, 2];
-  let proj = null;
-  let curMapId = 1;
-  let layer = "auto";        // auto | ground | decor | decor2 | over
-  let tool = "pen";          // pen | erase | rect | circle | fill | shadow
-  let mode = "map";          // map | event | pass | start | height
-  let selectedTile = 1;
-  let heightVal = 1;         // HD-2D elevation value painted in height mode (0–9)
-  let zoom = 0.75;
-  let selectedEvent = null;
-  let hoverCell = null;
-  let hoverQuad = 0;         // shadow-pen quadrant bit under the cursor
-  let rectStart = null;      // drag origin for the rect/circle tools
-  let dragEvent = null;
-  let dragPushed = false;    // undo snapshot taken for the current event drag
-  let painting = false;
-  let shadowSet = true;      // shadow pen: adding (left button) or erasing (right)
-  let passVal = 0;           // passability value being painted during a drag
-  let selecting = false;     // shift-drag marquee in progress
-  let selAnchor = null;
-  let selection = null;      // {x1,y1,x2,y2} inclusive (map mode)
-  let clipTiles = null;      // tile clipboard {w,h,layers,shadows}
-  let clipEvent = null;      // event clipboard (cloned event)
-  let clipCmd = null;        // event-command clipboard (array of cloned commands) — shared across event editors
-  let clipPage = null;       // event-page clipboard (cloned page) — shared across event editors
-  let pasteMode = null;      // null | "tiles" | "event"
-  let popupMenuEl = null;    // active canvas context menu (menu-drop), or null
-  let popupSubTimer = null;  // pending submenu-open timer (hover-intent delay), or null
-  let suppressNextCtxMenu = false; // right-click that cancelled a paste shouldn't also open the menu
-  const undoStack = [];
-  const redoStack = [];
 
   const $ = (id) => document.getElementById(id);
-  function curMap() { return RA.byId(proj.maps, curMapId); }
   function playtestUrl() { return "play.html?playtest=" + Date.now(); }
+
+  // Cross-boundary hook registrations: functions that still live in this
+  // closure but are called from the extracted modules (see editor-state.ts).
+  // Function declarations hoist, so registering here is safe.
+  Object.assign(editorHooks, {
+    refreshToolbar,
+    setMode,
+    rebuildAll,
+    openEventEditor,
+    quickTransfer,
+    quickSign,
+    quickChest,
+    walkCommands,
+  });
 
   // ============================ tiny DOM builder ============================
   function h(tag, attrs, ...kids) {
@@ -127,10 +105,10 @@ const editorI18n = createEditorI18n({
     return o;
   }
   function switchOpts() {
-    return [{ v: 0, l: "(none)" }].concat(proj.system.switches.map((n, i) => ({ v: i + 1, l: (i + 1) + ": " + (n || "—") })));
+    return [{ v: 0, l: "(none)" }].concat(S.proj.system.switches.map((n, i) => ({ v: i + 1, l: (i + 1) + ": " + (n || "—") })));
   }
   function varOpts() {
-    return [{ v: 0, l: "(none)" }].concat(proj.system.variables.map((n, i) => ({ v: i + 1, l: (i + 1) + ": " + (n || "—") })));
+    return [{ v: 0, l: "(none)" }].concat(S.proj.system.variables.map((n, i) => ({ v: i + 1, l: (i + 1) + ": " + (n || "—") })));
   }
   function cmpOpts() {
     return [{ v: ">=", l: "≥" }, { v: "==", l: "=" }, { v: "<=", l: "≤" }, {v: "<", l: "<"}, {v: ">", l: ">"}, {v: "!=", l: "≠"}];
@@ -150,17 +128,17 @@ const editorI18n = createEditorI18n({
 
   // Type-list options (sourced from Database ▸ Types) ---------------------
   function elementSelOpts() {
-    const o = RA.typeList(proj, "elements").map((e) => ({ v: e.key, l: e.name }));
+    const o = RA.typeList(S.proj, "elements").map((e) => ({ v: e.key, l: e.name }));
     o.stringValues = true;
     return o;
   }
   function skillTypeSelOpts() {
-    const st = RA.typeList(proj, "skillTypes");
+    const st = RA.typeList(S.proj, "skillTypes");
     const base = [{ v: "phys", l: "Physical" }, { v: "magic", l: "Magical" }, { v: "heal", l: "Heal" }];
     return base.map((b) => { const f = st.find((s) => s.key === b.v); return { v: b.v, l: f ? f.name : b.l }; });
   }
   function skillTypeTraitOpts() {
-    const st = RA.typeList(proj, "skillTypes");
+    const st = RA.typeList(S.proj, "skillTypes");
     const o = TRAIT_SKILL_TYPES.map((d) => {
       const f = st.find((s) => s.key === d.v);
       return { v: d.v, l: f ? f.name + " skills" : d.l };
@@ -169,7 +147,7 @@ const editorI18n = createEditorI18n({
     return o;
   }
   function typeSelOpts(kind, noneLabel) {
-    const o = RA.typeList(proj, kind).map((t) => ({ v: t.id, l: t.name }));
+    const o = RA.typeList(S.proj, kind).map((t) => ({ v: t.id, l: t.name }));
     if (noneLabel != null) o.unshift({ v: 0, l: noneLabel });
     return o;
   }
@@ -251,13 +229,13 @@ const editorI18n = createEditorI18n({
   // on hover; entering a different top-level row closes it. NOTE: openCmdMenu/openPageMenu predate
   // this and hand-roll the same pattern — left as-is to avoid regressions.
   function closePopupMenu() {
-    if (popupSubTimer) { clearTimeout(popupSubTimer); popupSubTimer = null; }
-    if (!popupMenuEl) return;
-    popupMenuEl.remove(); popupMenuEl = null;
+    if (S.popupSubTimer) { clearTimeout(S.popupSubTimer); S.popupSubTimer = null; }
+    if (!S.popupMenuEl) return;
+    S.popupMenuEl.remove(); S.popupMenuEl = null;
     document.removeEventListener("mousedown", onPopupOutside, true);
     document.removeEventListener("keydown", onPopupKey, true);
   }
-  function onPopupOutside(e) { if (popupMenuEl && !popupMenuEl.contains(e.target)) closePopupMenu(); }
+  function onPopupOutside(e) { if (S.popupMenuEl && !S.popupMenuEl.contains(e.target)) closePopupMenu(); }
   function onPopupKey(e) { if (e.key === "Escape") { e.preventDefault(); closePopupMenu(); } }
   function buildPopupList(items, isSub) {
     const menu = h("div", { class: "menu-drop" + (isSub ? " menu-sub" : "") });
@@ -273,11 +251,11 @@ const editorI18n = createEditorI18n({
         rowEl.addEventListener("mouseenter", () => {
           // A pass-through (mouse skimming across rows) shouldn't flash a submenu open: defer the
           // open behind a short hover-intent delay, cancelled if the pointer leaves first.
-          if (popupSubTimer) { clearTimeout(popupSubTimer); popupSubTimer = null; }
+          if (S.popupSubTimer) { clearTimeout(S.popupSubTimer); S.popupSubTimer = null; }
           rows.forEach((r) => { if (r !== rowEl && r._sub) { r._sub.remove(); r._sub = null; } });
           if (hasSub && on && !rowEl._sub) {
-            popupSubTimer = setTimeout(() => {
-              popupSubTimer = null;
+            S.popupSubTimer = setTimeout(() => {
+              S.popupSubTimer = null;
               if (rowEl._sub) return;
               const sub = buildPopupList(it.submenu, true);
               rowEl.appendChild(sub);
@@ -289,7 +267,7 @@ const editorI18n = createEditorI18n({
         rowEl.addEventListener("mouseleave", () => {
           // Cancel a not-yet-fired open; an already-open submenu stays (it's a child of this row, so
           // moving onto it doesn't fire this leave) until a different row is hovered.
-          if (popupSubTimer) { clearTimeout(popupSubTimer); popupSubTimer = null; }
+          if (S.popupSubTimer) { clearTimeout(S.popupSubTimer); S.popupSubTimer = null; }
         });
       }
       if (on && !hasSub) {
@@ -306,7 +284,7 @@ const editorI18n = createEditorI18n({
     document.body.appendChild(menu);
     menu.style.left = Math.max(4, Math.min(x, window.innerWidth - menu.offsetWidth - 4)) + "px";
     menu.style.top = Math.max(4, Math.min(y, window.innerHeight - menu.offsetHeight - 4)) + "px";
-    popupMenuEl = menu;
+    S.popupMenuEl = menu;
     document.addEventListener("mousedown", onPopupOutside, true);
     document.addEventListener("keydown", onPopupKey, true);
   }
@@ -321,7 +299,7 @@ const editorI18n = createEditorI18n({
   }
   function saveNow() {
     try {
-      saveProject(localStorage, proj);
+      saveProject(localStorage, S.proj);
       $("save-ind").textContent = "✓ " + t("saved");
     } catch (e) {
       $("save-ind").textContent = "⚠ " + t("save failed");
@@ -339,11 +317,11 @@ const editorI18n = createEditorI18n({
     saveNow(); // keep the local autosave as a crash-recovery copy
     try {
       if (saveAs || !currentProjectPath) {
-        const path = await host.saveProjectToFile(proj); // native Save dialog
+        const path = await host.saveProjectToFile(S.proj); // native Save dialog
         if (!path) { flashStatus("Saved locally — file save cancelled"); return; }
         currentProjectPath = path;
       } else {
-        await host.saveProjectToPath(currentProjectPath, proj); // silent overwrite
+        await host.saveProjectToPath(currentProjectPath, S.proj); // silent overwrite
       }
       flashStatus("Project saved to " + baseName(currentProjectPath));
     } catch (e) {
@@ -353,7 +331,7 @@ const editorI18n = createEditorI18n({
   async function exportProject() {
     if (host.isTauri) { desktopSave(true); return; } // Export = Save As on desktop
     try {
-      const result = await exportProjectFile(proj);
+      const result = await exportProjectFile(S.proj);
       if (result && result.cancelled) {
         flashStatus("Project export cancelled");
       } else if (result && result.method === "picker") {
@@ -377,7 +355,7 @@ const editorI18n = createEditorI18n({
       buttons: [
         { label: "Windows EXE", primary: true, async onClick(close) {
           try {
-            await writeWindowsExecutable(proj, Assets);
+            await writeWindowsExecutable(S.proj, Assets);
             close();
             flashStatus("Windows game executable exported");
           } catch (e) {
@@ -386,7 +364,7 @@ const editorI18n = createEditorI18n({
         } },
         { label: "Standalone HTML", async onClick(close) {
           try {
-            await writeStandaloneHtml(proj, Assets);
+            await writeStandaloneHtml(S.proj, Assets);
             close();
             flashStatus("Standalone HTML game exported");
           } catch (e) {
@@ -403,12 +381,12 @@ const editorI18n = createEditorI18n({
       try {
         const p = JSON.parse(r.result);
         if (!p || !p.meta || (p.meta.engine !== "rpgatlas" && p.meta.engine !== "driftwood")) throw new Error("Not an RPGAtlas project file.");
-        proj = RA.migrateProject(p);
-        Assets.registerCustomChars(proj.customChars);
-        await Assets.loadExternalAssets(proj);
-        curMapId = proj.maps[0].id;
-        selectedEvent = null;
-        undoStack.length = 0; redoStack.length = 0;
+        S.proj = RA.migrateProject(p);
+        Assets.registerCustomChars(S.proj.customChars);
+        await Assets.loadExternalAssets(S.proj);
+        S.curMapId = S.proj.maps[0].id;
+        S.selectedEvent = null;
+        S.undoStack.length = 0; S.redoStack.length = 0;
         rebuildAll();
         touch();
       } catch (e) { alert("Import failed: " + e.message); }
@@ -417,11 +395,10 @@ const editorI18n = createEditorI18n({
   }
 
   // ============================ map rendering ============================
-  let mapCanvas, mapCtx;
   function layerAlpha(li) {
-    if (mode !== "map") return li === 3 ? 0.8 : 1;
-    if (layer === "auto") return li === 3 ? 0.85 : 1;
-    const a = LAYER_ORDER.indexOf(layer);
+    if (S.mode !== "map") return li === 3 ? 0.8 : 1;
+    if (S.layer === "auto") return li === 3 ? 0.85 : 1;
+    const a = LAYER_ORDER.indexOf(S.layer);
     return li > a ? 0.45 : 1;
   }
   function effectivePass(x, y) {
@@ -451,7 +428,7 @@ const editorI18n = createEditorI18n({
     }
   }
   function drawPassOverlay(g, m) {
-    g.lineWidth = 3.5 / Math.max(zoom, 0.4);
+    g.lineWidth = 3.5 / Math.max(S.zoom, 0.4);
     for (let y = 0; y < m.height; y++) {
       for (let x = 0; x < m.width; x++) {
         const ov = m.passOv[y * m.width + x];
@@ -490,11 +467,11 @@ const editorI18n = createEditorI18n({
   function renderMap() {
     const m = curMap();
     if (!m) return;
-    mapCanvas.width = Math.max(1, Math.round(m.width * TILE * zoom));
-    mapCanvas.height = Math.max(1, Math.round(m.height * TILE * zoom));
-    const g = mapCtx;
-    g.setTransform(zoom, 0, 0, zoom, 0, 0);
-    g.imageSmoothingEnabled = zoom >= 1;
+    S.mapCanvas.width = Math.max(1, Math.round(m.width * TILE * S.zoom));
+    S.mapCanvas.height = Math.max(1, Math.round(m.height * TILE * S.zoom));
+    const g = S.mapCtx;
+    g.setTransform(S.zoom, 0, 0, S.zoom, 0, 0);
+    g.imageSmoothingEnabled = S.zoom >= 1;
     g.fillStyle = "#15151d";
     g.fillRect(0, 0, m.width * TILE, m.height * TILE);
     // tile layers (layers above the active one are dimmed while drawing)
@@ -514,26 +491,26 @@ const editorI18n = createEditorI18n({
     g.globalAlpha = 1;
     // grid
     g.strokeStyle = "rgba(255,255,255,0.09)";
-    g.lineWidth = 1 / zoom;
+    g.lineWidth = 1 / S.zoom;
     g.beginPath();
     for (let x = 0; x <= m.width; x++) { g.moveTo(x * TILE, 0); g.lineTo(x * TILE, m.height * TILE); }
     for (let y = 0; y <= m.height; y++) { g.moveTo(0, y * TILE); g.lineTo(m.width * TILE, y * TILE); }
     g.stroke();
-    if (mode === "pass") drawPassOverlay(g, m);
-    if (mode === "height") drawHeightOverlay(g, m);
+    if (S.mode === "pass") drawPassOverlay(g, m);
+    if (S.mode === "height") drawHeightOverlay(g, m);
     // Event pins stay visible while painting so placed events do not appear to
     // vanish when leaving Event mode. Passability/Height keep their overlays clean.
-    if (mode !== "pass" && mode !== "height") {
-      const interactiveEvents = mode === "event" || mode === "start";
+    if (S.mode !== "pass" && S.mode !== "height") {
+      const interactiveEvents = S.mode === "event" || S.mode === "start";
       for (const ev of m.events) {
         g.fillStyle = interactiveEvents
-          ? (ev === selectedEvent ? "rgba(120,200,255,0.35)" : "rgba(255,255,255,0.14)")
+          ? (ev === S.selectedEvent ? "rgba(120,200,255,0.35)" : "rgba(255,255,255,0.14)")
           : "rgba(120,200,255,0.10)";
         g.fillRect(ev.x * TILE + 2, ev.y * TILE + 2, TILE - 4, TILE - 4);
         g.strokeStyle = interactiveEvents
-          ? (ev === selectedEvent ? "#7ac8ff" : "rgba(255,255,255,0.6)")
+          ? (ev === S.selectedEvent ? "#7ac8ff" : "rgba(255,255,255,0.6)")
           : "rgba(122,200,255,0.45)";
-        g.lineWidth = 2 / zoom;
+        g.lineWidth = 2 / S.zoom;
         g.strokeRect(ev.x * TILE + 2, ev.y * TILE + 2, TILE - 4, TILE - 4);
         const pg = ev.pages[0];
         if (pg && pg.charset) {
@@ -547,48 +524,48 @@ const editorI18n = createEditorI18n({
       }
     }
     // start marker
-    if (proj.system.startMapId === m.id) {
+    if (S.proj.system.startMapId === m.id) {
       g.fillStyle = "rgba(110,230,140,0.8)";
-      g.fillRect(proj.system.startX * TILE + 8, proj.system.startY * TILE + 8, TILE - 16, TILE - 16);
+      g.fillRect(S.proj.system.startX * TILE + 8, S.proj.system.startY * TILE + 8, TILE - 16, TILE - 16);
       g.fillStyle = "#0c2c14";
       g.font = "bold 22px monospace";
       g.textAlign = "center"; g.textBaseline = "middle";
-      g.fillText("S", proj.system.startX * TILE + TILE / 2, proj.system.startY * TILE + TILE / 2 + 1);
+      g.fillText("S", S.proj.system.startX * TILE + TILE / 2, S.proj.system.startY * TILE + TILE / 2 + 1);
     }
     // selection marquee
-    if (mode === "map" && selection) {
-      const w = (selection.x2 - selection.x1 + 1) * TILE, h2 = (selection.y2 - selection.y1 + 1) * TILE;
+    if (S.mode === "map" && S.selection) {
+      const w = (S.selection.x2 - S.selection.x1 + 1) * TILE, h2 = (S.selection.y2 - S.selection.y1 + 1) * TILE;
       g.fillStyle = "rgba(255,216,106,0.12)";
-      g.fillRect(selection.x1 * TILE, selection.y1 * TILE, w, h2);
-      g.strokeStyle = "#ffd86a"; g.lineWidth = 2 / zoom;
+      g.fillRect(S.selection.x1 * TILE, S.selection.y1 * TILE, w, h2);
+      g.strokeStyle = "#ffd86a"; g.lineWidth = 2 / S.zoom;
       g.setLineDash([10, 6]);
-      g.strokeRect(selection.x1 * TILE, selection.y1 * TILE, w, h2);
+      g.strokeRect(S.selection.x1 * TILE, S.selection.y1 * TILE, w, h2);
       g.setLineDash([]);
     }
     // paste preview
-    if (pasteMode === "tiles" && clipTiles && hoverCell && mode === "map") {
+    if (S.pasteMode === "tiles" && S.clipTiles && S.hoverCell && S.mode === "map") {
       g.globalAlpha = 0.6;
-      for (let dy = 0; dy < clipTiles.h; dy++) {
-        for (let dx = 0; dx < clipTiles.w; dx++) {
-          const si = dy * clipTiles.w + dx;
-          for (const ln of LAYER_ORDER) Assets.drawTile(g, clipTiles.layers[ln][si], (hoverCell.x + dx) * TILE, (hoverCell.y + dy) * TILE);
+      for (let dy = 0; dy < S.clipTiles.h; dy++) {
+        for (let dx = 0; dx < S.clipTiles.w; dx++) {
+          const si = dy * S.clipTiles.w + dx;
+          for (const ln of LAYER_ORDER) Assets.drawTile(g, S.clipTiles.layers[ln][si], (S.hoverCell.x + dx) * TILE, (S.hoverCell.y + dy) * TILE);
         }
       }
       g.globalAlpha = 1;
-      g.strokeStyle = "#ffd86a"; g.lineWidth = 2 / zoom;
-      g.strokeRect(hoverCell.x * TILE, hoverCell.y * TILE, clipTiles.w * TILE, clipTiles.h * TILE);
+      g.strokeStyle = "#ffd86a"; g.lineWidth = 2 / S.zoom;
+      g.strokeRect(S.hoverCell.x * TILE, S.hoverCell.y * TILE, S.clipTiles.w * TILE, S.clipTiles.h * TILE);
     }
-    if (pasteMode === "event" && hoverCell && mode === "event") {
-      g.strokeStyle = "#ffd86a"; g.lineWidth = 2 / zoom;
-      g.strokeRect(hoverCell.x * TILE + 2, hoverCell.y * TILE + 2, TILE - 4, TILE - 4);
+    if (S.pasteMode === "event" && S.hoverCell && S.mode === "event") {
+      g.strokeStyle = "#ffd86a"; g.lineWidth = 2 / S.zoom;
+      g.strokeRect(S.hoverCell.x * TILE + 2, S.hoverCell.y * TILE + 2, TILE - 4, TILE - 4);
     }
     // hover / drag previews
-    if (hoverCell && !pasteMode) {
-      if ((tool === "rect" || tool === "circle") && rectStart && painting && (mode === "map" || mode === "height")) {
-        const r2 = normRect(rectStart, hoverCell);
+    if (S.hoverCell && !S.pasteMode) {
+      if ((S.tool === "rect" || S.tool === "circle") && S.rectStart && S.painting && (S.mode === "map" || S.mode === "height")) {
+        const r2 = normRect(S.rectStart, S.hoverCell);
         g.strokeStyle = "#ffd86a";
-        g.lineWidth = 2 / zoom;
-        if (tool === "rect") {
+        g.lineWidth = 2 / S.zoom;
+        if (S.tool === "rect") {
           g.strokeRect(r2.x1 * TILE, r2.y1 * TILE, (r2.x2 - r2.x1 + 1) * TILE, (r2.y2 - r2.y1 + 1) * TILE);
         } else {
           g.beginPath();
@@ -596,47 +573,46 @@ const editorI18n = createEditorI18n({
             (r2.x2 - r2.x1 + 1) / 2 * TILE, (r2.y2 - r2.y1 + 1) / 2 * TILE, 0, 0, 7);
           g.stroke();
         }
-      } else if (tool === "shadow" && mode === "map" && hoverQuad) {
+      } else if (S.tool === "shadow" && S.mode === "map" && S.hoverQuad) {
         const H = TILE / 2;
-        const qx = (hoverQuad === 2 || hoverQuad === 8) ? 1 : 0;
-        const qy = hoverQuad >= 4 ? 1 : 0;
+        const qx = (S.hoverQuad === 2 || S.hoverQuad === 8) ? 1 : 0;
+        const qy = S.hoverQuad >= 4 ? 1 : 0;
         g.fillStyle = "rgba(255,216,106,0.35)";
-        g.fillRect(hoverCell.x * TILE + qx * H, hoverCell.y * TILE + qy * H, H, H);
-        g.strokeStyle = "#ffffff"; g.lineWidth = 2 / zoom;
-        g.strokeRect(hoverCell.x * TILE + 1, hoverCell.y * TILE + 1, TILE - 2, TILE - 2);
+        g.fillRect(S.hoverCell.x * TILE + qx * H, S.hoverCell.y * TILE + qy * H, H, H);
+        g.strokeStyle = "#ffffff"; g.lineWidth = 2 / S.zoom;
+        g.strokeRect(S.hoverCell.x * TILE + 1, S.hoverCell.y * TILE + 1, TILE - 2, TILE - 2);
       } else {
         g.strokeStyle = "#ffffff";
-        g.lineWidth = 2 / zoom;
-        g.strokeRect(hoverCell.x * TILE + 1, hoverCell.y * TILE + 1, TILE - 2, TILE - 2);
+        g.lineWidth = 2 / S.zoom;
+        g.strokeRect(S.hoverCell.x * TILE + 1, S.hoverCell.y * TILE + 1, TILE - 2, TILE - 2);
       }
     }
   }
 
   // ============================ palette ============================
-  let palCanvas;
   function renderPalette() {
     const src = Assets.tilesetCanvas();
-    palCanvas.width = src.width; palCanvas.height = src.height;
-    const g = palCanvas.getContext("2d");
+    S.palCanvas.width = src.width; S.palCanvas.height = src.height;
+    const g = S.palCanvas.getContext("2d");
     g.drawImage(src, 0, 0);
-    const sx = (selectedTile % Assets.PALETTE_COLS) * TILE;
-    const sy = Math.floor(selectedTile / Assets.PALETTE_COLS) * TILE;
+    const sx = (S.selectedTile % Assets.PALETTE_COLS) * TILE;
+    const sy = Math.floor(S.selectedTile / Assets.PALETTE_COLS) * TILE;
     g.strokeStyle = "#ffd86a"; g.lineWidth = 3;
     g.strokeRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
   }
 
   // ============================ painting ============================
   function cellFromMouse(e) {
-    const r = mapCanvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX - r.left) / (TILE * zoom));
-    const y = Math.floor((e.clientY - r.top) / (TILE * zoom));
+    const r = S.mapCanvas.getBoundingClientRect();
+    const x = Math.floor((e.clientX - r.left) / (TILE * S.zoom));
+    const y = Math.floor((e.clientY - r.top) / (TILE * S.zoom));
     const m = curMap();
     if (x < 0 || y < 0 || x >= m.width || y >= m.height) return null;
     return { x, y };
   }
   function quadFromMouse(e) {
-    const r = mapCanvas.getBoundingClientRect();
-    const fx = (e.clientX - r.left) / (TILE * zoom), fy = (e.clientY - r.top) / (TILE * zoom);
+    const r = S.mapCanvas.getBoundingClientRect();
+    const fx = (e.clientX - r.left) / (TILE * S.zoom), fy = (e.clientY - r.top) / (TILE * S.zoom);
     const qx = (fx - Math.floor(fx)) >= 0.5 ? 1 : 0;
     const qy = (fy - Math.floor(fy)) >= 0.5 ? 1 : 0;
     return 1 << (qy * 2 + qx);
@@ -647,33 +623,33 @@ const editorI18n = createEditorI18n({
 
   // ---- undo / redo (full map snapshots: tiles, shadows, passability, events) ----
   function snapshotOf(mapId) {
-    const m = RA.byId(proj.maps, mapId);
+    const m = RA.byId(S.proj.maps, mapId);
     return { mapId, layers: RA.clone(m.layers), shadows: m.shadows.slice(), passOv: m.passOv.slice(), heights: heightsOf(m).slice(), events: RA.clone(m.events) };
   }
   function applySnapshot(s) {
-    const m = RA.byId(proj.maps, s.mapId);
+    const m = RA.byId(S.proj.maps, s.mapId);
     if (!m) return;
     m.layers = s.layers; m.shadows = s.shadows; m.passOv = s.passOv; m.heights = s.heights; m.events = s.events;
-    if (curMapId !== s.mapId) { curMapId = s.mapId; rebuildMapList(); }
-    selectedEvent = null;
+    if (S.curMapId !== s.mapId) { S.curMapId = s.mapId; rebuildMapList(); }
+    S.selectedEvent = null;
     touch(); renderMap(); refreshToolbar();
   }
   function pushUndo() {
-    undoStack.push(snapshotOf(curMapId));
-    if (undoStack.length > 60) undoStack.shift();
-    redoStack.length = 0;
+    S.undoStack.push(snapshotOf(S.curMapId));
+    if (S.undoStack.length > 60) S.undoStack.shift();
+    S.redoStack.length = 0;
     refreshToolbar();
   }
   function undo() {
-    const u = undoStack.pop();
+    const u = S.undoStack.pop();
     if (!u) { flashStatus("Nothing to undo"); return; }
-    redoStack.push(snapshotOf(u.mapId));
+    S.redoStack.push(snapshotOf(u.mapId));
     applySnapshot(u);
   }
   function redo() {
-    const r = redoStack.pop();
+    const r = S.redoStack.pop();
     if (!r) { flashStatus("Nothing to redo"); return; }
-    undoStack.push(snapshotOf(r.mapId));
+    S.undoStack.push(snapshotOf(r.mapId));
     applySnapshot(r);
   }
 
@@ -693,7 +669,7 @@ const editorI18n = createEditorI18n({
   }
   // Auto layer: terrain tiles go to ground; decorations stack onto decor, then decor 2.
   function resolvePaintLayer(t, x, y) {
-    if (layer !== "auto") return layer;
+    if (S.layer !== "auto") return S.layer;
     const def = Assets.tiles[t];
     if (!def || def.terrain) return "ground";
     const m = curMap(), i = y * m.width + x;
@@ -716,14 +692,14 @@ const editorI18n = createEditorI18n({
     }
   }
   function paintAt(cell) {
-    if (tool === "pen") {
-      setCell(cell.x, cell.y, selectedTile, resolvePaintLayer(selectedTile, cell.x, cell.y));
-    } else if (tool === "erase") {
-      setCell(cell.x, cell.y, 0, layer === "auto" ? topLayerAt(cell.x, cell.y) : layer);
-    } else if (tool === "fill") {
-      const def = Assets.tiles[selectedTile];
-      const ln = layer === "auto" ? (def && def.terrain ? "ground" : "decor") : layer;
-      floodFill(cell.x, cell.y, selectedTile, ln);
+    if (S.tool === "pen") {
+      setCell(cell.x, cell.y, S.selectedTile, resolvePaintLayer(S.selectedTile, cell.x, cell.y));
+    } else if (S.tool === "erase") {
+      setCell(cell.x, cell.y, 0, S.layer === "auto" ? topLayerAt(cell.x, cell.y) : S.layer);
+    } else if (S.tool === "fill") {
+      const def = Assets.tiles[S.selectedTile];
+      const ln = S.layer === "auto" ? (def && def.terrain ? "ground" : "decor") : S.layer;
+      floodFill(cell.x, cell.y, S.selectedTile, ln);
     }
     touch(); renderMap();
   }
@@ -766,26 +742,26 @@ const editorI18n = createEditorI18n({
 
   // ---- clipboard ----
   function canCopy() {
-    return mode === "map" ? !!selection : mode === "event" ? !!selectedEvent : false;
+    return S.mode === "map" ? !!S.selection : S.mode === "event" ? !!S.selectedEvent : false;
   }
   function copySelection(cut) {
-    if (mode === "event") {
-      if (!selectedEvent) { flashStatus("Select an event first (click one in Event mode)"); return; }
-      clipEvent = RA.clone(selectedEvent);
-      clipTiles = null;
+    if (S.mode === "event") {
+      if (!S.selectedEvent) { flashStatus("Select an event first (click one in Event mode)"); return; }
+      S.clipEvent = RA.clone(S.selectedEvent);
+      S.clipTiles = null;
       if (cut) {
         pushUndo();
         const m = curMap();
-        m.events = m.events.filter((ev) => ev !== selectedEvent);
-        selectedEvent = null;
+        m.events = m.events.filter((ev) => ev !== S.selectedEvent);
+        S.selectedEvent = null;
         touch(); renderMap();
       }
       flashStatus((cut ? "Event cut" : "Event copied") + " — Paste (Ctrl+V), then click to place");
       refreshToolbar();
       return;
     }
-    if (mode !== "map" || !selection) { flashStatus("Shift+drag on the map to select an area first"); return; }
-    const m = curMap(), r = selection;
+    if (S.mode !== "map" || !S.selection) { flashStatus("Shift+drag on the map to select an area first"); return; }
+    const m = curMap(), r = S.selection;
     const w = r.x2 - r.x1 + 1, h2 = r.y2 - r.y1 + 1;
     const clip = { w, h: h2, layers: {}, shadows: [], heights: [] };
     for (const ln of LAYER_ORDER) clip.layers[ln] = [];
@@ -798,8 +774,8 @@ const editorI18n = createEditorI18n({
         clip.heights.push(hts[i] || 0);
       }
     }
-    clipTiles = clip;
-    clipEvent = null;
+    S.clipTiles = clip;
+    S.clipEvent = null;
     if (cut) {
       pushUndo();
       for (let y = r.y1; y <= r.y2; y++) {
@@ -816,12 +792,12 @@ const editorI18n = createEditorI18n({
     refreshToolbar();
   }
   function startPaste() {
-    if (clipEvent && (mode === "event" || !clipTiles)) {
-      if (mode !== "event") setMode("event");
-      pasteMode = "event";
-    } else if (clipTiles) {
-      if (mode !== "map") setMode("map");
-      pasteMode = "tiles";
+    if (S.clipEvent && (S.mode === "event" || !S.clipTiles)) {
+      if (S.mode !== "event") setMode("event");
+      S.pasteMode = "event";
+    } else if (S.clipTiles) {
+      if (S.mode !== "map") setMode("map");
+      S.pasteMode = "tiles";
     } else {
       flashStatus("Clipboard is empty — Copy or Cut something first");
       return;
@@ -830,40 +806,40 @@ const editorI18n = createEditorI18n({
     refreshToolbar(); renderMap();
   }
   function stampPaste(cell) {
-    if (pasteMode === "tiles" && clipTiles) {
+    if (S.pasteMode === "tiles" && S.clipTiles) {
       pushUndo();
       const m = curMap();
-      for (let dy = 0; dy < clipTiles.h; dy++) {
-        for (let dx = 0; dx < clipTiles.w; dx++) {
+      for (let dy = 0; dy < S.clipTiles.h; dy++) {
+        for (let dx = 0; dx < S.clipTiles.w; dx++) {
           const x = cell.x + dx, y = cell.y + dy;
           if (x >= m.width || y >= m.height) continue;
-          const si = dy * clipTiles.w + dx, di = y * m.width + x;
-          for (const ln of LAYER_ORDER) m.layers[ln][di] = clipTiles.layers[ln][si];
-          m.shadows[di] = clipTiles.shadows[si];
-          heightsOf(m)[di] = (clipTiles.heights && clipTiles.heights[si]) || 0;
+          const si = dy * S.clipTiles.w + dx, di = y * m.width + x;
+          for (const ln of LAYER_ORDER) m.layers[ln][di] = S.clipTiles.layers[ln][si];
+          m.shadows[di] = S.clipTiles.shadows[si];
+          heightsOf(m)[di] = (S.clipTiles.heights && S.clipTiles.heights[si]) || 0;
         }
       }
       touch(); renderMap();
-    } else if (pasteMode === "event" && clipEvent) {
+    } else if (S.pasteMode === "event" && S.clipEvent) {
       if (eventAt(cell.x, cell.y)) { flashStatus("That cell already has an event"); return; }
       pushUndo();
       const m = curMap();
-      const ev = RA.clone(clipEvent);
+      const ev = RA.clone(S.clipEvent);
       ev.id = RA.nextId(m.events);
       ev.x = cell.x; ev.y = cell.y;
       m.events.push(ev);
-      selectedEvent = ev;
-      pasteMode = null; // events place one at a time
+      S.selectedEvent = ev;
+      S.pasteMode = null; // events place one at a time
       touch(); renderMap(); refreshToolbar(); setStatus();
     }
   }
   function cancelPaste() {
-    pasteMode = null;
+    S.pasteMode = null;
     renderMap(); refreshToolbar(); setStatus();
   }
   function clearSelection() {
-    selection = null;
-    pasteMode = null;
+    S.selection = null;
+    S.pasteMode = null;
     renderMap(); refreshToolbar(); setStatus();
   }
 
@@ -876,7 +852,7 @@ const editorI18n = createEditorI18n({
     const existing = eventAt(cell.x, cell.y);
     if (existing) {
       // Existing event → edit in place; commits on OK, unchanged behavior.
-      selectedEvent = existing;
+      S.selectedEvent = existing;
       renderMap(); refreshToolbar();
       openEventEditor(existing);
       return existing;
@@ -887,23 +863,23 @@ const editorI18n = createEditorI18n({
     const ev = DataDefaults.newEvent(RA.nextId(curMap().events), cell.x, cell.y);
     openEventEditor(ev, () => {
       curMap().events.push(ev);
-      selectedEvent = ev;
+      S.selectedEvent = ev;
       refreshToolbar();
     });
     return ev;
   }
   function setStartHere(cell) {
-    proj.system.startMapId = curMapId;
-    proj.system.startX = cell.x; proj.system.startY = cell.y;
+    S.proj.system.startMapId = S.curMapId;
+    S.proj.system.startX = cell.x; S.proj.system.startY = cell.y;
     touch(); renderMap();
     flashStatus("Start position set");
   }
   function deleteSelectedEvent() {
-    if (!selectedEvent) return;
+    if (!S.selectedEvent) return;
     pushUndo();
     const m = curMap();
-    m.events = m.events.filter((x) => x !== selectedEvent);
-    selectedEvent = null;
+    m.events = m.events.filter((x) => x !== S.selectedEvent);
+    S.selectedEvent = null;
     touch(); renderMap(); refreshToolbar();
   }
 
@@ -911,9 +887,9 @@ const editorI18n = createEditorI18n({
   function openCanvasMenu(e) {
     const cell = cellFromMouse(e);
     if (!cell) return;
-    selectedEvent = eventAt(cell.x, cell.y);
+    S.selectedEvent = eventAt(cell.x, cell.y);
     renderMap(); refreshToolbar();
-    const ev = selectedEvent;
+    const ev = S.selectedEvent;
     if (ev) {
       showPopupMenu(e.clientX, e.clientY, [
         { label: "Edit Event", onClick: () => openEventEditor(ev) },
@@ -931,8 +907,8 @@ const editorI18n = createEditorI18n({
           { label: "Sign", onClick: () => quickSign(cell) },
           { label: "Chest", onClick: () => quickChest(cell) },
         ] },
-        { label: "Paste Event", key: "Ctrl+V", enabled: !!clipEvent,
-          onClick: () => { pasteMode = "event"; stampPaste(cell); } },
+        { label: "Paste Event", key: "Ctrl+V", enabled: !!S.clipEvent,
+          onClick: () => { S.pasteMode = "event"; stampPaste(cell); } },
         "separator",
         { label: "Set Start Position Here", onClick: () => setStartHere(cell) },
       ]);
@@ -955,7 +931,7 @@ const editorI18n = createEditorI18n({
     const ev = DataDefaults.newEvent(RA.nextId(curMap().events), cell.x, cell.y, name);
     ev.pages = pages;
     curMap().events.push(ev);
-    selectedEvent = ev;
+    S.selectedEvent = ev;
     touch(); renderMap(); refreshToolbar();
     return ev;
   }
@@ -974,10 +950,10 @@ const editorI18n = createEditorI18n({
   }
   function quickTransfer(cell) {
     if (eventAt(cell.x, cell.y)) { flashStatus("That cell already has an event"); return; }
-    const w = { mapId: proj.maps[0] ? proj.maps[0].id : 0, x: 0, y: 0, dir: 0 };
+    const w = { mapId: S.proj.maps[0] ? S.proj.maps[0].id : 0, x: 0, y: 0, dir: 0 };
     // Keep refs to the Map/X/Y inputs so the visual picker can write back into them
     // (mirrors the full Transfer Player command form's "Pick destination" button).
-    const mapSel = sel(w, "mapId", dbOpts(proj.maps));
+    const mapSel = sel(w, "mapId", dbOpts(S.proj.maps));
     const xIn = nIn(w, "x", 0);
     const yIn = nIn(w, "y", 0);
     const content = h("div", null,
@@ -1007,11 +983,11 @@ const editorI18n = createEditorI18n({
   }
   function quickChest(cell) {
     if (eventAt(cell.x, cell.y)) { flashStatus("That cell already has an event"); return; }
-    const w = { kind: "item", id: proj.items[0] ? proj.items[0].id : 0, val: 1 };
+    const w = { kind: "item", id: S.proj.items[0] ? S.proj.items[0].id : 0, val: 1 };
     const entryWrap = h("span");
     function redrawEntry() {
       const isGold = w.kind === "gold";
-      const arr = w.kind === "weapon" ? proj.weapons : w.kind === "armor" ? proj.armors : proj.items;
+      const arr = w.kind === "weapon" ? S.proj.weapons : w.kind === "armor" ? S.proj.armors : S.proj.items;
       if (!isGold) w.id = arr[0] ? arr[0].id : 0; // keep id valid when kind changes
       entryWrap.innerHTML = "";
       entryWrap.appendChild(isGold ? h("span", null, "—") : sel(w, "id", dbOpts(arr)));
@@ -1052,95 +1028,95 @@ const editorI18n = createEditorI18n({
   function onCanvasDown(e) {
     const cell = cellFromMouse(e);
     if (!cell) return;
-    if (pasteMode) {
+    if (S.pasteMode) {
       if (e.button === 0) stampPaste(cell);
-      else if (e.button === 2) { suppressNextCtxMenu = true; cancelPaste(); }
+      else if (e.button === 2) { S.suppressNextCtxMenu = true; cancelPaste(); }
       return;
     }
     if (e.button === 2) {
-      if (mode === "map" && tool === "shadow") { // right button erases shadows
-        painting = true; shadowSet = false;
+      if (S.mode === "map" && S.tool === "shadow") { // right button erases shadows
+        S.painting = true; S.shadowSet = false;
         pushUndo();
         paintShadow(cell, quadFromMouse(e), false);
         return;
       }
-      if (mode === "height") { // eyedropper: pick up the elevation under the cursor
-        heightVal = heightsOf(curMap())[cell.y * curMap().width + cell.x] || 0;
+      if (S.mode === "height") { // eyedropper: pick up the elevation under the cursor
+        S.heightVal = heightsOf(curMap())[cell.y * curMap().width + cell.x] || 0;
         setStatus();
         return;
       }
-      if (mode === "map") { // eyedropper from the topmost visible tile
-        const ln = layer === "auto" ? topLayerAt(cell.x, cell.y) : layer;
+      if (S.mode === "map") { // eyedropper from the topmost visible tile
+        const ln = S.layer === "auto" ? topLayerAt(cell.x, cell.y) : S.layer;
         const t = getCell(cell.x, cell.y, ln) || getCell(cell.x, cell.y, "ground");
-        if (t > 0) { selectedTile = t; renderPalette(); setStatus(); }
+        if (t > 0) { S.selectedTile = t; renderPalette(); setStatus(); }
       }
       return;
     }
     if (e.button !== 0) return;
-    if (mode === "start") {
+    if (S.mode === "start") {
       setStartHere(cell);
       setMode("event");
       return;
     }
-    if (mode === "pass") {
+    if (S.mode === "pass") {
       pushUndo();
       const m = curMap();
       const cur = m.passOv[cell.y * m.width + cell.x] || 0;
-      passVal = cur === 0 ? 2 : cur === 2 ? 1 : 0; // auto → force block → force pass → auto
-      painting = true;
-      paintPass(cell, passVal);
+      S.passVal = cur === 0 ? 2 : cur === 2 ? 1 : 0; // auto → force block → force pass → auto
+      S.painting = true;
+      paintPass(cell, S.passVal);
       return;
     }
-    if (mode === "height") {
+    if (S.mode === "height") {
       pushUndo();
-      painting = true;
-      if (tool === "rect" || tool === "circle") { rectStart = cell; renderMap(); }
-      else if (tool === "fill") { floodFillHeight(cell.x, cell.y, heightVal); touch(); renderMap(); }
-      else paintHeight(cell, tool === "erase" ? 0 : heightVal);
+      S.painting = true;
+      if (S.tool === "rect" || S.tool === "circle") { S.rectStart = cell; renderMap(); }
+      else if (S.tool === "fill") { floodFillHeight(cell.x, cell.y, S.heightVal); touch(); renderMap(); }
+      else paintHeight(cell, S.tool === "erase" ? 0 : S.heightVal);
       return;
     }
-    if (mode === "event") {
-      selectedEvent = eventAt(cell.x, cell.y);
-      dragEvent = selectedEvent;
-      dragPushed = false;
+    if (S.mode === "event") {
+      S.selectedEvent = eventAt(cell.x, cell.y);
+      S.dragEvent = S.selectedEvent;
+      S.dragPushed = false;
       renderMap(); refreshToolbar();
       return;
     }
     // map mode
     if (e.shiftKey) { // marquee selection
-      selecting = true;
-      selAnchor = cell;
-      selection = normRect(cell, cell);
+      S.selecting = true;
+      S.selAnchor = cell;
+      S.selection = normRect(cell, cell);
       renderMap(); refreshToolbar();
       return;
     }
-    painting = true;
+    S.painting = true;
     pushUndo();
-    if (tool === "rect" || tool === "circle") { rectStart = cell; renderMap(); }
-    else if (tool === "shadow") { shadowSet = true; paintShadow(cell, quadFromMouse(e), true); }
+    if (S.tool === "rect" || S.tool === "circle") { S.rectStart = cell; renderMap(); }
+    else if (S.tool === "shadow") { S.shadowSet = true; paintShadow(cell, quadFromMouse(e), true); }
     else paintAt(cell);
   }
   function onCanvasMove(e) {
     const cell = cellFromMouse(e);
-    const q = cell && tool === "shadow" && mode === "map" ? quadFromMouse(e) : 0;
-    const changed = !cell || !hoverCell || cell.x !== hoverCell.x || cell.y !== hoverCell.y || q !== hoverQuad;
-    hoverCell = cell; hoverQuad = q;
+    const q = cell && S.tool === "shadow" && S.mode === "map" ? quadFromMouse(e) : 0;
+    const changed = !cell || !S.hoverCell || cell.x !== S.hoverCell.x || cell.y !== S.hoverCell.y || q !== S.hoverQuad;
+    S.hoverCell = cell; S.hoverQuad = q;
     if (!cell) { if (changed) renderMap(); return; }
-    if (selecting) {
-      selection = normRect(selAnchor, cell);
+    if (S.selecting) {
+      S.selection = normRect(S.selAnchor, cell);
       renderMap();
-    } else if (mode === "map" && painting && (tool === "pen" || tool === "erase")) {
+    } else if (S.mode === "map" && S.painting && (S.tool === "pen" || S.tool === "erase")) {
       paintAt(cell);
-    } else if (mode === "map" && painting && tool === "shadow") {
-      paintShadow(cell, q, shadowSet);
-    } else if (mode === "pass" && painting) {
-      paintPass(cell, passVal);
-    } else if (mode === "height" && painting && tool !== "rect" && tool !== "circle" && tool !== "fill") {
-      paintHeight(cell, tool === "erase" ? 0 : heightVal);
-    } else if (mode === "event" && dragEvent && (dragEvent.x !== cell.x || dragEvent.y !== cell.y)) {
+    } else if (S.mode === "map" && S.painting && S.tool === "shadow") {
+      paintShadow(cell, q, S.shadowSet);
+    } else if (S.mode === "pass" && S.painting) {
+      paintPass(cell, S.passVal);
+    } else if (S.mode === "height" && S.painting && S.tool !== "rect" && S.tool !== "circle" && S.tool !== "fill") {
+      paintHeight(cell, S.tool === "erase" ? 0 : S.heightVal);
+    } else if (S.mode === "event" && S.dragEvent && (S.dragEvent.x !== cell.x || S.dragEvent.y !== cell.y)) {
       if (!eventAt(cell.x, cell.y)) {
-        if (!dragPushed) { dragPushed = true; pushUndo(); dragEvent = curMap().events.find((ev) => ev.id === dragEvent.id); selectedEvent = dragEvent; }
-        dragEvent.x = cell.x; dragEvent.y = cell.y;
+        if (!S.dragPushed) { S.dragPushed = true; pushUndo(); S.dragEvent = curMap().events.find((ev) => ev.id === S.dragEvent.id); S.selectedEvent = S.dragEvent; }
+        S.dragEvent.x = cell.x; S.dragEvent.y = cell.y;
         touch();
       }
       renderMap();
@@ -1150,32 +1126,32 @@ const editorI18n = createEditorI18n({
     setStatus();
   }
   function onCanvasUp() {
-    if (selecting) {
-      selecting = false; selAnchor = null;
+    if (S.selecting) {
+      S.selecting = false; S.selAnchor = null;
       refreshToolbar(); renderMap();
     }
-    if ((mode === "map" || mode === "height") && painting && (tool === "rect" || tool === "circle") && rectStart && hoverCell) {
+    if ((S.mode === "map" || S.mode === "height") && S.painting && (S.tool === "rect" || S.tool === "circle") && S.rectStart && S.hoverCell) {
       const m = curMap();
-      const r = normRect(rectStart, hoverCell);
+      const r = normRect(S.rectStart, S.hoverCell);
       const cx = (r.x1 + r.x2 + 1) / 2, cy = (r.y1 + r.y2 + 1) / 2;
       const rx = (r.x2 - r.x1 + 1) / 2, ry = (r.y2 - r.y1 + 1) / 2;
       for (let y = r.y1; y <= r.y2; y++) {
         for (let x = r.x1; x <= r.x2; x++) {
-          if (tool === "circle") {
+          if (S.tool === "circle") {
             const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry;
             if (nx * nx + ny * ny > 1) continue;
           }
-          if (mode === "height") heightsOf(m)[y * m.width + x] = heightVal;
-          else setCell(x, y, selectedTile, resolvePaintLayer(selectedTile, x, y));
+          if (S.mode === "height") heightsOf(m)[y * m.width + x] = S.heightVal;
+          else setCell(x, y, S.selectedTile, resolvePaintLayer(S.selectedTile, x, y));
         }
       }
       touch();
     }
-    painting = false; rectStart = null; dragEvent = null; dragPushed = false;
+    S.painting = false; S.rectStart = null; S.dragEvent = null; S.dragPushed = false;
     renderMap();
   }
   function onCanvasDbl(e) {
-    if (mode !== "event") return;
+    if (S.mode !== "event") return;
     const cell = cellFromMouse(e);
     if (!cell) return;
     newEventAt(cell);
@@ -1184,32 +1160,32 @@ const editorI18n = createEditorI18n({
   function setStatus() {
     const m = curMap();
     let s = m ? m.name + " (" + m.width + "×" + m.height + ")" : "";
-    s += "  ·  " + (mode === "map" ? t(TOOL_LABELS[tool]) + " / " + t(LAYER_LABELS[layer])
-      : mode === "event" ? t("Event mode (double-click = new/edit, drag = move, right-click = menu)")
-      : mode === "pass" ? t("Passability (click cycles auto → ✕ block → ○ pass)")
-      : mode === "height" ? t("Heights — painting {value} with {tool} (keys 0–9 set the value, right-click picks, Eraser clears)", {
-        value: heightVal,
-        tool: t(TOOL_LABELS[tool]),
+    s += "  ·  " + (S.mode === "map" ? t(TOOL_LABELS[S.tool]) + " / " + t(LAYER_LABELS[S.layer])
+      : S.mode === "event" ? t("Event mode (double-click = new/edit, drag = move, right-click = menu)")
+      : S.mode === "pass" ? t("Passability (click cycles auto → ✕ block → ○ pass)")
+      : S.mode === "height" ? t("Heights — painting {value} with {tool} (keys 0–9 set the value, right-click picks, Eraser clears)", {
+        value: S.heightVal,
+        tool: t(TOOL_LABELS[S.tool]),
       })
       : t("Click the map to set the start position"));
-    if (hoverCell && m) {
-      s += "  ·  " + hoverCell.x + "," + hoverCell.y;
-      if (mode === "map") {
-        const ln = layer === "auto" ? topLayerAt(hoverCell.x, hoverCell.y) : layer;
-        const t = getCell(hoverCell.x, hoverCell.y, ln);
+    if (S.hoverCell && m) {
+      s += "  ·  " + S.hoverCell.x + "," + S.hoverCell.y;
+      if (S.mode === "map") {
+        const ln = S.layer === "auto" ? topLayerAt(S.hoverCell.x, S.hoverCell.y) : S.layer;
+        const t = getCell(S.hoverCell.x, S.hoverCell.y, ln);
         s += "  ·  " + ln + ": " + (Assets.tiles[t] ? Assets.tiles[t].name : "?");
       }
-      if (mode === "pass") {
-        s += "  ·  " + (effectivePass(hoverCell.x, hoverCell.y) ? "○ " + t("passable") : "✕ " + t("blocked")) +
-          (m.passOv[hoverCell.y * m.width + hoverCell.x] ? " (" + t("override") + ")" : "");
+      if (S.mode === "pass") {
+        s += "  ·  " + (effectivePass(S.hoverCell.x, S.hoverCell.y) ? "○ " + t("passable") : "✕ " + t("blocked")) +
+          (m.passOv[S.hoverCell.y * m.width + S.hoverCell.x] ? " (" + t("override") + ")" : "");
       }
-      const ev = mode !== "pass" && mode !== "height" && eventAt(hoverCell.x, hoverCell.y);
+      const ev = S.mode !== "pass" && S.mode !== "height" && eventAt(S.hoverCell.x, S.hoverCell.y);
       if (ev) s += "  ·  " + ev.name;
     }
-    if (mode === "map" && selection) s += "  ·  " + t("selection") + " " + (selection.x2 - selection.x1 + 1) + "×" + (selection.y2 - selection.y1 + 1);
-    if (mode === "map") s += "  ·  " + t("brush") + ": " + (Assets.tiles[selectedTile] ? Assets.tiles[selectedTile].name : "?");
+    if (S.mode === "map" && S.selection) s += "  ·  " + t("selection") + " " + (S.selection.x2 - S.selection.x1 + 1) + "×" + (S.selection.y2 - S.selection.y1 + 1);
+    if (S.mode === "map") s += "  ·  " + t("brush") + ": " + (Assets.tiles[S.selectedTile] ? Assets.tiles[S.selectedTile].name : "?");
     $("status-text").textContent = s;
-    $("zoom-ind").textContent = Math.round(zoom * 100) + "%";
+    $("zoom-ind").textContent = Math.round(S.zoom * 100) + "%";
   }
   let statusFlashT = null;
   function flashStatus(msg) {
@@ -1222,29 +1198,29 @@ const editorI18n = createEditorI18n({
   function rebuildMapList() {
     const ul = $("maplist");
     ul.innerHTML = "";
-    for (const m of proj.maps) {
+    for (const m of S.proj.maps) {
       const li = h("li", {
-        class: m.id === curMapId ? "sel" : "",
-        onclick() { curMapId = m.id; selectedEvent = null; rebuildMapList(); renderMap(); setStatus(); },
+        class: m.id === S.curMapId ? "sel" : "",
+        onclick() { S.curMapId = m.id; S.selectedEvent = null; rebuildMapList(); renderMap(); setStatus(); },
         ondblclick() { openMapProps(); },
       }, m.id + ": " + m.name);
       ul.appendChild(li);
     }
   }
   function addMap() {
-    const id = RA.nextId(proj.maps);
+    const id = RA.nextId(S.proj.maps);
     const m = DataDefaults.newMap(id, "Map " + id, 20, 15, Assets.T.grass);
-    proj.maps.push(m);
-    curMapId = id;
+    S.proj.maps.push(m);
+    S.curMapId = id;
     rebuildMapList(); renderMap(); touch();
     openMapProps();
   }
   function deleteMap() {
-    if (proj.maps.length <= 1) { alert("A project needs at least one map."); return; }
+    if (S.proj.maps.length <= 1) { alert("A project needs at least one map."); return; }
     const m = curMap();
     confirmBox('Delete map "' + m.name + '"? This cannot be undone.', () => {
       const danglers = [];
-      for (const om of proj.maps) {
+      for (const om of S.proj.maps) {
         if (om.id === m.id) continue;
         for (const ev of om.events) {
           walkCommands(ev.pages.flatMap((pg) => pg.commands || []), (c) => {
@@ -1252,9 +1228,9 @@ const editorI18n = createEditorI18n({
           });
         }
       }
-      proj.maps = proj.maps.filter((x) => x.id !== m.id);
-      if (proj.system.startMapId === m.id) proj.system.startMapId = proj.maps[0].id;
-      curMapId = proj.maps[0].id;
+      S.proj.maps = S.proj.maps.filter((x) => x.id !== m.id);
+      if (S.proj.system.startMapId === m.id) S.proj.system.startMapId = S.proj.maps[0].id;
+      S.curMapId = S.proj.maps[0].id;
       rebuildMapList(); renderMap(); touch();
       if (danglers.length) {
         alert('Map "' + m.name + '" was deleted, but these events still have a Transfer Player command targeting it and need to be fixed manually:\n\n' + danglers.join("\n"));
@@ -1309,12 +1285,12 @@ const editorI18n = createEditorI18n({
       buttons: [
         { label: "Generate", primary: true, onClick(close) {
           const m = performMapGeneration(work);
-          proj.maps.push(m);
-          curMapId = m.id;
+          S.proj.maps.push(m);
+          S.curMapId = m.id;
           if (work.setStart) {
-            proj.system.startMapId = m.id;
-            proj.system.startX = m.tempStartX;
-            proj.system.startY = m.tempStartY;
+            S.proj.system.startMapId = m.id;
+            S.proj.system.startX = m.tempStartX;
+            S.proj.system.startY = m.tempStartY;
           }
           delete m.tempStartX;
           delete m.tempStartY;
@@ -1334,7 +1310,7 @@ const editorI18n = createEditorI18n({
     const w = parseInt(opts.width) || 20;
     const h = parseInt(opts.height) || 15;
     const n = w * h;
-    const id = RA.nextId(proj.maps);
+    const id = RA.nextId(S.proj.maps);
     
     let music = "field";
     if (opts.theme === "grassland" || opts.theme === "swamp") music = "town";
@@ -1342,7 +1318,7 @@ const editorI18n = createEditorI18n({
     
     const m = {
       id, name: opts.name || ("Random Map " + id), width: w, height: h,
-      tilesetId: (proj.tilesets && proj.tilesets[0]) ? proj.tilesets[0].id : 1,
+      tilesetId: (S.proj.tilesets && S.proj.tilesets[0]) ? S.proj.tilesets[0].id : 1,
       music,
       encounters: { troops: [], rate: 0 },
       layers: {
@@ -1826,20 +1802,20 @@ const editorI18n = createEditorI18n({
 
   function openMapProps() {
     const m = curMap();
-    const tilesets = (proj.tilesets && proj.tilesets.length) ? proj.tilesets : [{ id: 1, name: "Default" }];
+    const tilesets = (S.proj.tilesets && S.proj.tilesets.length) ? S.proj.tilesets : [{ id: 1, name: "Default" }];
     const work = { name: m.name, width: m.width, height: m.height, music: m.music || "none", rate: m.encounters.rate, tilesetId: m.tilesetId || tilesets[0].id };
     const troopBox = h("div", { class: "minilist" });
     const encTroops = m.encounters.troops.slice();
     function redrawTroops() {
       troopBox.innerHTML = "";
       encTroops.forEach((tid, i) => {
-        const tr = RA.byId(proj.troops, tid);
+        const tr = RA.byId(S.proj.troops, tid);
         troopBox.appendChild(h("div", { class: "minirow" },
           h("span", null, tr ? tr.name : "(missing)"),
           h("button", { class: "mini", onclick() { encTroops.splice(i, 1); redrawTroops(); } }, "✕")));
       });
-      const pick = { id: proj.troops.length ? proj.troops[0].id : 0 };
-      const s = sel(pick, "id", dbOpts(proj.troops));
+      const pick = { id: S.proj.troops.length ? S.proj.troops[0].id : 0 };
+      const s = sel(pick, "id", dbOpts(S.proj.troops));
       troopBox.appendChild(h("div", { class: "minirow" }, s,
         h("button", { class: "mini", onclick() { if (pick.id) { encTroops.push(pick.id); redrawTroops(); } } }, "+ add")));
     }
@@ -2073,13 +2049,13 @@ const editorI18n = createEditorI18n({
 
   // ============================ command definitions ============================
   function cmdSummary(c) {
-    const swName = (id) => id + (proj.system.switches[id - 1] ? " (" + proj.system.switches[id - 1] + ")" : "");
-    const varName = (id) => id + (proj.system.variables[id - 1] ? " (" + proj.system.variables[id - 1] + ")" : "");
+    const swName = (id) => id + (S.proj.system.switches[id - 1] ? " (" + S.proj.system.switches[id - 1] + ")" : "");
+    const varName = (id) => id + (S.proj.system.variables[id - 1] ? " (" + S.proj.system.variables[id - 1] + ")" : "");
     const dbName = (arr, id) => { const e = RA.byId(arr, id); return e ? e.name : "#" + id; };
-    const questName = (id) => dbName(proj.quests || [], id);
-    const commonEventName = (id) => dbName(proj.commonEvents || [], id);
+    const questName = (id) => dbName(S.proj.quests || [], id);
+    const commonEventName = (id) => dbName(S.proj.commonEvents || [], id);
     const questObjName = (questId, objIndex) => {
-      const q = RA.byId(proj.quests || [], questId);
+      const q = RA.byId(S.proj.quests || [], questId);
       const obj = q && Array.isArray(q.objectives) ? q.objectives[objIndex] : null;
       return obj ? (obj.label || obj.kind || ("Objective " + (objIndex + 1))) : ("Objective " + (objIndex + 1));
     };
@@ -2095,7 +2071,7 @@ const editorI18n = createEditorI18n({
           : k === "var" ? "Var " + varName(c.cond.id) + " " + (c.cond.cmp || ">=") + " " + c.cond.val
           : k === "selfsw" ? "Self-Switch " + c.cond.key + " is ON"
           : k === "quest" ? "Quest " + questName(c.cond.questId) + " is " + (c.cond.status || "active")
-          : k === "item" ? "Has " + dbName(c.cond.itemKind === "weapon" ? proj.weapons : c.cond.itemKind === "armor" ? proj.armors : proj.items, c.cond.id)
+          : k === "item" ? "Has " + dbName(c.cond.itemKind === "weapon" ? S.proj.weapons : c.cond.itemKind === "armor" ? S.proj.armors : S.proj.items, c.cond.id)
           : "Gold " + (c.cond.cmp || ">=") + " " + c.cond.val;
         return "If " + d;
       }
@@ -2105,12 +2081,12 @@ const editorI18n = createEditorI18n({
       case "questComplete": return "Complete Quest: " + questName(c.questId);
       case "questFail": return "Fail Quest: " + questName(c.questId);
       case "commonEvent": return "Call Common Event: " + commonEventName(c.commonEventId);
-      case "transfer": { const m = RA.byId(proj.maps, c.mapId); return "Transfer → " + (m ? m.name : "?") + " (" + c.x + "," + c.y + ")"; }
-      case "gold": return (c.op === "sub" ? "Lose" : "Gain") + " " + c.val + " " + proj.system.currency;
-      case "item": return (c.op === "sub" ? "Lose" : "Gain") + " " + dbName(c.kind === "weapon" ? proj.weapons : c.kind === "armor" ? proj.armors : proj.items, c.id) + " ×" + c.val;
-      case "party": return (c.op === "add" ? "Add" : "Remove") + " party member: " + dbName(proj.actors, c.actorId);
+      case "transfer": { const m = RA.byId(S.proj.maps, c.mapId); return "Transfer → " + (m ? m.name : "?") + " (" + c.x + "," + c.y + ")"; }
+      case "gold": return (c.op === "sub" ? "Lose" : "Gain") + " " + c.val + " " + S.proj.system.currency;
+      case "item": return (c.op === "sub" ? "Lose" : "Gain") + " " + dbName(c.kind === "weapon" ? S.proj.weapons : c.kind === "armor" ? S.proj.armors : S.proj.items, c.id) + " ×" + c.val;
+      case "party": return (c.op === "add" ? "Add" : "Remove") + " party member: " + dbName(S.proj.actors, c.actorId);
       case "heal": return c.full ? "Recover All" : "Heal " + (c.hp || 0) + " HP / " + (c.mp || 0) + " MP";
-      case "battle": return "Battle: " + dbName(proj.troops, c.troopId) + (c.escape === false ? " (no escape)" : "") + (c.lose ? " (lose allowed)" : "");
+      case "battle": return "Battle: " + dbName(S.proj.troops, c.troopId) + (c.escape === false ? " (no escape)" : "") + (c.lose ? " (lose allowed)" : "");
       case "shop": return "Open Shop (" + (c.goods || []).length + " goods)";
       case "wait": return "Wait " + c.frames + " frames";
       case "se": return "Sound: " + c.name;
@@ -2131,12 +2107,12 @@ const editorI18n = createEditorI18n({
   // Shows the chosen map; click a tile to set a destination. cb({ mapId, x, y }).
   function openLocationPicker(initMapId, initX, initY, cb) {
     const PS = 24; // picker pixels per tile
-    const pick = { mapId: RA.byId(proj.maps, initMapId) ? initMapId : proj.maps[0].id, x: initX, y: initY };
+    const pick = { mapId: RA.byId(S.proj.maps, initMapId) ? initMapId : S.proj.maps[0].id, x: initX, y: initY };
     const canvas = h("canvas", { class: "locpick-canvas" });
     const ctx = canvas.getContext("2d");
     const scroll = h("div", { class: "locpick-scroll" }, canvas);
     const info = h("span", { class: "dim", style: "margin-left:auto; align-self:center" });
-    const pMap = () => RA.byId(proj.maps, pick.mapId) || proj.maps[0];
+    const pMap = () => RA.byId(S.proj.maps, pick.mapId) || S.proj.maps[0];
     function draw() {
       const m = pMap();
       canvas.width = m.width * PS; canvas.height = m.height * PS;
@@ -2156,9 +2132,9 @@ const editorI18n = createEditorI18n({
         ctx.fillStyle = "rgba(120,200,255,0.20)";
         ctx.fillRect(ev.x * TILE + 3, ev.y * TILE + 3, TILE - 6, TILE - 6);
       }
-      if (proj.system.startMapId === m.id) {
+      if (S.proj.system.startMapId === m.id) {
         ctx.fillStyle = "rgba(110,230,140,0.5)";
-        ctx.fillRect(proj.system.startX * TILE + 8, proj.system.startY * TILE + 8, TILE - 16, TILE - 16);
+        ctx.fillRect(S.proj.system.startX * TILE + 8, S.proj.system.startY * TILE + 8, TILE - 16, TILE - 16);
       }
       if (pick.x >= 0 && pick.y >= 0 && pick.x < m.width && pick.y < m.height) {
         ctx.fillStyle = "rgba(255,216,106,0.32)";
@@ -2175,7 +2151,7 @@ const editorI18n = createEditorI18n({
       if (x < 0 || y < 0 || x >= m.width || y >= m.height) return;
       pick.x = x; pick.y = y; draw();
     });
-    const mapSel = sel(pick, "mapId", dbOpts(proj.maps), () => {
+    const mapSel = sel(pick, "mapId", dbOpts(S.proj.maps), () => {
       const m = pMap();
       pick.x = Math.min(pick.x, m.width - 1); pick.y = Math.min(pick.y, m.height - 1);
       draw();
@@ -2266,20 +2242,20 @@ const editorI18n = createEditorI18n({
           } else if (w.kind === "selfsw") {
             sub.appendChild(field("Self-Switch", sel(w, "key", [{ v: "A", l: "A" }, { v: "B", l: "B" }, { v: "C", l: "C" }, { v: "D", l: "D" }])));
           } else if (w.kind === "quest") {
-            sub.appendChild(row(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"))),
+            sub.appendChild(row(field("Quest", sel(w, "questId", dbOpts(S.proj.quests, "(none)"))),
               field("Status", sel(w, "status", stringSelOpts(["inactive", "active", "completed", "failed", "abandoned"])))));
           } else if (w.kind === "item") {
             const kindSel = sel(w, "itemKind", [{ v: "item", l: "Item" }, { v: "weapon", l: "Weapon" }, { v: "armor", l: "Armor" }], redrawItem);
             sub.appendChild(row(field("Kind", kindSel), field("Entry", h("span", { id: "ifitem" }))));
             redrawItem();
             function redrawItem() {
-              const arr = w.itemKind === "weapon" ? proj.weapons : w.itemKind === "armor" ? proj.armors : proj.items;
+              const arr = w.itemKind === "weapon" ? S.proj.weapons : w.itemKind === "armor" ? S.proj.armors : S.proj.items;
               const span = sub.querySelector("#ifitem") || sub;
               span.innerHTML = "";
               span.appendChild(sel(w, "id", dbOpts(arr)));
             }
           } else if (w.kind === "actor") {
-            if (!w.actorId) w.actorId = proj.actors[0] ? proj.actors[0].id : 1;
+            if (!w.actorId) w.actorId = S.proj.actors[0] ? S.proj.actors[0].id : 1;
             if (!w.check) w.check = "inParty";
             if (w.itemId == null) w.itemId = 0;
             const checkSel = sel(w, "check", [
@@ -2289,7 +2265,7 @@ const editorI18n = createEditorI18n({
             ], redrawActorCheck);
             const itemSpan = h("span", { id: "actoritem" });
             sub.appendChild(row(
-              field("Actor", sel(w, "actorId", dbOpts(proj.actors))),
+              field("Actor", sel(w, "actorId", dbOpts(S.proj.actors))),
               field("Check", checkSel),
               field("Equipment", itemSpan)
             ));
@@ -2298,9 +2274,9 @@ const editorI18n = createEditorI18n({
               const span = sub.querySelector("#actoritem") || itemSpan;
               span.innerHTML = "";
               if (w.check === "weapon") {
-                span.appendChild(sel(w, "itemId", dbOpts(proj.weapons, "(none)")));
+                span.appendChild(sel(w, "itemId", dbOpts(S.proj.weapons, "(none)")));
               } else if (w.check === "armor") {
-                span.appendChild(sel(w, "itemId", dbOpts(proj.armors, "(none)")));
+                span.appendChild(sel(w, "itemId", dbOpts(S.proj.armors, "(none)")));
               } else {
                 span.appendChild(h("span", { class: "dim" }, "N/A"));
               }
@@ -2329,56 +2305,56 @@ const editorI18n = createEditorI18n({
           if (!c.else) c.else = [];
         };
       } },
-    { t: "questStart", label: "Start Quest", make: () => ({ t: "questStart", questId: proj.quests[0] ? proj.quests[0].id : 0 }),
+    { t: "questStart", label: "Start Quest", make: () => ({ t: "questStart", questId: S.proj.quests[0] ? S.proj.quests[0].id : 0 }),
       form(c, box) {
-        const w = { questId: c.questId || (proj.quests[0] ? proj.quests[0].id : 0) };
-        box.appendChild(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"))));
+        const w = { questId: c.questId || (S.proj.quests[0] ? S.proj.quests[0].id : 0) };
+        box.appendChild(field("Quest", sel(w, "questId", dbOpts(S.proj.quests, "(none)"))));
         return () => { c.questId = w.questId; };
       } },
-    { t: "questAdvanceObj", label: "Advance Quest Objective", make: () => ({ t: "questAdvanceObj", questId: proj.quests[0] ? proj.quests[0].id : 0, objIndex: 0, amount: 1 }),
+    { t: "questAdvanceObj", label: "Advance Quest Objective", make: () => ({ t: "questAdvanceObj", questId: S.proj.quests[0] ? S.proj.quests[0].id : 0, objIndex: 0, amount: 1 }),
       form(c, box) {
-        const w = { questId: c.questId || (proj.quests[0] ? proj.quests[0].id : 0), objIndex: c.objIndex || 0, amount: c.amount || 1 };
+        const w = { questId: c.questId || (S.proj.quests[0] ? S.proj.quests[0].id : 0), objIndex: c.objIndex || 0, amount: c.amount || 1 };
         const objWrap = h("span");
         function redrawObj() {
-          const q = RA.byId(proj.quests, w.questId);
+          const q = RA.byId(S.proj.quests, w.questId);
           const opts = (q && q.objectives && q.objectives.length ? q.objectives : [{ label: "(none)" }]).map((obj, i) => ({ v: i, l: (i + 1) + ": " + (obj.label || obj.kind || "Objective") }));
           objWrap.innerHTML = "";
           objWrap.appendChild(sel(w, "objIndex", opts));
         }
         redrawObj();
-        box.appendChild(row(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"), redrawObj)), field("Objective", objWrap), field("Amount", nIn(w, "amount", 1, 999))));
+        box.appendChild(row(field("Quest", sel(w, "questId", dbOpts(S.proj.quests, "(none)"), redrawObj)), field("Objective", objWrap), field("Amount", nIn(w, "amount", 1, 999))));
         return () => Object.assign(c, w);
       } },
-    { t: "questSetObj", label: "Set Quest Objective Progress", make: () => ({ t: "questSetObj", questId: proj.quests[0] ? proj.quests[0].id : 0, objIndex: 0, value: 0 }),
+    { t: "questSetObj", label: "Set Quest Objective Progress", make: () => ({ t: "questSetObj", questId: S.proj.quests[0] ? S.proj.quests[0].id : 0, objIndex: 0, value: 0 }),
       form(c, box) {
-        const w = { questId: c.questId || (proj.quests[0] ? proj.quests[0].id : 0), objIndex: c.objIndex || 0, value: c.value || 0 };
+        const w = { questId: c.questId || (S.proj.quests[0] ? S.proj.quests[0].id : 0), objIndex: c.objIndex || 0, value: c.value || 0 };
         const objWrap = h("span");
         function redrawObj() {
-          const q = RA.byId(proj.quests, w.questId);
+          const q = RA.byId(S.proj.quests, w.questId);
           const opts = (q && q.objectives && q.objectives.length ? q.objectives : [{ label: "(none)" }]).map((obj, i) => ({ v: i, l: (i + 1) + ": " + (obj.label || obj.kind || "Objective") }));
           objWrap.innerHTML = "";
           objWrap.appendChild(sel(w, "objIndex", opts));
         }
         redrawObj();
-        box.appendChild(row(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"), redrawObj)), field("Objective", objWrap), field("Value", nIn(w, "value", 0, 999))));
+        box.appendChild(row(field("Quest", sel(w, "questId", dbOpts(S.proj.quests, "(none)"), redrawObj)), field("Objective", objWrap), field("Value", nIn(w, "value", 0, 999))));
         return () => Object.assign(c, w);
       } },
-    { t: "questComplete", label: "Complete Quest", make: () => ({ t: "questComplete", questId: proj.quests[0] ? proj.quests[0].id : 0 }),
+    { t: "questComplete", label: "Complete Quest", make: () => ({ t: "questComplete", questId: S.proj.quests[0] ? S.proj.quests[0].id : 0 }),
       form(c, box) {
-        const w = { questId: c.questId || (proj.quests[0] ? proj.quests[0].id : 0) };
-        box.appendChild(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"))));
+        const w = { questId: c.questId || (S.proj.quests[0] ? S.proj.quests[0].id : 0) };
+        box.appendChild(field("Quest", sel(w, "questId", dbOpts(S.proj.quests, "(none)"))));
         return () => { c.questId = w.questId; };
       } },
-    { t: "questFail", label: "Fail Quest", make: () => ({ t: "questFail", questId: proj.quests[0] ? proj.quests[0].id : 0 }),
+    { t: "questFail", label: "Fail Quest", make: () => ({ t: "questFail", questId: S.proj.quests[0] ? S.proj.quests[0].id : 0 }),
       form(c, box) {
-        const w = { questId: c.questId || (proj.quests[0] ? proj.quests[0].id : 0) };
-        box.appendChild(field("Quest", sel(w, "questId", dbOpts(proj.quests, "(none)"))));
+        const w = { questId: c.questId || (S.proj.quests[0] ? S.proj.quests[0].id : 0) };
+        box.appendChild(field("Quest", sel(w, "questId", dbOpts(S.proj.quests, "(none)"))));
         return () => { c.questId = w.questId; };
       } },
-    { t: "commonEvent", label: "Call Common Event", make: () => ({ t: "commonEvent", commonEventId: proj.commonEvents[0] ? proj.commonEvents[0].id : 0 }),
+    { t: "commonEvent", label: "Call Common Event", make: () => ({ t: "commonEvent", commonEventId: S.proj.commonEvents[0] ? S.proj.commonEvents[0].id : 0 }),
       form(c, box) {
-        const w = { commonEventId: c.commonEventId || (proj.commonEvents[0] ? proj.commonEvents[0].id : 0) };
-        box.appendChild(field("Common event", sel(w, "commonEventId", dbOpts(proj.commonEvents, "(none)"))));
+        const w = { commonEventId: c.commonEventId || (S.proj.commonEvents[0] ? S.proj.commonEvents[0].id : 0) };
+        box.appendChild(field("Common event", sel(w, "commonEventId", dbOpts(S.proj.commonEvents, "(none)"))));
         return () => { c.commonEventId = w.commonEventId; };
       } },
     { t: "switch", label: "Control Switch", make: () => ({ t: "switch", id: 1, val: true }),
@@ -2405,7 +2381,7 @@ const editorI18n = createEditorI18n({
     { t: "transfer", label: "Transfer Player", make: () => ({ t: "transfer", mapId: 1, x: 0, y: 0, dir: 0 }),
       form(c, box) {
         const w = { mapId: c.mapId, x: c.x, y: c.y, dir: c.dir == null ? 0 : c.dir };
-        const mapSel = sel(w, "mapId", dbOpts(proj.maps));
+        const mapSel = sel(w, "mapId", dbOpts(S.proj.maps));
         const xIn = nIn(w, "x", 0, 200);
         const yIn = nIn(w, "y", 0, 200);
         box.appendChild(row(field("Map", mapSel), field("X", xIn), field("Y", yIn), field("Facing", sel(w, "dir", DIR_OPTS))));
@@ -2428,7 +2404,7 @@ const editorI18n = createEditorI18n({
         const w = { kind: c.kind || "item", id: c.id, op: c.op, val: c.val };
         const entryWrap = h("span");
         function redraw() {
-          const arr = w.kind === "weapon" ? proj.weapons : w.kind === "armor" ? proj.armors : proj.items;
+          const arr = w.kind === "weapon" ? S.proj.weapons : w.kind === "armor" ? S.proj.armors : S.proj.items;
           entryWrap.innerHTML = "";
           entryWrap.appendChild(sel(w, "id", dbOpts(arr)));
         }
@@ -2442,7 +2418,7 @@ const editorI18n = createEditorI18n({
       form(c, box) {
         const w = { op: c.op, actorId: c.actorId };
         box.appendChild(row(field("Op", sel(w, "op", [{ v: "add", l: "Add" }, { v: "remove", l: "Remove" }])),
-          field("Actor", sel(w, "actorId", dbOpts(proj.actors)))));
+          field("Actor", sel(w, "actorId", dbOpts(S.proj.actors)))));
         return () => Object.assign(c, w);
       } },
     { t: "heal", label: "Heal Party", make: () => ({ t: "heal", full: true, hp: 0, mp: 0 }),
@@ -2454,7 +2430,7 @@ const editorI18n = createEditorI18n({
     { t: "battle", label: "Start Battle", make: () => ({ t: "battle", troopId: 1, escape: true, lose: false }),
       form(c, box) {
         const w = { troopId: c.troopId, escape: c.escape !== false, lose: !!c.lose };
-        box.appendChild(row(field("Troop", sel(w, "troopId", dbOpts(proj.troops))),
+        box.appendChild(row(field("Troop", sel(w, "troopId", dbOpts(S.proj.troops))),
           field("Can escape", chk(w, "escape")), field("Continue on loss", chk(w, "lose"))));
         return () => { c.troopId = w.troopId; c.escape = w.escape; c.lose = w.lose; };
       } },
@@ -2465,16 +2441,16 @@ const editorI18n = createEditorI18n({
         function redraw() {
           list.innerHTML = "";
           goods.forEach((gd, i) => {
-            const arr = gd.kind === "weapon" ? proj.weapons : gd.kind === "armor" ? proj.armors : proj.items;
+            const arr = gd.kind === "weapon" ? S.proj.weapons : gd.kind === "armor" ? S.proj.armors : S.proj.items;
             const e = RA.byId(arr, gd.id);
             list.appendChild(h("div", { class: "minirow" },
               h("span", null, gd.kind + ": " + (e ? e.name : "?")),
               h("button", { class: "mini", onclick() { goods.splice(i, 1); redraw(); } }, "✕")));
           });
-          const pick = { kind: "item", id: proj.items.length ? proj.items[0].id : 0 };
+          const pick = { kind: "item", id: S.proj.items.length ? S.proj.items[0].id : 0 };
           const entry = h("span");
           function redrawEntry() {
-            const arr = pick.kind === "weapon" ? proj.weapons : pick.kind === "armor" ? proj.armors : proj.items;
+            const arr = pick.kind === "weapon" ? S.proj.weapons : pick.kind === "armor" ? S.proj.armors : S.proj.items;
             pick.id = arr.length ? arr[0].id : 0;
             entry.innerHTML = "";
             entry.appendChild(sel(pick, "id", dbOpts(arr)));
@@ -2650,22 +2626,22 @@ const editorI18n = createEditorI18n({
           draft.code = codeInput.value;
           if (preset) Object.assign(preset, draft);
           else {
-            proj.commandPresets.push({
-              id: RA.nextId(proj.commandPresets),
+            S.proj.commandPresets.push({
+              id: RA.nextId(S.proj.commandPresets),
               name: draft.name,
               code: draft.code,
             });
           }
           touch();
           close();
-          page = Math.max(0, Math.ceil((CMD_DEFS.length + proj.commandPresets.length + 1) / PAGE_SIZE) - 1);
+          page = Math.max(0, Math.ceil((CMD_DEFS.length + S.proj.commandPresets.length + 1) / PAGE_SIZE) - 1);
           redraw();
         } },
         { label: "Cancel" },
       ];
       if (preset) buttons.unshift({ label: "Delete", onClick(close) {
         confirmBox("Delete the saved command button \"" + preset.name + "\"?", () => {
-          proj.commandPresets = proj.commandPresets.filter((p) => p.id !== preset.id);
+          S.proj.commandPresets = S.proj.commandPresets.filter((p) => p.id !== preset.id);
           touch();
           close();
           redraw();
@@ -2685,7 +2661,7 @@ const editorI18n = createEditorI18n({
 
     function items() {
       return CMD_DEFS.map((def) => ({ kind: "builtin", def }))
-        .concat(proj.commandPresets.map((preset) => ({ kind: "preset", preset })))
+        .concat(S.proj.commandPresets.map((preset) => ({ kind: "preset", preset })))
         .concat({ kind: "add" });
     }
     function redraw() {
@@ -2900,7 +2876,7 @@ const editorI18n = createEditorI18n({
     function copySel(cut) {
       const b = selBlock();
       if (!b) return;
-      clipCmd = b.cmds.map((c) => RA.clone(c));
+      S.clipCmd = b.cmds.map((c) => RA.clone(c));
       flashStatus((cut ? "Cut " : "Copied ") + b.count + (b.count > 1 ? " commands" : " command"));
       if (cut) {
         snap();
@@ -2912,7 +2888,7 @@ const editorI18n = createEditorI18n({
       }
     }
     function pasteSel() {
-      const block = Array.isArray(clipCmd) ? clipCmd : (clipCmd ? [clipCmd] : null);
+      const block = Array.isArray(S.clipCmd) ? S.clipCmd : (S.clipCmd ? [S.clipCmd] : null);
       if (!block || !block.length) { flashStatus("Clipboard is empty — copy a command first"); return; }
       const target = cur();
       let arr, idx;
@@ -2943,7 +2919,7 @@ const editorI18n = createEditorI18n({
       redraw(); listEl.focus({ preventScroll: true });
       closeCmdMenu();
       const b = selBlock(), isCmd = !!b, n = b ? b.count : 0, sfx = n > 1 ? " " + n : "";
-      const canPaste = Array.isArray(clipCmd) ? clipCmd.length > 0 : !!clipCmd;
+      const canPaste = Array.isArray(S.clipCmd) ? S.clipCmd.length > 0 : !!S.clipCmd;
       const canUp = !!b && b.lo > 0, canDown = !!b && b.hi < b.arr.length - 1;
       const menu = h("div", { class: "menu-drop" });
       const item = (label, key, on, fn) => menu.appendChild(h("div", {
@@ -3070,8 +3046,8 @@ const editorI18n = createEditorI18n({
       else del();
     }
     function addPageAt(i) { ev.pages.splice(i, 0, DataDefaults.newPage()); pageIdx = i; redrawTabs(); redrawPage(); }
-    function copyPage(i) { clipPage = RA.clone(ev.pages[i]); flashStatus("Copied page " + (i + 1)); }
-    function pastePage(i) { if (!clipPage) return; ev.pages.splice(i + 1, 0, RA.clone(clipPage)); pageIdx = i + 1; redrawTabs(); redrawPage(); }
+    function copyPage(i) { S.clipPage = RA.clone(ev.pages[i]); flashStatus("Copied page " + (i + 1)); }
+    function pastePage(i) { if (!S.clipPage) return; ev.pages.splice(i + 1, 0, RA.clone(S.clipPage)); pageIdx = i + 1; redrawTabs(); redrawPage(); }
     function movePage(i, d) {
       const j = i + d;
       if (j < 0 || j >= ev.pages.length) return;
@@ -3108,7 +3084,7 @@ const editorI18n = createEditorI18n({
       item("Move right", i < last, () => movePage(i, 1));
       sep();
       item("Copy", true, () => copyPage(i));
-      item("Paste", !!clipPage, () => pastePage(i));
+      item("Paste", !!S.clipPage, () => pastePage(i));
       item("Delete", ev.pages.length > 1, () => deletePage(i));
       document.body.appendChild(menu);
       menu.style.left = Math.max(4, Math.min(x, window.innerWidth - menu.offsetWidth - 4)) + "px";
@@ -3232,7 +3208,7 @@ const editorI18n = createEditorI18n({
       // rebuilds whenever the objective-quest selection changes (preserved from the quest system).
       const objWrap = h("div", { class: "prop-ctrl" });
       function redrawObjectiveList() {
-        const q = RA.byId(proj.quests, pg.cond.objectiveQuestId);
+        const q = RA.byId(S.proj.quests, pg.cond.objectiveQuestId);
         const opts = [{ v: 0, l: "(none)" }].concat(((q && q.objectives) || []).map((obj, i) => ({ v: i, l: (i + 1) + ": " + (obj.label || obj.kind || "Objective") })));
         objWrap.innerHTML = "";
         objWrap.appendChild(sel(pg.cond, "objectiveIndex", opts));
@@ -3248,9 +3224,9 @@ const editorI18n = createEditorI18n({
           propRow("Self-Switch", sel(pg.cond, "selfSw",
             [{ v: "", l: "(none)" }, { v: "A", l: "A" }, { v: "B", l: "B" }, { v: "C", l: "C" }, { v: "D", l: "D" }],
             refreshConditions)),
-          propRow("Quest", sel(pg.cond, "questId", dbOpts(proj.quests, "(none)"), refreshConditions)),
+          propRow("Quest", sel(pg.cond, "questId", dbOpts(S.proj.quests, "(none)"), refreshConditions)),
           propRow("Status", sel(pg.cond, "questStatus", stringSelOpts(["inactive", "active", "completed", "failed", "abandoned"]))),
-          propRow("Obj. quest", sel(pg.cond, "objectiveQuestId", dbOpts(proj.quests, "(none)"),
+          propRow("Obj. quest", sel(pg.cond, "objectiveQuestId", dbOpts(S.proj.quests, "(none)"),
             () => { refreshConditions(); redrawObjectiveList(); })),
           h("div", { class: "prop-row" }, h("span", { class: "prop-label" }, t("Objective")), objWrap),
           propRow("Obj. is", sel(pg.cond, "objectiveStatus", stringSelOpts(["incomplete", "completed"])))),
@@ -3290,7 +3266,7 @@ const editorI18n = createEditorI18n({
       const combatSection = section("Action Combat", [
         h("div", { class: "prop-rows" },
           propRow("Enabled", chk(pg.combat, "enabled")),
-          propRow("Enemy", sel(pg.combat, "enemyId", dbOpts(proj.enemies, "(none)"))),
+          propRow("Enemy", sel(pg.combat, "enemyId", dbOpts(S.proj.enemies, "(none)"))),
           h("div", { class: "subhead" }, "Enemy AI"),
           propRow("AI", sel(pg.combat, "ai", RA.ACTION_COMBAT_AI || [{ v: "none", l: "None" }])),
           propRow("HP override", nIn(pg.combat, "hp", 0, 9999)),
@@ -3367,10 +3343,10 @@ const editorI18n = createEditorI18n({
     { v: "heal", l: "Healing skills" },
   ];
   function traitDefault(type) {
-    if (type === "element") return { type, key: (RA.typeList(proj, "elements")[0] || { key: "physical" }).key, value: 100 };
-    if (type === "state") return { type, key: String(proj.states[0] ? proj.states[0].id : 1), value: 100 };
+    if (type === "element") return { type, key: (RA.typeList(S.proj, "elements")[0] || { key: "physical" }).key, value: 100 };
+    if (type === "state") return { type, key: String(S.proj.states[0] ? S.proj.states[0].id : 1), value: 100 };
     if (type === "skill") return { type, key: "phys", value: 100 };
-    if (type === "equip") return { type, key: "weapon", value: proj.weapons[0] ? proj.weapons[0].id : 0 };
+    if (type === "equip") return { type, key: "weapon", value: S.proj.weapons[0] ? S.proj.weapons[0].id : 0 };
     if (type === "special") return { type, key: "critChance", value: 5 };
     return { type: "param", key: "atk", value: 100 };
   }
@@ -3473,10 +3449,10 @@ const editorI18n = createEditorI18n({
   function dbTabs() {
     return [
       { label: "System", build() {
-        const s = proj.system;
+        const s = S.proj.system;
         const box = h("div", { class: "dbform single" });
         box.appendChild(field("Game title", tIn(s, "title")));
-        box.appendChild(row(field("Start map", sel(s, "startMapId", dbOpts(proj.maps))),
+        box.appendChild(row(field("Start map", sel(s, "startMapId", dbOpts(S.proj.maps))),
           field("X", nIn(s, "startX", 0, 200)), field("Y", nIn(s, "startY", 0, 200)),
           field("Facing", sel(s, "startDir", DIR_OPTS)),
           field("Start transparent", chk(s, "startTransparent"))));
@@ -3484,7 +3460,7 @@ const editorI18n = createEditorI18n({
         const partyRow = h("div");
         for (let i = 0; i < 4; i++) {
           const slot = { v: s.party[i] || 0 };
-          partyRow.appendChild(field("Member " + (i + 1), sel(slot, "v", dbOpts(proj.actors, "(empty)"), () => {
+          partyRow.appendChild(field("Member " + (i + 1), sel(slot, "v", dbOpts(S.proj.actors, "(empty)"), () => {
             s.party[i] = slot.v || undefined;
             s.party = s.party.filter(Boolean);
             touch();
@@ -3539,7 +3515,7 @@ const editorI18n = createEditorI18n({
       { label: "Controls", build() {
         // The project's DEFAULT key/gamepad bindings (proj.system.input) — the controls a NEW
         // player starts with. Mirrors the in-game rebinder; replaces the old localStorage snippet.
-        const s = proj.system;
+        const s = S.proj.system;
         const box = h("div", { class: "dbform single" });
         box.appendChild(h("div", { class: "subhead" }, "Default controls"));
         box.appendChild(h("div", { class: "dim" }, "The key/gamepad bindings a NEW player starts with. Players who change their controls in-game keep their own settings — editing these won't override them."));
@@ -3654,8 +3630,8 @@ const editorI18n = createEditorI18n({
         return box;
       } },
       { label: "Actors", build: () => listFormTab({
-        list: () => proj.actors,
-        blank: () => ({ id: 0, name: "Actor", classId: proj.classes[0].id, level: 1, charset: "hero", weaponId: 0, armorId: 0 }),
+        list: () => S.proj.actors,
+        blank: () => ({ id: 0, name: "Actor", classId: S.proj.classes[0].id, level: 1, charset: "hero", weaponId: 0, armorId: 0 }),
         form(e, box, redrawList) {
           const preview = h("span", { class: "char-preview" });
           function rp() {
@@ -3663,15 +3639,15 @@ const editorI18n = createEditorI18n({
             const ci = Assets.charsetIndex(e.charset);
             if (ci >= 0) { preview.appendChild(Assets.faceCanvas(ci)); }
           }
-          box.appendChild(row(field("Name", nameRefresher(e, redrawList)), field("Class", sel(e, "classId", dbOpts(proj.classes))), field("Initial level", nIn(e, "level", 1, 99))));
+          box.appendChild(row(field("Name", nameRefresher(e, redrawList)), field("Class", sel(e, "classId", dbOpts(S.proj.classes))), field("Initial level", nIn(e, "level", 1, 99))));
           box.appendChild(row(field("Sprite", sel(e, "charset", charsetOpts(true), rp)), preview));
-          box.appendChild(row(field("Initial weapon", sel(e, "weaponId", dbOpts(proj.weapons, "(none)"))),
-            field("Initial armor", sel(e, "armorId", dbOpts(proj.armors, "(none)")))));
+          box.appendChild(row(field("Initial weapon", sel(e, "weaponId", dbOpts(S.proj.weapons, "(none)"))),
+            field("Initial armor", sel(e, "armorId", dbOpts(S.proj.armors, "(none)")))));
           rp();
         },
       }) },
       { label: "Classes", build: () => listFormTab({
-        list: () => proj.classes,
+        list: () => S.proj.classes,
         blank: () => ({ id: 0, name: "Class", icon: 0, base: { mhp: 40, mmp: 12, atk: 10, def: 9, mat: 8, mdf: 8, agi: 8 },
           growth: { mhp: 7, mmp: 2, atk: 2, def: 1.8, mat: 1.8, mdf: 1.8, agi: 1.5 }, traits: [], learnings: [] }),
         form(e, box, redrawList) {
@@ -3696,7 +3672,7 @@ const editorI18n = createEditorI18n({
               return elementSelOpts();
             }
             if (t.type === "state") {
-              const opts = dbOpts(proj.states);
+              const opts = dbOpts(S.proj.states);
               opts.stringValues = true;
               return opts;
             }
@@ -3730,14 +3706,14 @@ const editorI18n = createEditorI18n({
               });
               const keySelect = sel(t, "key", traitKeyOptions(t), () => {
                 if (t.type === "equip") {
-                  const db = t.key === "armor" ? proj.armors : proj.weapons;
+                  const db = t.key === "armor" ? S.proj.armors : S.proj.weapons;
                   if (!db.some((item) => item.id === Number(t.value))) t.value = db[0] ? db[0].id : 0;
                   redrawTraits();
                 }
               });
               let valueControl;
               if (t.type === "equip") {
-                const db = t.key === "armor" ? proj.armors : proj.weapons;
+                const db = t.key === "armor" ? S.proj.armors : S.proj.weapons;
                 valueControl = field("Allowed item", sel(t, "value", dbOpts(db, "(none)")));
               } else {
                 const max = t.type === "special" && t.key === "critChance" ? 100 : 999;
@@ -3789,12 +3765,12 @@ const editorI18n = createEditorI18n({
             lbox.innerHTML = "";
             (e.learnings || []).forEach((l, i) => {
               lbox.appendChild(h("div", { class: "minirow" },
-                h("span", null, "Lv"), nIn(l, "level", 1, 99), sel(l, "skillId", dbOpts(proj.skills)),
+                h("span", null, "Lv"), nIn(l, "level", 1, 99), sel(l, "skillId", dbOpts(S.proj.skills)),
                 h("button", { class: "mini", onclick() { e.learnings.splice(i, 1); touch(); redrawL(); } }, "✕")));
             });
             lbox.appendChild(h("button", { class: "mini", onclick() {
               e.learnings = e.learnings || [];
-              e.learnings.push({ level: 1, skillId: proj.skills[0] ? proj.skills[0].id : 1 });
+              e.learnings.push({ level: 1, skillId: S.proj.skills[0] ? S.proj.skills[0].id : 1 });
               touch(); redrawL();
             } }, "+ add skill"));
           }
@@ -3804,7 +3780,7 @@ const editorI18n = createEditorI18n({
         },
       }) },
       { label: "Skills", build: () => listFormTab({
-        list: () => proj.skills,
+        list: () => S.proj.skills,
         blank: () => ({ id: 0, name: "Skill", icon: 8, type: "magic", power: 20, mp: 5, scope: "enemy", color: "#f07030", stateId: 0, stateOp: "add", stateChance: 100 }),
         form(e, box, redrawList) {
           if (!e.element) e.element = RA.elementOfSkill(e);
@@ -3820,13 +3796,13 @@ const editorI18n = createEditorI18n({
           if (e.stateChance == null) e.stateChance = 100;
           box.appendChild(h("div", { class: "subhead" }, "State effect (optional)"));
           box.appendChild(row(field("Effect", sel(e, "stateOp", [{ v: "add", l: "Add state" }, { v: "remove", l: "Remove state" }])),
-            field("State", sel(e, "stateId", dbOpts(proj.states, "(none)"))),
+            field("State", sel(e, "stateId", dbOpts(S.proj.states, "(none)"))),
             field("Chance %", nIn(e, "stateChance", 0, 100))));
           box.appendChild(h("div", { class: "dim" }, "Damage: physical = power + 2·ATK − 1.2·DEF · magical = power + 2·MAT − 1.5·MDF · heal = power + 1.2·MAT. The state effect rolls per target hit (see the States tab)."));
         },
       }) },
       { label: "Items", build: () => listFormTab({
-        list: () => proj.items,
+        list: () => S.proj.items,
         blank: () => ({ id: 0, name: "Item", icon: 24, price: 50, hp: 50, mp: 0, desc: "" }),
         form(e, box, redrawList) {
           box.appendChild(row(field("Name", nameRefresher(e, redrawList)), iconPickerField(e, redrawList), field("Price", nIn(e, "price", 0))));
@@ -3835,7 +3811,7 @@ const editorI18n = createEditorI18n({
         },
       }) },
       { label: "Weapons", build: () => listFormTab({
-        list: () => proj.weapons,
+        list: () => S.proj.weapons,
         blank: () => ({ id: 0, name: "Weapon", icon: 48, price: 100, wtypeId: 1, params: { atk: 5 } }),
         form(e, box, redrawList) {
           e.params = e.params || {};
@@ -3847,7 +3823,7 @@ const editorI18n = createEditorI18n({
         },
       }) },
       { label: "Armors", build: () => listFormTab({
-        list: () => proj.armors,
+        list: () => S.proj.armors,
         blank: () => ({ id: 0, name: "Armor", icon: 56, price: 80, atypeId: 1, etypeId: 4, params: { def: 4 } }),
         form(e, box, redrawList) {
           e.params = e.params || {};
@@ -3860,7 +3836,7 @@ const editorI18n = createEditorI18n({
         },
       }) },
       { label: "Enemies", build: () => listFormTab({
-        list: () => proj.enemies,
+        list: () => S.proj.enemies,
         blank: () => ({ id: 0, name: "Enemy", sprite: "slime", color: "#5aa84f",
           stats: { mhp: 30, atk: 10, def: 6, mat: 5, mdf: 5, agi: 6 }, exp: 10, gold: 10, actions: [{ skillId: 0, weight: 5 }] }),
         form(e, box, redrawList) {
@@ -3882,7 +3858,7 @@ const editorI18n = createEditorI18n({
             abox.innerHTML = "";
             (e.actions || []).forEach((a, i) => {
               abox.appendChild(h("div", { class: "minirow" },
-                sel(a, "skillId", [{ v: 0, l: "(basic attack)" }].concat(dbOpts(proj.skills))),
+                sel(a, "skillId", [{ v: 0, l: "(basic attack)" }].concat(dbOpts(S.proj.skills))),
                 h("span", null, "weight"), nIn(a, "weight", 1, 99),
                 h("button", { class: "mini", onclick() { e.actions.splice(i, 1); touch(); redrawA(); } }, "✕")));
             });
@@ -3899,7 +3875,7 @@ const editorI18n = createEditorI18n({
         },
       }) },
       { label: "Troops", build: () => listFormTab({
-        list: () => proj.troops,
+        list: () => S.proj.troops,
         blank: () => ({ id: 0, name: "Troop", enemies: [] }),
         form(e, box, redrawList) {
           box.appendChild(field("Name", nameRefresher(e, redrawList)));
@@ -3908,7 +3884,7 @@ const editorI18n = createEditorI18n({
             mbox.innerHTML = "";
             for (let i = 0; i < 4; i++) {
               const slot = { v: e.enemies[i] || 0 };
-              mbox.appendChild(field("Slot " + (i + 1), sel(slot, "v", dbOpts(proj.enemies, "(empty)"), () => {
+              mbox.appendChild(field("Slot " + (i + 1), sel(slot, "v", dbOpts(S.proj.enemies, "(empty)"), () => {
                 const arr = [];
                 const slots = mbox.querySelectorAll("select");
                 slots.forEach((s2) => { const v = Number(s2.value); if (v) arr.push(v); });
@@ -3923,7 +3899,7 @@ const editorI18n = createEditorI18n({
         },
       }) },
       { label: "Common Events", build: () => listFormTab({
-        list: () => proj.commonEvents,
+        list: () => S.proj.commonEvents,
         allowEmpty: true,
         blank: () => RA.defaultCommonEvent(),
         form(e, box, redrawList) {
@@ -3947,7 +3923,7 @@ const editorI18n = createEditorI18n({
         },
       }) },
       { label: "Quests", build: () => listFormTab({
-        list: () => proj.quests,
+        list: () => S.proj.quests,
         allowEmpty: true,
         reorderable: true,
         blank: () => ({
@@ -3992,8 +3968,8 @@ const editorI18n = createEditorI18n({
           }
           function questWarnings() {
             const warnings = [];
-            const questById = (id) => RA.byId(proj.quests, Number(id) || 0);
-            const itemDbFor = (kind) => kind === "weapon" ? proj.weapons : kind === "armor" ? proj.armors : proj.items;
+            const questById = (id) => RA.byId(S.proj.quests, Number(id) || 0);
+            const itemDbFor = (kind) => kind === "weapon" ? S.proj.weapons : kind === "armor" ? S.proj.armors : S.proj.items;
             if (!e.objectives.length) pushQuestWarning(warnings, "This quest has no objectives.");
 
             const seenNext = new Set();
@@ -4023,10 +3999,10 @@ const editorI18n = createEditorI18n({
             e.failConditions.forEach((fc) => {
               if (fc.kind === "battleLose") {
                 const id = Number(fc.troopId) || 0;
-                if (id && !RA.byId(proj.troops, id)) pushQuestWarning(warnings, "Fail condition references missing troop #" + id + ".");
+                if (id && !RA.byId(S.proj.troops, id)) pushQuestWarning(warnings, "Fail condition references missing troop #" + id + ".");
               } else if (fc.kind === "enemyDefeatCount") {
                 const id = Number(fc.enemyId) || 0;
-                if (id && !RA.byId(proj.enemies, id)) pushQuestWarning(warnings, "Fail condition references missing enemy #" + id + ".");
+                if (id && !RA.byId(S.proj.enemies, id)) pushQuestWarning(warnings, "Fail condition references missing enemy #" + id + ".");
               }
             });
 
@@ -4034,14 +4010,14 @@ const editorI18n = createEditorI18n({
               const idx = i + 1;
               if (obj.kind === "kill") {
                 const id = Number(obj.enemyId) || 0;
-                if (id && !RA.byId(proj.enemies, id)) pushQuestWarning(warnings, "Objective " + idx + " references missing enemy #" + id + ".");
+                if (id && !RA.byId(S.proj.enemies, id)) pushQuestWarning(warnings, "Objective " + idx + " references missing enemy #" + id + ".");
               } else if (obj.kind === "fetch") {
                 const kind = obj.itemKind || "item";
                 const id = Number(obj.id) || 0;
                 if (id && !RA.byId(itemDbFor(kind), id)) pushQuestWarning(warnings, "Objective " + idx + " references missing " + kind + " #" + id + ".");
                 const mapId = Number(obj.targetMapId) || 0;
                 const eventId = Number(obj.targetEventId) || 0;
-                const map = mapId ? RA.byId(proj.maps, mapId) : null;
+                const map = mapId ? RA.byId(S.proj.maps, mapId) : null;
                 if (mapId && !map) pushQuestWarning(warnings, "Objective " + idx + " references missing turn-in map #" + mapId + ".");
                 if (eventId && !mapId) pushQuestWarning(warnings, "Objective " + idx + " has a turn-in event but no turn-in map.");
                 if (map && eventId && !(map.events || []).some((ev2) => ev2.id === eventId)) {
@@ -4076,7 +4052,7 @@ const editorI18n = createEditorI18n({
                   if (!rw.itemKind) rw.itemKind = "item";
                   const entryWrap = h("span");
                   const redrawEntry = () => {
-                    const arr = rw.itemKind === "weapon" ? proj.weapons : rw.itemKind === "armor" ? proj.armors : proj.items;
+                    const arr = rw.itemKind === "weapon" ? S.proj.weapons : rw.itemKind === "armor" ? S.proj.armors : S.proj.items;
                     if (!arr.some((it) => it.id === Number(rw.id))) rw.id = arr[0] ? arr[0].id : 0;
                     entryWrap.innerHTML = "";
                     entryWrap.appendChild(sel(rw, "id", dbOpts(arr, "(none)")));
@@ -4097,7 +4073,7 @@ const editorI18n = createEditorI18n({
                   rowEl.appendChild(sel(rw, "op", [{ v: "set", l: "Set" }, { v: "add", l: "Add" }, { v: "sub", l: "Sub" }]));
                   rowEl.appendChild(nIn(rw, "amount", -9999999, 9999999));
                 } else if (rw.kind === "questUnlock" || rw.kind === "questLock") {
-                  rowEl.appendChild(sel(rw, "questId", dbOpts(proj.quests, "(none)")));
+                  rowEl.appendChild(sel(rw, "questId", dbOpts(S.proj.quests, "(none)")));
                 } else {
                   rowEl.appendChild(nIn(rw, "amount", 0, 9999999));
                 }
@@ -4130,9 +4106,9 @@ const editorI18n = createEditorI18n({
                   rowEl.appendChild(field("Cmp", sel(fc, "cmp", [{ v: ">=", l: "≥" }, { v: "==", l: "=" }, { v: "<=", l: "≤" }])));
                   rowEl.appendChild(field("Value", nIn(fc, "val", -9999999, 9999999)));
                 } else if (fc.kind === "battleLose") {
-                  rowEl.appendChild(field("Troop", sel(fc, "troopId", dbOpts(proj.troops, "(none)"))));
+                  rowEl.appendChild(field("Troop", sel(fc, "troopId", dbOpts(S.proj.troops, "(none)"))));
                 } else if (fc.kind === "enemyDefeatCount") {
-                  rowEl.appendChild(field("Enemy", sel(fc, "enemyId", dbOpts(proj.enemies, "(none)"))));
+                  rowEl.appendChild(field("Enemy", sel(fc, "enemyId", dbOpts(S.proj.enemies, "(none)"))));
                   rowEl.appendChild(field("Losses", nIn(fc, "count", 1, 99)));
                 } else {
                   rowEl.appendChild(h("div", { class: "dim" }, "Manual fail only — use the Fail Quest command."));
@@ -4164,7 +4140,7 @@ const editorI18n = createEditorI18n({
                   { v: "var", l: "Variable" },
                 ], redraw));
                 if (rq.kind === "quest") {
-                  const questOpts = [{ v: 0, l: "(none)" }].concat(proj.quests.filter((q) => q !== e).map((q) => ({ v: q.id, l: q.id + ": " + (q.name || "Quest") })));
+                  const questOpts = [{ v: 0, l: "(none)" }].concat(S.proj.quests.filter((q) => q !== e).map((q) => ({ v: q.id, l: q.id + ": " + (q.name || "Quest") })));
                   rowEl.appendChild(sel(rq, "questId", questOpts));
                   rowEl.appendChild(sel(rq, "status", stringSelOpts(["active", "completed", "failed", "abandoned"])));
                 } else if (rq.kind === "switch") {
@@ -4201,18 +4177,18 @@ const editorI18n = createEditorI18n({
                 rowEl.appendChild(field("Label", tIn(obj, "label")));
                 rowEl.appendChild(field("Count", nIn(obj, "count", 1, 999)));
                 if (obj.kind === "kill") {
-                  rowEl.appendChild(field("Enemy", sel(obj, "enemyId", dbOpts(proj.enemies, "(none)"))));
+                  rowEl.appendChild(field("Enemy", sel(obj, "enemyId", dbOpts(S.proj.enemies, "(none)"))));
                 } else if (obj.kind === "fetch") {
                   const itemWrap = h("span");
                   const eventWrap = h("span");
                   const redrawItem = () => {
-                    const arr = obj.itemKind === "weapon" ? proj.weapons : obj.itemKind === "armor" ? proj.armors : proj.items;
+                    const arr = obj.itemKind === "weapon" ? S.proj.weapons : obj.itemKind === "armor" ? S.proj.armors : S.proj.items;
                     if (!arr.some((it) => it.id === Number(obj.id))) obj.id = arr[0] ? arr[0].id : 0;
                     itemWrap.innerHTML = "";
                     itemWrap.appendChild(sel(obj, "id", dbOpts(arr, "(none)")));
                   };
                   const redrawEvent = () => {
-                    const map = RA.byId(proj.maps, obj.targetMapId);
+                    const map = RA.byId(S.proj.maps, obj.targetMapId);
                     const eventOpts = [{ v: 0, l: "(any)" }].concat((map || { events: [] }).events.map((ev2) => ({ v: ev2.id, l: ev2.id + ": " + ev2.name })));
                     eventWrap.innerHTML = "";
                     eventWrap.appendChild(sel(obj, "targetEventId", eventOpts));
@@ -4225,7 +4201,7 @@ const editorI18n = createEditorI18n({
                   ], redrawItem)));
                   redrawItem();
                   rowEl.appendChild(field("Entry", itemWrap));
-                  rowEl.appendChild(field("Turn-in map", sel(obj, "targetMapId", dbOpts(proj.maps, "(any)"), redrawEvent)));
+                  rowEl.appendChild(field("Turn-in map", sel(obj, "targetMapId", dbOpts(S.proj.maps, "(any)"), redrawEvent)));
                   redrawEvent();
                   rowEl.appendChild(field("Turn-in event", eventWrap));
                   rowEl.appendChild(field("Consume on complete", chk(obj, "consumeOnComplete")));
@@ -4235,8 +4211,8 @@ const editorI18n = createEditorI18n({
               });
               panel.appendChild(h("div", { class: "minirow" },
                 h("button", { class: "mini", onclick() { e.objectives.push({ kind: "event", label: "Talk to target", count: 1 }); touch(); redraw(); } }, "+ Event objective"),
-                h("button", { class: "mini", onclick() { e.objectives.push({ kind: "kill", label: "Defeat target enemies", enemyId: proj.enemies[0] ? proj.enemies[0].id : 0, count: 3 }); touch(); redraw(); } }, "+ Kill objective"),
-                h("button", { class: "mini", onclick() { e.objectives.push({ kind: "fetch", label: "Bring requested item", itemKind: "item", id: proj.items[0] ? proj.items[0].id : 0, count: 1, targetMapId: 0, targetEventId: 0, consumeOnComplete: false }); touch(); redraw(); } }, "+ Fetch objective")));
+                h("button", { class: "mini", onclick() { e.objectives.push({ kind: "kill", label: "Defeat target enemies", enemyId: S.proj.enemies[0] ? S.proj.enemies[0].id : 0, count: 3 }); touch(); redraw(); } }, "+ Kill objective"),
+                h("button", { class: "mini", onclick() { e.objectives.push({ kind: "fetch", label: "Bring requested item", itemKind: "item", id: S.proj.items[0] ? S.proj.items[0].id : 0, count: 1, targetMapId: 0, targetEventId: 0, consumeOnComplete: false }); touch(); redraw(); } }, "+ Fetch objective")));
               renderWarnings();
             }
             redraw();
@@ -4279,7 +4255,7 @@ const editorI18n = createEditorI18n({
             nextBox.innerHTML = "";
             e.nextQuestIds.forEach((id, i) => {
               const slot = { id };
-              const options = [{ v: 0, l: "(none)" }].concat(proj.quests.filter((q) => q !== e).map((q) => ({ v: q.id, l: q.id + ": " + (q.name || "Quest") })));
+              const options = [{ v: 0, l: "(none)" }].concat(S.proj.quests.filter((q) => q !== e).map((q) => ({ v: q.id, l: q.id + ": " + (q.name || "Quest") })));
               nextBox.appendChild(h("div", { class: "minirow" },
                 sel(slot, "id", options, () => {
                   e.nextQuestIds[i] = slot.id;
@@ -4289,7 +4265,7 @@ const editorI18n = createEditorI18n({
                 h("button", { class: "mini", onclick() { e.nextQuestIds.splice(i, 1); touch(); redrawNext(); } }, "✕")));
             });
             nextBox.appendChild(h("button", { class: "mini", onclick() {
-              const candidate = proj.quests.find((q) => q !== e && !e.nextQuestIds.includes(q.id));
+              const candidate = S.proj.quests.find((q) => q !== e && !e.nextQuestIds.includes(q.id));
               if (!candidate) return;
               e.nextQuestIds.push(candidate.id);
               touch(); redrawNext();
@@ -4304,7 +4280,7 @@ const editorI18n = createEditorI18n({
         },
       }) },
       { label: "States", build: () => listFormTab({
-        list: () => proj.states,
+        list: () => S.proj.states,
         blank: () => ({ id: 0, name: "State", icon: 12, color: "#a050d8", restrict: "none", hpTurn: 0, minTurns: 2, maxTurns: 4, removeAtEnd: true }),
         form(e, box, redrawList) {
           const colorIn = h("input", { type: "color", value: e.color || "#a050d8", oninput(ev2) { e.color = ev2.target.value; touch(); } });
@@ -4340,14 +4316,14 @@ const editorI18n = createEditorI18n({
   ];
 
   function tilesetTab() {
-    if (!Array.isArray(proj.tilesets) || !proj.tilesets.length) {
-      proj.tilesets = [{ id: 1, name: "Default", tileProps: {} }];
+    if (!Array.isArray(S.proj.tilesets) || !S.proj.tilesets.length) {
+      S.proj.tilesets = [{ id: 1, name: "Default", tileProps: {} }];
     }
 
     const wrap = h("div", { class: "dbtab" });
     const listEl = h("ul", { class: "dblist" });
     const formEl = h("div", { class: "dbform" });
-    let cur = proj.tilesets[0] || null;
+    let cur = S.proj.tilesets[0] || null;
     let selTileIdx = -1;
     let tileBtns = [];
     let detailEl = null;
@@ -4485,7 +4461,7 @@ const editorI18n = createEditorI18n({
 
     function redrawList() {
       listEl.innerHTML = "";
-      for (const ts of proj.tilesets) {
+      for (const ts of S.proj.tilesets) {
         const li = h("li", { class: ts === cur ? "sel" : "", onclick() { cur = ts; selTileIdx = -1; redrawList(); redrawForm(); } },
           h("span", { class: "db-entry-id" }, ts.id + ":"),
           h("span", null, ts.name || "—"));
@@ -4495,22 +4471,22 @@ const editorI18n = createEditorI18n({
 
     const btns = h("div", { class: "dbbtns" },
       h("button", { onclick() {
-        const e = { id: RA.nextId(proj.tilesets), name: "Tileset", tileProps: {} };
-        proj.tilesets.push(e);
+        const e = { id: RA.nextId(S.proj.tilesets), name: "Tileset", tileProps: {} };
+        S.proj.tilesets.push(e);
         cur = e; touch(); redrawList(); redrawForm();
       } }, "+ New"),
       h("button", { onclick() {
         if (!cur) return;
-        if (proj.tilesets.length <= 1) { alert("Keep at least one tileset."); return; }
+        if (S.proj.tilesets.length <= 1) { alert("Keep at least one tileset."); return; }
         confirmBox("Delete \"" + cur.name + "\"?", () => {
-          proj.tilesets.splice(proj.tilesets.indexOf(cur), 1);
-          cur = proj.tilesets[0] || null;
+          S.proj.tilesets.splice(S.proj.tilesets.indexOf(cur), 1);
+          cur = S.proj.tilesets[0] || null;
           touch(); redrawList(); redrawForm();
         });
       } }, "Delete"),
     );
 
-    cur = proj.tilesets[0] || null;
+    cur = S.proj.tilesets[0] || null;
     redrawList(); redrawForm();
     wrap.appendChild(h("div", { class: "dbside" }, btns, listEl));
     wrap.appendChild(formEl);
@@ -4554,7 +4530,7 @@ const editorI18n = createEditorI18n({
   }
 
   function typesTab() {
-    const t = proj.system.types;
+    const t = S.proj.system.types;
     const box = h("div", { class: "dbform single" });
     box.appendChild(h("div", { class: "dim", style: "margin-bottom:10px" },
       "Define the categories your game uses. Elements drive resistances (set them on Classes ▸ Traits and pick one per skill). " +
@@ -4577,7 +4553,7 @@ const editorI18n = createEditorI18n({
   }
 
   function nameListTab(key, prefix, maxEntries) {
-    const names = proj.system[key];
+    const names = S.proj.system[key];
     const box = h("div", { class: "dbform single namegrid" });
     const addBtn = h("button", { class: "namegrid-add" });
 
@@ -4652,7 +4628,7 @@ atlas.onMapLoad((map) => {
 });`;
 
   function openPluginManager() {
-    const plugins = proj.plugins;
+    const plugins = S.proj.plugins;
     let cur = plugins[0] || null;
     const list = h("ul", { class: "plug-list" });
     const nameIn = h("input", { type: "text", placeholder: "Plugin name", oninput(e) { if (cur) { cur.name = e.target.value; touch(); redrawList(); } } });
@@ -4851,7 +4827,7 @@ atlas.onMapLoad((map) => {
       }
       const ql = query.toLowerCase();
       const matches = [];
-      for (const m of proj.maps) {
+      for (const m of S.proj.maps) {
         for (const ev of m.events) {
           ev.pages.forEach((pg, pi) => {
             let hit = null;
@@ -4889,13 +4865,13 @@ atlas.onMapLoad((map) => {
       for (const r of matches) {
         results.appendChild(h("div", { class: "search-row", onclick() {
           dlg.close();
-          curMapId = r.m.id;
+          S.curMapId = r.m.id;
           setMode("event");
-          selectedEvent = r.ev;
+          S.selectedEvent = r.ev;
           rebuildMapList(); renderMap(); refreshToolbar();
           const sc = $("mapscroll");
-          sc.scrollLeft = r.ev.x * TILE * zoom - sc.clientWidth / 2;
-          sc.scrollTop = r.ev.y * TILE * zoom - sc.clientHeight / 2;
+          sc.scrollLeft = r.ev.x * TILE * S.zoom - sc.clientWidth / 2;
+          sc.scrollTop = r.ev.y * TILE * S.zoom - sc.clientHeight / 2;
           openEventEditor(r.ev);
         } },
           h("b", null, r.m.name + " — " + r.ev.name),
@@ -4960,7 +4936,7 @@ atlas.onMapLoad((map) => {
       } },
       { label: "Enemies", build() {
         const grid = h("div", { class: "res-grid" });
-        for (const e of proj.enemies) {
+        for (const e of S.proj.enemies) {
           grid.appendChild(resCell(copyCanvas(Assets.enemyCanvas(e.sprite, e.color, 96)),
             e.name, "enemy-" + e.name.toLowerCase().replace(/\W+/g, "-"), Assets.enemyCanvas(e.sprite, e.color, 264)));
         }
@@ -5050,9 +5026,9 @@ atlas.onMapLoad((map) => {
         editing.params = paramsOf(work);
         Assets.registerHuman(editing.key, editing.name, editing.params);
       } else {
-        const id = RA.nextId(proj.customChars.length ? proj.customChars : [{ id: 0 }]);
+        const id = RA.nextId(S.proj.customChars.length ? S.proj.customChars : [{ id: 0 }]);
         const entry = { id, key: "cg" + id, name: work.name, params: paramsOf(work) };
-        proj.customChars.push(entry);
+        S.proj.customChars.push(entry);
         Assets.registerHuman(entry.key, entry.name, entry.params);
         editing = entry;
       }
@@ -5062,14 +5038,14 @@ atlas.onMapLoad((map) => {
     }
     function redrawList() {
       listEl.innerHTML = "";
-      for (const c of proj.customChars) {
+      for (const c of S.proj.customChars) {
         listEl.appendChild(h("li", { class: c === editing ? "sel" : "", onclick() {
           editing = c;
           work = Object.assign({ name: c.name }, c.params);
           redrawForm(); redrawPreview();
         } }, c.name));
       }
-      if (!proj.customChars.length) listEl.appendChild(h("li", { class: "dim" }, "(none yet)"));
+      if (!S.proj.customChars.length) listEl.appendChild(h("li", { class: "dim" }, "(none yet)"));
     }
     const side = h("div", { class: "cg-side" },
       h("div", { class: "subhead", style: "margin:0" }, "Saved characters"),
@@ -5078,7 +5054,7 @@ atlas.onMapLoad((map) => {
         if (!editing) return;
         confirmBox('Delete "' + editing.name + '"? Actors/events using it will show no sprite.', () => {
           Assets.removeCharset(editing.key);
-          proj.customChars.splice(proj.customChars.indexOf(editing), 1);
+          S.proj.customChars.splice(S.proj.customChars.indexOf(editing), 1);
           editing = null;
           touch(); redrawList(); redrawForm(); renderMap();
         });
@@ -5325,12 +5301,12 @@ atlas.onMapLoad((map) => {
 
   act("new", { label: "New Project…", icon: "new", tip: "New project (resets to the bundled sample game)", run() {
     confirmBox("Start a fresh project (the bundled sample game)? Your current project will be replaced — Export first if you want to keep it.", () => {
-      proj = DataDefaults.newProject();
-      Assets.registerCustomChars(proj.customChars);
-      Assets.bindExternalAssets(proj);
-      curMapId = proj.maps[0].id;
-      selectedEvent = null; selection = null; pasteMode = null;
-      undoStack.length = 0; redoStack.length = 0;
+      S.proj = DataDefaults.newProject();
+      Assets.registerCustomChars(S.proj.customChars);
+      Assets.bindExternalAssets(S.proj);
+      S.curMapId = S.proj.maps[0].id;
+      S.selectedEvent = null; S.selection = null; S.pasteMode = null;
+      S.undoStack.length = 0; S.redoStack.length = 0;
       rebuildAll(); touch();
     });
   } });
@@ -5355,39 +5331,39 @@ atlas.onMapLoad((map) => {
   act("mapprops", { label: "Map Properties…", run: openMapProps });
   act("hdpreview", { label: "HD-2D Preview", icon: "hd2d", key: "F2", tip: "Toggle the live HD-2D preview panel (uses this map's HD-2D settings)", active: () => !!hdPanel, run: toggleHdPreview });
 
-  act("undo", { label: "Undo", icon: "undo", key: "Ctrl+Z", enabled: () => undoStack.length > 0, run: undo });
-  act("redo", { label: "Redo", icon: "redo", key: "Ctrl+Y", enabled: () => redoStack.length > 0, run: redo });
+  act("undo", { label: "Undo", icon: "undo", key: "Ctrl+Z", enabled: () => S.undoStack.length > 0, run: undo });
+  act("redo", { label: "Redo", icon: "redo", key: "Ctrl+Y", enabled: () => S.redoStack.length > 0, run: redo });
   act("cut", { label: "Cut", icon: "cut", key: "Ctrl+X", tip: "Cut the selected area / event", enabled: canCopy, run: () => copySelection(true) });
   act("copy", { label: "Copy", icon: "copy", key: "Ctrl+C", tip: "Copy the selected area / event (Shift+drag selects tiles)", enabled: canCopy, run: () => copySelection(false) });
-  act("paste", { label: "Paste", icon: "paste", key: "Ctrl+V", tip: "Paste — then click the map to place", enabled: () => !!(clipTiles || clipEvent), run: startPaste });
-  act("deselect", { label: "Clear Selection", key: "Esc", enabled: () => !!(selection || pasteMode), run: clearSelection });
+  act("paste", { label: "Paste", icon: "paste", key: "Ctrl+V", tip: "Paste — then click the map to place", enabled: () => !!(S.clipTiles || S.clipEvent), run: startPaste });
+  act("deselect", { label: "Clear Selection", key: "Esc", enabled: () => !!(S.selection || S.pasteMode), run: clearSelection });
 
-  act("mode-map", { label: "Map (Tile) Mode", icon: "map", key: "Tab ⇆", tip: "Tile layer — draw the map", active: () => mode === "map", run: () => setMode("map") });
-  act("mode-event", { label: "Event Mode", icon: "event", key: "Tab ⇆", tip: "Event layer — place and edit events", active: () => mode === "event", run: () => setMode("event") });
-  act("mode-pass", { label: "Passability Mode", icon: "pass", key: "Tab ⇆", tip: "Passability — click tiles to cycle auto → ✕ block → ○ pass", active: () => mode === "pass", run: () => setMode("pass") });
+  act("mode-map", { label: "Map (Tile) Mode", icon: "map", key: "Tab ⇆", tip: "Tile layer — draw the map", active: () => S.mode === "map", run: () => setMode("map") });
+  act("mode-event", { label: "Event Mode", icon: "event", key: "Tab ⇆", tip: "Event layer — place and edit events", active: () => S.mode === "event", run: () => setMode("event") });
+  act("mode-pass", { label: "Passability Mode", icon: "pass", key: "Tab ⇆", tip: "Passability — click tiles to cycle auto → ✕ block → ○ pass", active: () => S.mode === "pass", run: () => setMode("pass") });
   act("mode-height", { label: "Height Mode (HD-2D)", icon: "height", key: "Tab ⇆",
     tip: "Heights — paint HD-2D elevation with the Pen / Rectangle / Circle / Fill tools (digits 0–9 set the value)",
-    active: () => mode === "height", run: () => setMode("height") });
-  act("mode-start", { label: "Set Start Position…", active: () => mode === "start", run() {
+    active: () => S.mode === "height", run: () => setMode("height") });
+  act("mode-start", { label: "Set Start Position…", active: () => S.mode === "start", run() {
     setMode("start");
     flashStatus("Click the map to set the player start position");
   } });
 
   [["auto", "`"], ["ground", "1"], ["decor", "2"], ["decor2", "3"], ["over", "4"]].forEach(([ln, key]) => {
     act("layer-" + ln, { label: LAYER_LABELS[ln], icon: "layer-" + ln, key,
-      active: () => layer === ln && mode === "map",
-      run() { if (mode !== "map") setMode("map"); setLayer(ln); } });
+      active: () => S.layer === ln && S.mode === "map",
+      run() { if (S.mode !== "map") setMode("map"); setLayer(ln); } });
   });
   [["pen", "Q"], ["erase", "W"], ["rect", "E"], ["circle", "R"], ["fill", "T"], ["shadow", "Y"]].forEach(([t, key]) => {
     act("tool-" + t, { label: TOOL_LABELS[t], icon: t, key,
       tip: t === "shadow" ? "Shadow Pen — left paints a shadow quadrant, right erases" : TOOL_LABELS[t],
-      active: () => tool === t && (mode === "map" || mode === "height"),
-      run() { if (mode !== "map" && mode !== "height") setMode("map"); setTool(t); } });
+      active: () => S.tool === t && (S.mode === "map" || S.mode === "height"),
+      run() { if (S.mode !== "map" && S.mode !== "height") setMode("map"); setTool(t); } });
   });
 
   act("zoomin", { label: "Zoom In", icon: "zoomin", key: "+", run: () => zoomStep(1) });
   act("zoomout", { label: "Zoom Out", icon: "zoomout", key: "−", run: () => zoomStep(-1) });
-  act("zoom1", { label: "Zoom 1:1", icon: "zoom1", key: "0", tip: "Set zoom to 100%", active: () => Math.abs(zoom - 1) < 0.01, run: () => setZoom(1) });
+  act("zoom1", { label: "Zoom 1:1", icon: "zoom1", key: "0", tip: "Set zoom to 100%", active: () => Math.abs(S.zoom - 1) < 0.01, run: () => setZoom(1) });
   act("zoomfit", { label: "Fit Map In View", run: () => zoomFit() });
 
   act("db", { label: "Database…", icon: "db", key: "F1", tip: "Database — actors, items, enemies, switches…", run: openDatabase });
@@ -5507,24 +5483,24 @@ atlas.onMapLoad((map) => {
 
   // ============================ modes / zoom ============================
   function setMode(m) {
-    mode = m;
-    selectedEvent = null;
-    pasteMode = null;
+    S.mode = m;
+    S.selectedEvent = null;
+    S.pasteMode = null;
     renderMap(); refreshToolbar(); setStatus();
   }
   const MODE_CYCLE = ["map", "event", "pass", "height"]; // "start" intentionally excluded
   function cycleMode(dir) {
-    let i = MODE_CYCLE.indexOf(mode);
+    let i = MODE_CYCLE.indexOf(S.mode);
     if (i < 0) i = 0; // "start"/unexpected -> enter at "map"
     const n = MODE_CYCLE.length;
     setMode(MODE_CYCLE[(i + dir + n) % n]);
   }
   function setTool(t) {
-    tool = t;
+    S.tool = t;
     renderMap(); refreshToolbar(); setStatus();
   }
   function setLayer(l) {
-    layer = l;
+    S.layer = l;
     renderMap(); refreshToolbar(); setStatus();
   }
   function setZoom(z, pivot) {
@@ -5532,17 +5508,17 @@ atlas.onMapLoad((map) => {
     const sc = $("mapscroll");
     const px = pivot ? pivot.x : sc.clientWidth / 2;
     const py = pivot ? pivot.y : sc.clientHeight / 2;
-    const wx = (sc.scrollLeft + px - 14) / zoom;  // 14 = #mapscroll padding
-    const wy = (sc.scrollTop + py - 14) / zoom;
-    zoom = z;
+    const wx = (sc.scrollLeft + px - 14) / S.zoom;  // 14 = #mapscroll padding
+    const wy = (sc.scrollTop + py - 14) / S.zoom;
+    S.zoom = z;
     renderMap();
-    sc.scrollLeft = wx * zoom + 14 - px;
-    sc.scrollTop = wy * zoom + 14 - py;
+    sc.scrollLeft = wx * S.zoom + 14 - px;
+    sc.scrollTop = wy * S.zoom + 14 - py;
     setStatus(); refreshToolbar();
   }
   function zoomStep(d, pivot) {
     let best = 0, bd = Infinity;
-    ZOOMS.forEach((z, i) => { const dd = Math.abs(z - zoom); if (dd < bd) { bd = dd; best = i; } });
+    ZOOMS.forEach((z, i) => { const dd = Math.abs(z - S.zoom); if (dd < bd) { bd = dd; best = i; } });
     setZoom(ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, best + d))], pivot);
   }
   function zoomFit() {
@@ -5553,7 +5529,7 @@ atlas.onMapLoad((map) => {
 
   // ============================ boot / wiring ============================
   function rebuildAll() {
-    if (!RA.byId(proj.maps, curMapId)) curMapId = proj.maps[0].id;
+    if (!RA.byId(S.proj.maps, S.curMapId)) S.curMapId = S.proj.maps[0].id;
     rebuildMapList();
     renderPalette();
     renderMap();
@@ -5562,42 +5538,42 @@ atlas.onMapLoad((map) => {
   }
 
   async function boot() {
-    proj = loadStored() || DataDefaults.newProject();
-    Assets.registerCustomChars(proj.customChars);
-    await Promise.all([Assets.loadIconSet(), Assets.loadExternalAssets(proj)]);
-    mapCanvas = $("mapcanvas");
-    mapCtx = mapCanvas.getContext("2d");
-    palCanvas = $("palette");
+    S.proj = loadStored() || DataDefaults.newProject();
+    Assets.registerCustomChars(S.proj.customChars);
+    await Promise.all([Assets.loadIconSet(), Assets.loadExternalAssets(S.proj)]);
+    S.mapCanvas = $("mapcanvas");
+    S.mapCtx = S.mapCanvas.getContext("2d");
+    S.palCanvas = $("palette");
 
     editorI18n.localizeStatic();
     buildMenubar();
     buildToolbar();
 
     // palette
-    palCanvas.addEventListener("mousedown", (e) => {
-      const r = palCanvas.getBoundingClientRect();
+    S.palCanvas.addEventListener("mousedown", (e) => {
+      const r = S.palCanvas.getBoundingClientRect();
       const x = Math.floor((e.clientX - r.left) / TILE), y = Math.floor((e.clientY - r.top) / TILE);
       const id = y * Assets.PALETTE_COLS + x;
-      if (id >= 0 && Assets.tiles[id]) { selectedTile = id; renderPalette(); setStatus(); }
+      if (id >= 0 && Assets.tiles[id]) { S.selectedTile = id; renderPalette(); setStatus(); }
     });
-    palCanvas.addEventListener("mousemove", (e) => {
-      const r = palCanvas.getBoundingClientRect();
+    S.palCanvas.addEventListener("mousemove", (e) => {
+      const r = S.palCanvas.getBoundingClientRect();
       const x = Math.floor((e.clientX - r.left) / TILE), y = Math.floor((e.clientY - r.top) / TILE);
       const id = y * Assets.PALETTE_COLS + x;
-      palCanvas.title = Assets.tiles[id] ? Assets.tiles[id].name : "";
+      S.palCanvas.title = Assets.tiles[id] ? Assets.tiles[id].name : "";
     });
 
     // map canvas
-    mapCanvas.addEventListener("mousedown", onCanvasDown);
-    mapCanvas.addEventListener("mousemove", onCanvasMove);
+    S.mapCanvas.addEventListener("mousedown", onCanvasDown);
+    S.mapCanvas.addEventListener("mousemove", onCanvasMove);
     window.addEventListener("mouseup", onCanvasUp);
-    mapCanvas.addEventListener("dblclick", onCanvasDbl);
-    mapCanvas.addEventListener("contextmenu", (e) => {
+    S.mapCanvas.addEventListener("dblclick", onCanvasDbl);
+    S.mapCanvas.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      if (suppressNextCtxMenu) { suppressNextCtxMenu = false; return; }
-      if (mode === "event") openCanvasMenu(e);
+      if (S.suppressNextCtxMenu) { S.suppressNextCtxMenu = false; return; }
+      if (S.mode === "event") openCanvasMenu(e);
     });
-    mapCanvas.addEventListener("mouseleave", () => { hoverCell = null; hoverQuad = 0; renderMap(); });
+    S.mapCanvas.addEventListener("mouseleave", () => { S.hoverCell = null; S.hoverQuad = 0; renderMap(); });
 
     // ctrl+wheel zooms around the cursor
     $("mapscroll").addEventListener("wheel", (e) => {
@@ -5620,8 +5596,8 @@ atlas.onMapLoad((map) => {
       if (modalRoot().children.length) return;
       if (e.code === "Escape") {
         if (menuOpenRef) { closeMenus(); return; }
-        if (pasteMode || selection) { clearSelection(); return; }
-        if (selectedEvent) { selectedEvent = null; renderMap(); refreshToolbar(); }
+        if (S.pasteMode || S.selection) { clearSelection(); return; }
+        if (S.selectedEvent) { S.selectedEvent = null; renderMap(); refreshToolbar(); }
         return;
       }
       if (e.key === "?" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); openKeyboardShortcuts(); return; }
@@ -5646,13 +5622,13 @@ atlas.onMapLoad((map) => {
         case "F5": e.preventDefault(); runAct("play");      return;
       }
       // Height mode consumes ALL digits for the painted elevation (0–9). Must stay above the layer gate.
-      if (mode === "height" && /^Digit\d$/.test(e.code)) {
-        heightVal = Number(e.code.slice(5));
+      if (S.mode === "height" && /^Digit\d$/.test(e.code)) {
+        S.heightVal = Number(e.code.slice(5));
         setStatus();
         return;
       }
       // Tools
-      if (mode === "map" || mode === "height") {
+      if (S.mode === "map" || S.mode === "height") {
         switch (e.code) {
           case "KeyQ": setTool("pen");    return;
           case "KeyW": setTool("erase");  return;
@@ -5663,7 +5639,7 @@ atlas.onMapLoad((map) => {
         }
       }
       // Layers
-      if (mode === "map") {
+      if (S.mode === "map") {
         switch (e.code) {
           case "Backquote": setLayer("auto");   return;
           case "Digit1":    setLayer("ground"); return;
@@ -5677,7 +5653,7 @@ atlas.onMapLoad((map) => {
         case "Minus": case "NumpadSubtract": zoomStep(-1); break;
         case "Digit0": case "Numpad0": setZoom(1); break; // reset to 100% (height mode consumes 0 above)
         case "Delete": case "Backspace":
-          if (mode === "event") deleteSelectedEvent();
+          if (S.mode === "event") deleteSelectedEvent();
           break;
       }
     });

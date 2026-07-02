@@ -20,13 +20,13 @@ assert.match(
 
 assert.match(
   editorSource,
-  /if \(mode !== "pass" && mode !== "height"\) \{/,
+  /if \(S\.mode !== "pass" && S\.mode !== "height"\) \{/,
   "editor draws event pins outside Event mode",
 );
 
 assert.match(
   editorSource,
-  /const interactiveEvents = mode === "event" \|\| mode === "start";/,
+  /const interactiveEvents = S\.mode === "event" \|\| S\.mode === "start";/,
   "event editing states still get the stronger interactive marker treatment",
 );
 
