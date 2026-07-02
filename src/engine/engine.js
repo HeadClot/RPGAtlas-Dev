@@ -7,6 +7,37 @@ import { registerCommand, getCommand } from "./interpreter/registry.js";
 import { registerBuiltinCommands } from "./interpreter/commands/index.js";
 import { el, sleep, clamp, rnd, esc, sysSe, sysBgm, setSysProjectProvider } from "./util.js";
 import { UIStack, pushUI, removeUI, showList, initUiStack } from "./ui-stack.js";
+// Shared engine context (Phase 1 Stage B): imported as EC because `ctx` here is
+// the game canvas 2d context. The IIFE installs getter/setter bridges onto EC
+// (below, before the boot section) so extracted modules see this closure's
+// live state; fns carries the closure functions extracted modules call.
+import { ctx as EC, fns } from "./state/engine-context.js";
+import {
+  G,
+  expForLevel,
+  actorClass,
+  skillElement,
+  skillMpCost,
+  skillPowerRate,
+  actorIncomingRate,
+  canActorEquip,
+  sanitizeEquipment,
+  param,
+  learnedSkills,
+  makeActor,
+  gainExp,
+  addInv,
+  invCount,
+  dbFor,
+  initQuestRuntime,
+  Quests,
+  questState,
+  objectiveDone,
+  evaluateQuestFailures,
+  noteBattleFailure,
+  onEnemyKilled,
+  traitDescription,
+} from "./state/game-state.js";
 
 const _Assets = window.RPGAtlasDeps.Assets;
 const _DataDefaults = window.RPGAtlasDeps.DataDefaults;
@@ -36,6 +67,10 @@ const _createInputSystem = window.createInputSystem;
   setSysProjectProvider(() => proj); // util.js sys* helpers read the live project
   let stage, canvas, ctx, uiLayer, fader;
   initUiStack(() => uiLayer); // ui-stack.js showList appends to the live uiLayer
+  // Closure functions the extracted modules call through the fns registry.
+  // Function declarations hoist, so installing here (before initQuestRuntime
+  // below) is safe. Entries are removed as their owners move out of this file.
+  fns.refreshAllPages = refreshAllPages;
   let scene = "boot"; // boot | title | map | battle | gameover
   let menuOpen = false;
   let cameraZoom = 1;
@@ -67,6 +102,53 @@ const _createInputSystem = window.createInputSystem;
   let showMessage;
   let setMsgSpeed = null; // message-system typewriter speed setter (captured at wiring)
 
+  // ---- closure-state bridge (Phase 1 Stage B) ----
+  // Bridge this closure's mutable state onto the shared engine context (EC) so
+  // extracted modules — and the command handlers via services.ctx — read/write
+  // the SAME live values the remaining closure code does. This generalizes the
+  // old ctxScalars get/set bridge (camera/shake/flash) to every closure `let`
+  // an extracted module needs. The accessors only run at call time, so vars
+  // declared further down (map, playerOptions, loop scalars…) are fine — they
+  // are never written through EC before boot. Bridges disappear with this file
+  // at the end of Stage B, when boot.ts assigns the context's fields directly.
+  Object.defineProperties(EC, Object.getOwnPropertyDescriptors({
+    get proj() { return proj; }, set proj(v) { proj = v; },
+    get stage() { return stage; }, set stage(v) { stage = v; },
+    get canvas() { return canvas; }, set canvas(v) { canvas = v; },
+    get g2d() { return ctx; }, set g2d(v) { ctx = v; },
+    get uiLayer() { return uiLayer; }, set uiLayer(v) { uiLayer = v; },
+    get fader() { return fader; }, set fader(v) { fader = v; },
+    get SCREEN_W() { return SCREEN_W; }, set SCREEN_W(v) { SCREEN_W = v; },
+    get SCREEN_H() { return SCREEN_H; }, set SCREEN_H(v) { SCREEN_H = v; },
+    get scene() { return scene; }, set scene(v) { scene = v; },
+    get menuOpen() { return menuOpen; }, set menuOpen(v) { menuOpen = v; },
+    get cameraZoom() { return cameraZoom; }, set cameraZoom(v) { cameraZoom = v; },
+    get shakePower() { return shakePower; }, set shakePower(v) { shakePower = v; },
+    get shakeSpeed() { return shakeSpeed; }, set shakeSpeed(v) { shakeSpeed = v; },
+    get shakeTimer() { return shakeTimer; }, set shakeTimer(v) { shakeTimer = v; },
+    get shakeDuration() { return shakeDuration; }, set shakeDuration(v) { shakeDuration = v; },
+    get flashColor() { return flashColor; }, set flashColor(v) { flashColor = v; },
+    get flashOpacity() { return flashOpacity; }, set flashOpacity(v) { flashOpacity = v; },
+    get flashTimer() { return flashTimer; }, set flashTimer(v) { flashTimer = v; },
+    get flashDuration() { return flashDuration; }, set flashDuration(v) { flashDuration = v; },
+    get Input() { return Input; }, set Input(v) { Input = v; },
+    get richText() { return richText; }, set richText(v) { richText = v; },
+    get showMessage() { return showMessage; }, set showMessage(v) { showMessage = v; },
+    get setMsgSpeed() { return setMsgSpeed; }, set setMsgSpeed(v) { setMsgSpeed = v; },
+    get map() { return map; }, set map(v) { map = v; },
+    get lowerBuf() { return lowerBuf; }, set lowerBuf(v) { lowerBuf = v; },
+    get upperBuf() { return upperBuf; }, set upperBuf(v) { upperBuf = v; },
+    get hdActive() { return hdActive; }, set hdActive(v) { hdActive = v; },
+    get evRTs() { return evRTs; }, set evRTs(v) { evRTs = v; },
+    get blockingRun() { return blockingRun; }, set blockingRun(v) { blockingRun = v; },
+    get globalT() { return globalT; }, set globalT(v) { globalT = v; },
+    get loopLast() { return loopLast; }, set loopLast(v) { loopLast = v; },
+    get loopAcc() { return loopAcc; }, set loopAcc(v) { loopAcc = v; },
+    get playerOptions() { return playerOptions; }, set playerOptions(v) { playerOptions = v; },
+    get dashLatch() { return dashLatch; }, set dashLatch(v) { dashLatch = v; },
+    get dashPrev() { return dashPrev; }, set dashPrev(v) { dashPrev = v; },
+  }));
+
 
   // ============================ message window ============================
   // Substitute control codes, HTML-escape, then let text-code plugins add markup.
@@ -81,168 +163,12 @@ const _createInputSystem = window.createInputSystem;
   }
 
   // ============================ game state ============================
-  const G = {
-    switches: {},
-    vars: {},
-    selfSw: {},
-    quests: {},
-    party: [],
-    inv: { item: {}, weapon: {}, armor: {} },
-    gold: 0,
-    mapId: 0,
-    steps: 0,
-    encSteps: 0,
-    player: null,
-  };
+  // G and the actor/param/exp/inventory helpers live in ./state/game-state.ts
+  // (Phase 1 Stage B). The quest runtime is created here, exactly where the
+  // monolith created it; game-state reaches this closure's refreshAllPages
+  // through fns (installed at the top of this IIFE).
+  initQuestRuntime();
 
-  function expForLevel(lv) {
-    let t = 0;
-    for (let l = 2; l <= lv; l++)
-      t += Math.floor(20 * Math.pow(l - 1, 1.75) + 30);
-    return t;
-  }
-  function actorClass(a) {
-    return RA.byId(proj.classes, a.classId) || proj.classes[0];
-  }
-  function skillElement(skill) {
-    return RA.elementOfSkill(skill);
-  }
-  function skillMpCost(a, skill) {
-    return Math.max(
-      0,
-      Math.ceil(
-        (skill.mp || 0) * RA.traitRate(actorClass(a), "special", "mpCost", 1),
-      ),
-    );
-  }
-  function skillPowerRate(a, skill) {
-    return RA.traitRate(actorClass(a), "skill", skill.type, 1);
-  }
-  function actorIncomingRate(a, element, guarding) {
-    const c = actorClass(a);
-    let rate = RA.traitRate(c, "element", element, 1);
-    rate *= RA.traitRate(c, "special", "damageTaken", 1);
-    if (guarding) rate *= RA.traitRate(c, "special", "guardDamage", 0.55);
-    return rate;
-  }
-  function canActorEquip(a, kind, itemId) {
-    return RA.canEquip(actorClass(a), kind, itemId);
-  }
-  function sanitizeEquipment(a) {
-    if (!canActorEquip(a, "weapon", a.weaponId)) a.weaponId = 0;
-    if (!canActorEquip(a, "armor", a.armorId)) a.armorId = 0;
-  }
-  function param(a, stat) {
-    const c = actorClass(a);
-    let v = Math.floor(
-      (c.base[stat] || 0) + (c.growth[stat] || 0) * (a.level - 1),
-    );
-    const w = RA.byId(proj.weapons, a.weaponId),
-      ar = RA.byId(proj.armors, a.armorId);
-    if (w && w.params) v += w.params[stat] || 0;
-    if (ar && ar.params) v += ar.params[stat] || 0;
-    v = Math.floor(v * RA.traitRate(c, "param", stat, 1));
-    return Math.max(1, v);
-  }
-  function learnedSkills(a) {
-    const c = actorClass(a);
-    return (c.learnings || [])
-      .filter((l) => l.level <= a.level)
-      .map((l) => RA.byId(proj.skills, l.skillId))
-      .filter(Boolean);
-  }
-  function makeActor(actorId) {
-    const d = RA.byId(proj.actors, actorId);
-    if (!d) return null;
-    const a = {
-      actorId,
-      name: d.name,
-      classId: d.classId,
-      charset: d.charset,
-      level: d.level || 1,
-      exp: expForLevel(d.level || 1),
-      weaponId: d.weaponId || 0,
-      armorId: d.armorId || 0,
-      hp: 1,
-      mp: 1,
-    };
-    sanitizeEquipment(a);
-    a.hp = param(a, "mhp");
-    a.mp = param(a, "mmp");
-    return a;
-  }
-  function gainExp(a, amount, log) {
-    a.exp += amount;
-    while (a.exp >= expForLevel(a.level + 1)) {
-      const before = learnedSkills(a).map((s) => s.id);
-      a.level++;
-      a.hp = Math.min(a.hp + 10, param(a, "mhp"));
-      if (log) log(a.name + " reached level " + a.level + "!");
-      sysSe("levelup");
-      for (const s of learnedSkills(a)) {
-        if (!before.includes(s.id) && log)
-          log(a.name + " learned " + s.name + "!");
-      }
-    }
-  }
-  function addInv(kind, id, n) {
-    const bag = G.inv[kind];
-    bag[id] = clamp((bag[id] || 0) + n, 0, 99);
-    if (!bag[id]) delete bag[id];
-  }
-  function invCount(kind, id) { return G.inv[kind][id] || 0; }
-  function dbFor(kind) { return kind === "item" ? proj.items : kind === "weapon" ? proj.weapons : proj.armors; }
-  const questRuntime = window.RPGAtlasQuests.create({
-    G,
-    RA,
-    clamp,
-    gainExp,
-    addInv,
-    invCount,
-    dbFor,
-    refreshAllPages,
-    getProj: () => proj,
-    now: () => Date.now(),
-  });
-  const {
-    Quests,
-    questState,
-    objectiveDone,
-    evaluateQuestFailures,
-    noteBattleFailure,
-    onEnemyKilled,
-  } = questRuntime;
-  function traitDescription(t) {
-    const value = Number(t.value) || 0;
-    if (t.type === "param")
-      return String(t.key).toUpperCase() + " " + value + "%";
-    if (t.type === "element") {
-      const e = RA.typeList(proj, "elements").find((x) => x.key === t.key);
-      return (e ? e.name : t.key) + " damage " + value + "%";
-    }
-    if (t.type === "state") {
-      const state = RA.byId(proj.states || [], Number(t.key));
-      return (state ? state.name : "State " + t.key) + " chance " + value + "%";
-    }
-    if (t.type === "skill")
-      return (
-        String(t.key).replace(/^\w/, (c) => c.toUpperCase()) +
-        " skill power " +
-        value +
-        "%"
-      );
-    if (t.type === "equip") {
-      const item = RA.byId(
-        t.key === "armor" ? proj.armors : proj.weapons,
-        value,
-      );
-      return "Can equip " + (item ? item.name : t.key + " " + value);
-    }
-    const special = RA.TRAIT_SPECIALS.find((x) => x.v === t.key);
-    return (
-      (special ? special.l.replace(/ %$/, "") : t.key) + ": " + value + "%"
-    );
-  }
 
   // ============================ map runtime ============================
   let map = null;
@@ -268,6 +194,8 @@ const _createInputSystem = window.createInputSystem;
   let blockingRun = false; // an action/touch/autorun interpreter is active
   const parallels = new Map(); // evRT -> running flag
   const commonParallels = new Map(); // common event id -> running flag
+  EC.parallels = parallels; // shared with extracted modules (same Map identity)
+  EC.commonParallels = commonParallels;
 
   function tileAt(layer, x, y) {
     return map.layers[layer][y * map.width + x];
@@ -3477,34 +3405,17 @@ const _createInputSystem = window.createInputSystem;
   }
 
   // ============================ interpreter services ============================
+  // The closure-state bridge onto the shared engine context (EC) is installed
+  // near the top of this IIFE (before any extracted module's init can write
+  // through it); see "closure-state bridge" above.
   // The service surface the extracted command handlers call. It bridges the
   // registry (src/engine/interpreter/) back to this closure's functions and
   // mutable scalars. Late-bound values (message-system fns; camera/shake/flash
   // scalars that are reassigned) are exposed via getters/setters so handlers
   // always see live state — identical to referencing the closure `let`s
   // directly, as the old switch did.
-  const ctxScalars = {
-    get cameraZoom() { return cameraZoom; },
-    set cameraZoom(v) { cameraZoom = v; },
-    get shakePower() { return shakePower; },
-    set shakePower(v) { shakePower = v; },
-    get shakeSpeed() { return shakeSpeed; },
-    set shakeSpeed(v) { shakeSpeed = v; },
-    get shakeTimer() { return shakeTimer; },
-    set shakeTimer(v) { shakeTimer = v; },
-    get shakeDuration() { return shakeDuration; },
-    set shakeDuration(v) { shakeDuration = v; },
-    get flashColor() { return flashColor; },
-    set flashColor(v) { flashColor = v; },
-    get flashOpacity() { return flashOpacity; },
-    set flashOpacity(v) { flashOpacity = v; },
-    get flashTimer() { return flashTimer; },
-    set flashTimer(v) { flashTimer = v; },
-    get flashDuration() { return flashDuration; },
-    set flashDuration(v) { flashDuration = v; },
-  };
   const EngineServices = {
-    ctx: ctxScalars,
+    ctx: EC,
     // message system (late-bound: reassigned during wiring)
     get showMessage() { return showMessage; },
     get richText() { return richText; },

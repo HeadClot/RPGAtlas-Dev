@@ -48,9 +48,12 @@ test.describe("standalone export", () => {
     // Non-trivial single-file document (project + assets + runtime inlined).
     expect(html.length).toBeGreaterThan(100_000);
     // Player bundle is inlined as a module (replacing the old inline engine.js);
-    // its presence is proven by the engine's own boot-time global reads.
+    // its presence is proven by the engine's own boot-time global reads. (Since
+    // the Stage B game-state extraction the quests global is read through the
+    // src/shared/deps.ts seam, so the marker is the create call itself rather
+    // than the old direct `window.` access.)
     expect(html).toMatch(/<script type="module">/);
-    expect(html).toContain("window.RPGAtlasQuests.create");
+    expect(html).toContain("RPGAtlasQuests.create");
     // Classic deps still inlined ahead of it, populating window globals —
     // including the engine's hard boot dependencies (quest runtime, journal
     // view, input system) whose omission used to crash every exported game.
