@@ -205,6 +205,72 @@ test.describe("live HD-2D viewport", () => {
   });
 });
 
+test.describe("world view", () => {
+  test("opens as a dock panel, draws a node per map, and dragging one persists worldPos", async ({ page }) => {
+    await page.goto("/index.html");
+    const saveIndicator = page.locator("#save-ind");
+    await expect(saveIndicator).toBeVisible();
+    await expect(saveIndicator).toHaveText(/^✓ /);
+
+    const readProject = () =>
+      page.evaluate(() => JSON.parse(localStorage.getItem("rpgatlas_project")));
+    const before = await readProject();
+    const mapCount = before.maps.length;
+
+    // View ▸ World View docks the map-connection graph (a brand-new panel).
+    await page.locator("#menus .menu-label", { hasText: "View" }).dispatchEvent("mousedown");
+    await page.locator(".menu-drop .menu-item", { hasText: "World View" }).click();
+    await expect(page.locator(".dock-tab", { hasText: "World" })).toBeVisible();
+
+    const nodes = page.locator("#dock-root .wv-node");
+    await expect(nodes).toHaveCount(mapCount);
+
+    // Drag the first map node; its position is saved to map.worldPos.
+    const node = nodes.first();
+    const box = await node.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 90, box.y + box.height / 2 + 60, { steps: 6 });
+    await page.mouse.up();
+
+    await expect(saveIndicator).toHaveText(/^● /);
+    await expect(saveIndicator).toHaveText(/^✓ /, { timeout: 5000 });
+
+    const after = await readProject();
+    const pinned = after.maps.filter((m) => m.worldPos && typeof m.worldPos.x === "number");
+    expect(pinned.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+test.describe("database list upgrades", () => {
+  test("search filters the list and checking a row reveals the bulk bar", async ({ page }) => {
+    await page.goto("/index.html");
+    await expect(page.locator("#save-ind")).toBeVisible();
+
+    // Open the Database and switch to the Items list tab.
+    await page.locator("#menus .menu-label", { hasText: "Tools" }).dispatchEvent("mousedown");
+    await page.locator(".menu-drop .menu-item", { hasText: "Database" }).click();
+    await expect(page.locator(".db-modal")).toBeVisible();
+    await page.locator(".dbtabs-vert button", { hasText: "Items" }).click();
+
+    const rows = page.locator(".dblist li:not(.db-empty)");
+    await expect(rows.first()).toBeVisible();
+
+    // A query that matches nothing empties the list; clearing restores it.
+    const search = page.locator(".dbsearch");
+    await search.fill("zzzznope");
+    await expect(page.locator(".dblist .db-empty")).toBeVisible();
+    await search.fill("");
+    await expect(rows.first()).toBeVisible();
+
+    // Checking a row's checkbox reveals the bulk action bar.
+    await expect(page.locator(".dbbulk")).toBeHidden();
+    await page.locator(".dblist li .db-entry-check").first().check();
+    await expect(page.locator(".dbbulk")).toBeVisible();
+    await expect(page.locator(".dbbulk button", { hasText: "Bulk Edit" })).toBeVisible();
+  });
+});
+
 test.describe("autotiles", () => {
   test("importing an A2 sheet adds a terrain brush; painting writes autotile ids", async ({ page }) => {
     await page.goto("/index.html");

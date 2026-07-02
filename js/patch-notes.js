@@ -5,6 +5,18 @@
 export const PATCH_NOTES = [
   {
     date: "July 2, 2026",
+    title: "World View & database upgrades",
+    summary:
+      "A new bird's-eye World View draws your whole game as a map-connection graph parsed live from Transfer commands, and every Database list gains search, multi-select bulk editing, and cross-project copy/paste.",
+    items: [
+      "View ▸ World View (F3) opens a dockable map graph: each map is a node, each Transfer-Player command an arrow. Drag maps to arrange them (positions are saved per map), click to select, double-click to open, and add per-map notes in the inspector. Drag the ↻ handle on an arrow onto another map to re-link every transfer behind that connection. Broken links to deleted maps are flagged.",
+      "Every Database list (Actors, Items, Skills, Enemies, …) now has a search box, per-row checkboxes for multi-select, and a bulk bar: Bulk Edit a shared numeric field (set / add / multiply), Duplicate, and Delete across the whole selection.",
+      "Copy and Paste move entries between projects through a shared clipboard — copy your enemies in one project, open another, and paste them in.",
+      "The Classes tab shows a live stat-curve preview (levels 1/25/50/99) and the Skills tab an interactive damage preview, both using the exact engine formulas — purely editor-side, no change to how the game runs.",
+    ],
+  },
+  {
+    date: "July 2, 2026",
     title: "Cliff auto-texturing — sculpted rock faces in HD-2D",
     summary:
       "Raised terrain blocks can now render as proper cliffs in the HD-2D scene: their exposed walls get a top-down light gradient, a sunlit crest, and shaded vertical corners instead of a single flat tint. Off by default, per map.",

@@ -18,6 +18,7 @@ import {
 } from "./shared";
 
 export const actorsTab = () => listFormTab({
+  kind: "actors",
   list: () => S.proj.actors,
   blank: () => ({ id: 0, name: "Actor", classId: S.proj.classes[0].id, level: 1, charset: "hero", weaponId: 0, armorId: 0 }),
   form(e: any, box: any, redrawList: any) {
@@ -36,6 +37,7 @@ export const actorsTab = () => listFormTab({
 });
 
 export const classesTab = () => listFormTab({
+  kind: "classes",
   list: () => S.proj.classes,
   blank: () => ({ id: 0, name: "Class", icon: 0, base: { mhp: 40, mmp: 12, atk: 10, def: 9, mat: 8, mdf: 8, agi: 8 },
     growth: { mhp: 7, mmp: 2, atk: 2, def: 1.8, mat: 1.8, mdf: 1.8, agi: 1.5 }, traits: [], learnings: [] }),
@@ -166,10 +168,34 @@ export const classesTab = () => listFormTab({
     redrawL();
     box.appendChild(h("div", { class: "subhead" }, "Skills learned"));
     box.appendChild(lbox);
+    // Stat-curve preview (Stage E "formula fields"): the engine derives each
+    // battle param as floor(base + growth·(level−1)); this shows that curve live
+    // as the base/growth fields above change. Equipment/traits are excluded — it
+    // is the class curve, not a fully-equipped actor.
+    const curveBox = h("div", { class: "stat-curve" });
+    const LEVELS = [1, 25, 50, 99];
+    function recomputeCurve() {
+      curveBox.innerHTML = "";
+      const head = h("div", { class: "sc-row sc-head" }, h("span", { class: "sc-key" }, "Lv"));
+      for (const L of LEVELS) head.appendChild(h("span", { class: "sc-cell" }, String(L)));
+      curveBox.appendChild(head);
+      for (const k of STAT_KEYS) {
+        const rowEl = h("div", { class: "sc-row" }, h("span", { class: "sc-key" }, k.toUpperCase()));
+        const base = Number(e.base[k]) || 0, g = Number(e.growth[k]) || 0;
+        for (const L of LEVELS) rowEl.appendChild(h("span", { class: "sc-cell" }, String(Math.floor(base + g * (L - 1)))));
+        curveBox.appendChild(rowEl);
+      }
+    }
+    recomputeCurve();
+    box.appendChild(h("div", { class: "subhead" }, "Stat curve preview"));
+    box.appendChild(h("div", { class: "dim" }, "floor(base + growth × (level − 1)), matching the engine. Equipment and traits are not applied here."));
+    box.appendChild(curveBox);
+    box.addEventListener("input", recomputeCurve); // reflect base/growth edits live
   },
 });
 
 export const skillsTab = () => listFormTab({
+  kind: "skills",
   list: () => S.proj.skills,
   blank: () => ({ id: 0, name: "Skill", icon: 8, type: "magic", power: 20, mp: 5, scope: "enemy", color: "#f07030", stateId: 0, stateOp: "add", stateChance: 100 }),
   form(e: any, box: any, redrawList: any) {
@@ -189,10 +215,44 @@ export const skillsTab = () => listFormTab({
       field("State", sel(e, "stateId", dbOpts(S.proj.states, "(none)"))),
       field("Chance %", nIn(e, "stateChance", 0, 100))));
     box.appendChild(h("div", { class: "dim" }, "Damage: physical = power + 2·ATK − 1.2·DEF · magical = power + 2·MAT − 1.5·MDF · heal = power + 1.2·MAT. The state effect rolls per target hit (see the States tab)."));
+    // Damage preview (Stage E "formula fields"): plug in a reference attacker
+    // stat and target defense to see the base hit for this skill, using the
+    // exact engine formula (pre-variance). Updates live as Power/Type change.
+    const ref = { atk: 30, def: 10 };
+    const out = h("span", { class: "dmg-out" });
+    function recomputeDmg() {
+      const power = Number(e.power) || 0;
+      const heal = e.type === "heal";
+      const phys = e.type === "phys";
+      let d;
+      if (heal) d = power + ref.atk * 1.2;
+      else if (phys) d = power + ref.atk * 2 - ref.def * 1.2;
+      else d = power + ref.atk * 2 - ref.def * 1.5;
+      d = Math.max(heal ? 0 : 1, Math.round(d));
+      out.textContent = (heal ? "Heals ≈ " : "Deals ≈ ") + d + " HP";
+    }
+    const previewNum = (obj: any, key: any) => h("input", {
+      type: "number", value: String(obj[key]), style: "width:64px",
+      oninput(ev: any) { obj[key] = Number(ev.target.value) || 0; recomputeDmg(); },
+    });
+    const atkLbl = h("span", null, "");
+    const defWrap = h("label", { class: "dmg-fld dmg-def" }, h("span", null, "Target DEF/MDF"), previewNum(ref, "def"));
+    function relabel() {
+      atkLbl.textContent = e.type === "phys" ? "Attacker ATK" : "Attacker MAT";
+      defWrap.style.display = e.type === "heal" ? "none" : "";
+    }
+    relabel();
+    recomputeDmg();
+    box.appendChild(h("div", { class: "subhead" }, "Damage preview"));
+    box.appendChild(h("div", { class: "dmg-preview" },
+      h("label", { class: "dmg-fld" }, atkLbl, previewNum(ref, "atk")),
+      defWrap, out));
+    box.addEventListener("input", () => { relabel(); recomputeDmg(); });
   },
 });
 
 export const enemiesTab = () => listFormTab({
+  kind: "enemies",
   list: () => S.proj.enemies,
   blank: () => ({ id: 0, name: "Enemy", sprite: "slime", color: "#5aa84f",
     stats: { mhp: 30, atk: 10, def: 6, mat: 5, mdf: 5, agi: 6 }, exp: 10, gold: 10, actions: [{ skillId: 0, weight: 5 }] }),
@@ -233,6 +293,7 @@ export const enemiesTab = () => listFormTab({
 });
 
 export const statesTab = () => listFormTab({
+  kind: "states",
   list: () => S.proj.states,
   blank: () => ({ id: 0, name: "State", icon: 12, color: "#a050d8", restrict: "none", hpTurn: 0, minTurns: 2, maxTurns: 4, removeAtEnd: true }),
   form(e: any, box: any, redrawList: any) {

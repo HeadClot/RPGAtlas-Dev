@@ -650,3 +650,65 @@ button.danger:hover { background: #6a3636; }
 }
 .cg-preview canvas { image-rendering: pixelated; width: 72px; height: 72px; }
 .fld input[type=color] { padding: 1px 2px; width: 44px; height: 28px; }
+
+/* ===================== Phase 3 Stage E ===================== */
+/* World View panel */
+.world-view { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #0f1017; }
+.wv-viewport { position: absolute; inset: 0 0 76px 0; overflow: auto; cursor: grab;
+  background-image: radial-gradient(#1c1e2a 1px, transparent 1px); background-size: 24px 24px; }
+.wv-viewport.panning { cursor: grabbing; }
+.wv-stage { position: relative; transform-origin: 0 0; }
+.wv-edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.wv-nodes { position: absolute; left: 0; top: 0; }
+.wv-edge { stroke: #5a6180; stroke-width: 2; }
+.wv-arrowhead { fill: #6c97c4; }
+.wv-edge-count { fill: #aeccf0; font: 11px "Segoe UI", sans-serif; text-anchor: middle; }
+.wv-relink { fill: #262838; stroke: var(--gold-edge); stroke-width: 1.5; cursor: crosshair; pointer-events: auto; }
+.wv-relink:hover { fill: var(--gold); }
+.wv-relink-ghost { stroke: var(--gold); stroke-width: 2; stroke-dasharray: 5 4; }
+.wv-node {
+  position: absolute; width: 148px; height: 88px; box-sizing: border-box;
+  background: #1c1e2a; border: 1px solid #3a3d52; border-radius: 7px; padding: 8px 9px;
+  cursor: move; display: flex; flex-direction: column; gap: 4px; overflow: hidden;
+  box-shadow: 0 3px 9px rgba(0,0,0,0.4);
+}
+.wv-node:hover { border-color: var(--accent-edge); }
+.wv-node.sel { border-color: var(--accent-edge); box-shadow: 0 0 0 1px var(--accent-edge) inset, 0 3px 9px rgba(0,0,0,0.5); }
+.wv-node.current { background: #23283a; }
+.wv-node.wv-drop { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold) inset; }
+.wv-node-title { display: flex; align-items: center; gap: 4px; font-weight: 600; color: var(--accent-text); }
+.wv-node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wv-start { color: var(--gold); font-size: 11px; }
+.wv-node-dims { font-size: 11px; color: #8a8fa6; }
+.wv-hud { position: absolute; left: 0; right: 0; bottom: 0; height: 76px; padding: 6px 8px;
+  background: rgba(14,16,23,0.94); border-top: 1px solid #2c2f44; display: flex; flex-direction: column; gap: 4px; }
+.wv-hud-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #b8bcce; }
+.wv-hud-spacer { flex: 1; }
+.wv-hud-zoom { min-width: 42px; text-align: center; }
+.wv-hud-warn { font-size: 11px; color: #e0b060; }
+.wv-inspect { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.wv-inspect-head { display: flex; align-items: center; gap: 8px; color: var(--accent-text); }
+.wv-inspect-head span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wv-notes-label { font-size: 11px; color: #8a8fa6; }
+.wv-notes, .map-notes { width: 100%; resize: vertical; font: inherit; }
+.wv-inspect-empty { padding-top: 4px; }
+
+/* Database list upgrades: search, multi-select, bulk bar */
+.dbsearch { width: 100%; }
+.db-entry-check { margin: 0; cursor: pointer; flex: 0 0 auto; }
+.db-empty { padding: 8px; font-style: italic; }
+.dbbulk { display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  padding: 5px 6px; background: #1c1e2a; border: 1px solid var(--accent-edge); border-radius: 5px; }
+.dbbulk-count { font-size: 11px; color: var(--accent-text); margin-right: 2px; }
+
+/* Computed previews (formula fields) */
+.stat-curve { display: inline-flex; flex-direction: column; gap: 2px; margin-top: 4px;
+  border: 1px solid #2c2f44; border-radius: 6px; padding: 6px 8px; background: #14151c; }
+.sc-row { display: flex; gap: 4px; align-items: center; }
+.sc-head { color: var(--accent-text); font-weight: 600; }
+.sc-key { width: 44px; font-size: 11px; color: #8a8fa6; }
+.sc-head .sc-key { color: var(--accent-text); }
+.sc-cell { width: 46px; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
+.dmg-preview { display: flex; align-items: center; gap: 12px; margin-top: 4px; flex-wrap: wrap; }
+.dmg-fld { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #b8bcce; }
+.dmg-out { font-weight: 600; color: var(--gold); }

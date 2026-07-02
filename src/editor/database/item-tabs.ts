@@ -14,6 +14,7 @@ import { cmdListWidget } from "../event-editor/command-list";
 import { PARAM_KEYS, listFormTab, nameRefresher, iconPickerField } from "./shared";
 
 export const itemsTab = () => listFormTab({
+  kind: "items",
   list: () => S.proj.items,
   blank: () => ({ id: 0, name: "Item", icon: 24, price: 50, hp: 50, mp: 0, desc: "" }),
   form(e: any, box: any, redrawList: any) {
@@ -24,6 +25,7 @@ export const itemsTab = () => listFormTab({
 });
 
 export const weaponsTab = () => listFormTab({
+  kind: "weapons",
   list: () => S.proj.weapons,
   blank: () => ({ id: 0, name: "Weapon", icon: 48, price: 100, wtypeId: 1, params: { atk: 5 } }),
   form(e: any, box: any, redrawList: any) {
@@ -37,6 +39,7 @@ export const weaponsTab = () => listFormTab({
 });
 
 export const armorsTab = () => listFormTab({
+  kind: "armors",
   list: () => S.proj.armors,
   blank: () => ({ id: 0, name: "Armor", icon: 56, price: 80, atypeId: 1, etypeId: 4, params: { def: 4 } }),
   form(e: any, box: any, redrawList: any) {
@@ -51,6 +54,7 @@ export const armorsTab = () => listFormTab({
 });
 
 export const troopsTab = () => listFormTab({
+  kind: "troops",
   list: () => S.proj.troops,
   blank: () => ({ id: 0, name: "Troop", enemies: [] }),
   form(e: any, box: any, redrawList: any) {
@@ -76,6 +80,7 @@ export const troopsTab = () => listFormTab({
 });
 
 export const commonEventsTab = () => listFormTab({
+  kind: "commonEvents",
   list: () => S.proj.commonEvents,
   allowEmpty: true,
   blank: () => RA.defaultCommonEvent(),

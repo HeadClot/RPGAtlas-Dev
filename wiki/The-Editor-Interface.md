@@ -40,6 +40,19 @@ The viewport needs WebGL2; on a browser without it the panel shows a short notic
 
 ---
 
+## The World View
+
+Press **`F3`** (or **View ▸ World View**) to dock a bird's-eye graph of your whole game. Every map is a
+node; every **Transfer Player** command becomes an arrow between maps, parsed live from your events — so
+the picture always matches the game.
+
+- **Arrange it** — **drag** a map node to move it; its spot is saved on the map. **Auto-arrange** re-lays
+  everything out, and **Ctrl+scroll** zooms.
+- **Navigate** — **click** a map to select it (and edit its **Notes** in the inspector), **double-click**
+  to open it in the editor.
+- **Re-link connections** — **drag** the small **↻** handle on an arrow onto another map to retarget every
+  Transfer command behind that link at once. Arrows to a deleted map are flagged as broken.
+
 ## The menu bar
 
 | Menu | What lives there |
@@ -116,6 +129,7 @@ control over what stacks on what, or to use the Overhead layer for things the pl
 | **Right-click** | Pick the tile under the cursor |
 | `F1` | Open the **Database** |
 | `F2` | Show the live **HD-2D Viewport** panel |
+| `F3` | Show the **World View** map-connection graph |
 | `F5` | **Playtest** (save and run the game) |
 | `F6` | Focus the next workspace panel |
 | `Ctrl+P` | **Command Palette** — type a few letters of any editor command and press Enter to run it |
