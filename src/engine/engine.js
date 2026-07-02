@@ -3,6 +3,9 @@
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 "use strict";
 
+import { registerCommand, getCommand } from "./interpreter/registry.js";
+import { registerBuiltinCommands } from "./interpreter/commands/index.js";
+
 const _Assets = window.RPGAtlasDeps.Assets;
 const _DataDefaults = window.RPGAtlasDeps.DataDefaults;
 const _Renderer = window.RPGAtlasDeps.Renderer;
@@ -1022,233 +1025,15 @@ const _createInputSystem = window.createInputSystem;
       for (const cmd of list || []) await this.exec(cmd);
     }
     async exec(c) {
-      switch (c.t) {
-        case "text":
-          await showMessage(c.name, c.text, c.face);
-          break;
-        case "choices": {
-          const i = await showList(
-            c.options.map((o) => ({ html: richText(o) })),
-            { className: "choicewin", cancellable: false },
-          );
-          await this.runList(c.branches[i] || []);
-          break;
-        }
-        case "switch": 
-          G.switches[c.id] = !!c.val; 
-          refreshAllPages(); 
-          evaluateQuestFailures(); 
-          break;
-        case "selfsw": 
-          G.selfSw[this.selfKey(c.key)] = !!c.val; 
-          refreshAllPages(); 
-          break;
-        case "var": {
-          const cur = G.vars[c.id] || 0;
-          let v = c.val;
-          if (c.op === "rnd") v = c.val + rnd((c.val2 || c.val) - c.val + 1);
-          G.vars[c.id] =
-            c.op === "add" ? cur + v : c.op === "sub" ? cur - v : v;
-          refreshAllPages();
-          evaluateQuestFailures();
-          break;
-        }
-        case "if": {
-          const ok2 = this.testCond(c.cond);
-          await this.runList(ok2 ? c.then : c.else);
-          break;
-        }
-        case "questStart":
-          Quests.start(c.questId);
-          break;
-
-        case "questAdvanceObj":
-          Quests.advanceObjective(c.questId, c.objIndex, c.amount);
-          evaluateQuestFailures();
-          break;
-
-        case "questSetObj":
-          Quests.setObjective(c.questId, c.objIndex, c.value);
-          evaluateQuestFailures();
-          break;
-
-        case "questComplete": {
-          const res = Quests.complete(c.questId, {
-            mapId: G.mapId,
-            eventId: this.evRT ? this.evRT.ev.id : 0,
-          });
-          if (res && res.rewardText) {
-            await showMessage(
-              "",
-              "You received " + res.rewardText + "!",
-            );
-          }
-          break;
-        }
-
-        case "questFail":
-          Quests.fail(c.questId);
-          break;
-
-        case "commonEvent":
-          await this.callCommonEvent(c.commonEventId);
-          break;
-
-        case "transfer":
-          await transferPlayer(c.mapId, c.x, c.y, c.dir);
-          break;
-
-        case "gold":
-          G.gold = clamp(
-            G.gold + (c.op === "sub" ? -c.val : c.val),
-            0,
-            9999999,
-          );
-          break;
-
-        case "item":
-          addInv(
-            c.kind || "item",
-            c.id,
-            c.op === "sub" ? -c.val : c.val,
-          );
-          break;
-        case "party": {
-          if (c.op === "add") {
-            if (
-              !G.party.find((a) => a.actorId === c.actorId) &&
-              G.party.length < 4
-            ) {
-              const a = makeActor(c.actorId);
-              if (a) G.party.push(a);
-            }
-          } else {
-            G.party = G.party.filter((a) => a.actorId !== c.actorId);
-            if (!G.party.length)
-              G.party.push(
-                makeActor(proj.system.party[0] || proj.actors[0].id),
-              );
-          }
-          break;
-        }
-        case "heal": {
-          for (const a of G.party) {
-            if (c.full) {
-              a.hp = param(a, "mhp");
-              a.mp = param(a, "mmp");
-              a.states = [];
-            } else {
-              a.hp = clamp(a.hp + (c.hp || 0), 1, param(a, "mhp"));
-              a.mp = clamp(a.mp + (c.mp || 0), 0, param(a, "mmp"));
-            }
-          }
-          break;
-        }
-        case "battle": {
-          const result = await Battle.run(c.troopId, c.escape !== false);
-          if (result === "lose" && !c.lose) await gameOver();
-          break;
-        }
-        case "shop":
-          await Shop.run(c.goods || []);
-          break;
-        case "wait": {
-          await waitFrames(c.frames || 30);
-          break;
-        }
-        case "se":
-          Sfx.play(c.name);
-          break;
-        case "music":
-          Music.play(c.theme);
-          break;
-        case "move": {
-          const target = c.target === "player" ? G.player : this.evRT;
-          if (!target) break;
-          if (c.wait) {
-            await new Promise((res) => setRoute(target, c.steps.slice(), res));
-          } else {
-            setRoute(target, c.steps.slice(), null);
-          }
-          break;
-        }
-        case "cameraZoom": {
-          const start = cameraZoom;
-          const target = clamp(Number(c.zoom) || 1, 0.25, 4);
-          const frames = Math.max(0, Math.floor(Number(c.frames) || 0));
-          if (!frames) {
-            cameraZoom = target;
-          } else {
-            await tickTween(frames, (t) => {
-              cameraZoom = start + (target - start) * (t * t * (3 - 2 * t));
-            });
-          }
-          cameraZoom = target;
-          break;
-        }
-        case "shake": {
-          shakePower = clamp(c.power || 5, 1, 9);
-          shakeSpeed = clamp(c.speed || 5, 1, 9);
-          shakeTimer = clamp(c.duration || 30, 1, 600);
-          shakeDuration = shakeTimer;
-          if (c.wait) {
-            while (shakeTimer > 0) await frameWait();
-          }
-          break;
-        }
-        case "weather": {
-          if (window.Atlas && typeof window.Atlas.weather === "function") {
-            window.Atlas.weather(c.kind, c.power);
-          }
-          break;
-        }
-        case "flash": {
-          flashColor = c.color || "#ffffff";
-          flashOpacity = clamp(Number(c.opacity) || 0.5, 0.01, 1.0);
-          flashTimer = clamp(c.duration || 15, 1, 300);
-          flashDuration = flashTimer;
-          if (c.wait) {
-            while (flashTimer > 0) await frameWait();
-          }
-          break;
-        }
-        case "transparency":
-          if (G.player) G.player.transparent = !!c.val;
-          break;
-        case "erase":
-          if (this.evRT) this.evRT.erased = true;
-          break;
-        case "save":
-          await saveLoadMenu("save");
-          break;
-        case "gameover":
-          await gameOver();
-          break;
-        case "totitle":
-          await toTitle();
-          break;
-        case "script": {
-          try {
-            const api = Object.create(scriptApi);
-            api.callCommonEvent = (id) => this.callCommonEvent(id);
-            const result = new Function("game", c.code)(api);
-            if (result && typeof result.then === "function") await result;
-          } catch (e) {
-            console.error("Script command error:", e);
-          }
-          refreshAllPages();
-          break;
-        }
-        default:
-          if (Plugins.commands[c.t]) {
-            try {
-              await Plugins.commands[c.t](c, this);
-            } catch (e) {
-              console.error("Plugin command '" + c.t + "' failed:", e);
-            }
-          }
-          break;
-      }
+      // Every command — built-in and plugin-registered — is dispatched through
+      // the shared registry (src/engine/interpreter/registry.js). An unknown
+      // type resolves to undefined and is a silent no-op, exactly as the old
+      // switch's `default` was when no plugin handler existed. Plugin handlers
+      // register through the plugin bridge below, wrapped in the same try/catch
+      // the old default case used, so their frozen (cmd, interp) signature and
+      // error handling are preserved.
+      const handler = getCommand(c.t);
+      if (handler) await handler(c, { interp: this, state: G, services: EngineServices });
     }
     async callCommonEvent(id) {
       const commonEvent = RA.byId(proj.commonEvents || [], Number(id));
@@ -1423,8 +1208,19 @@ const _createInputSystem = window.createInputSystem;
         onUpdate: (fn) => Plugins.hooks.update.push(fn),
         onRender: (fn) => Plugins.hooks.render.push(fn),
         onMessageText: (fn) => Plugins.textProcessors.push(fn),
+        // Plugin commands route onto the same registry as built-ins. The frozen
+        // plugin API is fn(cmd, interp) with per-call error isolation (the old
+        // switch `default` behavior), so adapt the (cmd, ctx) registry handler
+        // to call fn(cmd, ctx.interp) inside the same try/catch.
         registerCommand: (t, fn) => {
-          Plugins.commands[t] = fn;
+          Plugins.commands[t] = fn; // kept for introspection / parity
+          registerCommand(t, async (cmd, ic) => {
+            try {
+              await fn(cmd, ic.interp);
+            } catch (e) {
+              console.error("Plugin command '" + t + "' failed:", e);
+            }
+          });
         },
         setTransition: (t) => {
           Plugins.transition = t;
@@ -3884,6 +3680,60 @@ const _createInputSystem = window.createInputSystem;
     });
     await toTitle();
   }
+
+  // ============================ interpreter services ============================
+  // The service surface the extracted command handlers call. It bridges the
+  // registry (src/engine/interpreter/) back to this closure's functions and
+  // mutable scalars. Late-bound values (message-system fns; camera/shake/flash
+  // scalars that are reassigned) are exposed via getters/setters so handlers
+  // always see live state — identical to referencing the closure `let`s
+  // directly, as the old switch did.
+  const ctxScalars = {
+    get cameraZoom() { return cameraZoom; },
+    set cameraZoom(v) { cameraZoom = v; },
+    get shakePower() { return shakePower; },
+    set shakePower(v) { shakePower = v; },
+    get shakeSpeed() { return shakeSpeed; },
+    set shakeSpeed(v) { shakeSpeed = v; },
+    get shakeTimer() { return shakeTimer; },
+    set shakeTimer(v) { shakeTimer = v; },
+    get shakeDuration() { return shakeDuration; },
+    set shakeDuration(v) { shakeDuration = v; },
+    get flashColor() { return flashColor; },
+    set flashColor(v) { flashColor = v; },
+    get flashOpacity() { return flashOpacity; },
+    set flashOpacity(v) { flashOpacity = v; },
+    get flashTimer() { return flashTimer; },
+    set flashTimer(v) { flashTimer = v; },
+    get flashDuration() { return flashDuration; },
+    set flashDuration(v) { flashDuration = v; },
+  };
+  const EngineServices = {
+    ctx: ctxScalars,
+    // message system (late-bound: reassigned during wiring)
+    get showMessage() { return showMessage; },
+    get richText() { return richText; },
+    showList,
+    // helpers
+    clamp, rnd,
+    // deps
+    Sfx, Music,
+    // state ops
+    refreshAllPages, evaluateQuestFailures,
+    addInv, makeActor, param,
+    getProj: () => proj,
+    // quests
+    Quests,
+    // scripting
+    scriptApi,
+    // waits / tweens
+    waitFrames, frameWait, tickTween,
+    // routing / scenes
+    setRoute, transferPlayer, saveLoadMenu, gameOver, toTitle,
+    // battle / shop
+    Battle, Shop,
+  };
+  registerBuiltinCommands();
 
   // ============================ boot ============================
   function loadProject() {

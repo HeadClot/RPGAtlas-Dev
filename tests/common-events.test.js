@@ -51,8 +51,11 @@ const engineSource = fs.readFileSync("src/engine/engine.js", "utf8");
 assert.match(editorSource, /\{ label: "Common Events"/, "Database exposes the Common Events tab");
 assert.match(editorSource, /t: "commonEvent", label: "Call Common Event"/,
   "event command picker exposes Call Common Event");
-assert.match(engineSource, /case "commonEvent":\s*await this\.callCommonEvent/,
-  "the interpreter waits for command-based common-event calls");
+// The `commonEvent` interpreter command moved to the extracted registry
+// (src/engine/interpreter/commands/flow.ts) in Phase 1 Stage B. Assert the
+// handler awaits interp.callCommonEvent by bundling and driving it, rather than
+// grepping the (now-deleted) switch case. The Script-API bridge, the
+// autorun/parallel scheduler, and the recursion guard still live in engine.js.
 assert.match(engineSource, /callCommonEvent\(id\)\s*\{\s*return new Interp\(null\)\.callCommonEvent\(id\)/,
   "the Script API exposes game.callCommonEvent(id)");
 assert.match(engineSource, /commonEvent\.trigger === "auto"/,
@@ -62,4 +65,33 @@ assert.match(engineSource, /commonEvent\.trigger !== "parallel"/,
 assert.match(engineSource, /this\.commonStack\.includes\(commonEvent\.id\)/,
   "recursive common-event calls are guarded");
 
-console.log("Common event tests passed.");
+(async () => {
+  const { build } = require("esbuild");
+  const path = require("node:path");
+  const root = path.resolve(__dirname, "..");
+  const entry = `
+    export { getCommand } from ${JSON.stringify(
+      path.join(root, "src/engine/interpreter/registry.ts").replace(/\\/g, "/"),
+    )};
+    export { registerBuiltinCommands } from ${JSON.stringify(
+      path.join(root, "src/engine/interpreter/commands/index.ts").replace(/\\/g, "/"),
+    )};
+  `;
+  const out = (await build({
+    stdin: { contents: entry, resolveDir: root, loader: "ts" },
+    bundle: true, format: "cjs", write: false, platform: "node", logLevel: "silent",
+  })).outputFiles[0].text;
+  const mod = { exports: {} };
+  vm.runInNewContext(out, { module: mod, exports: mod.exports, require, console, window: {} });
+  mod.exports.registerBuiltinCommands();
+  const handler = mod.exports.getCommand("commonEvent");
+  assert.equal(typeof handler, "function", "the interpreter registers a commonEvent handler");
+  let called = null;
+  await handler({ t: "commonEvent", commonEventId: 7 }, {
+    interp: { callCommonEvent: async (id) => { called = id; } },
+    state: {}, services: {},
+  });
+  assert.equal(called, 7, "the commonEvent command awaits interp.callCommonEvent with the id");
+
+  console.log("Common event tests passed.");
+})().catch((e) => { console.error(e); process.exit(1); });
