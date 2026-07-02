@@ -17,9 +17,9 @@ function evaluate(source) {
   return vm.runInContext(source, context);
 }
 
-const engineSource = fs.readFileSync("src/engine/engine.js", "utf8");
 const mapRuntimeSource = fs.readFileSync("src/engine/scenes/map-runtime.ts", "utf8");
 const mapSceneSource = fs.readFileSync("src/engine/scenes/map.ts", "utf8");
+const inputWiringSource = fs.readFileSync("src/engine/input.ts", "utf8");
 
 // Phase 1 Stage B: the combat geometry helpers moved to
 // src/engine/scenes/map-runtime.ts. Bundle the real module with esbuild and
@@ -175,7 +175,7 @@ assert.equal(
 // Stage B) asks Input for "attack", and the input layer resolves a project-defined
 // replacement binding. The combat/chase internals live in scenes/map-runtime.ts.
 assert.match(mapSceneSource, /Input\.consume\(["']attack["']\)/, "map update consumes the Attack action");
-assert.doesNotMatch(engineSource, /case\s+["']KeyJ["']/, "engine has no hardcoded J attack branch");
+assert.doesNotMatch(inputWiringSource, /case\s+["']KeyJ["']/, "input wiring has no hardcoded J attack branch");
 assert.doesNotMatch(mapSceneSource, /case\s+["']KeyJ["']/, "map update has no hardcoded J attack branch");
 assert.doesNotMatch(mapRuntimeSource, /case\s+["']KeyJ["']/, "map runtime has no hardcoded J attack branch");
 assert.match(mapRuntimeSource, /tileDistance\(p, rt\) > 1/, "touch damage can strike from an adjacent tile");

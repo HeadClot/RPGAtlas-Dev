@@ -3,14 +3,13 @@
    bundles it through the HTML pipeline for `vite build`; the same source is
    bundled to a single-file IIFE (player-bundle.js) for the standalone export.
 
-   Stage A of the Phase 1 refactor keeps engine.js verbatim (moved from
-   js/engine.js to src/engine/engine.js): this entry only side-effect-imports
-   it, proving the module build pipeline before any code is split out. The
-   monolith remains a classic-style IIFE that reads window.RPGAtlasDeps and the
-   classic-script factory globals (createMessageSystem, createInputSystem,
-   window.RPGAtlasQuests, window.RPGAtlasJournalView) populated by the other
-   <script> tags loaded before it in play.html / inlined in the export.
-   GPL-3.0-or-later (see LICENSE). */
+   Phase 1 Stage B dissolved the engine.js monolith into typed modules under
+   src/engine/; boot.ts is the composition root (it wires the services and
+   runs the DOM-ready boot on evaluation). The classic scripts loaded before
+   this module in play.html / the standalone export (assets, renderer,
+   runtime/messages, runtime/input, sfx, plugins, data, quests, journal-view)
+   still populate window.RPGAtlasDeps and the factory globals, read through
+   src/shared/deps.ts. GPL-3.0-or-later (see LICENSE). */
 
-// Side-effect import: engine.js runs its boot IIFE on evaluation.
-import "./engine.js";
+// Side-effect import: boot.ts wires the engine and boots on evaluation.
+import "./boot.js";

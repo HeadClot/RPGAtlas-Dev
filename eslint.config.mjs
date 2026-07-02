@@ -12,16 +12,16 @@ import tseslint from "typescript-eslint";
 export default [
   {
     // Never lint build output, deps, the desktop crate, legacy JS, or the
-    // node:test suites (owned elsewhere). The two monoliths moved verbatim into
-    // src/ in Phase 1 Stage A (engine.js/editor.js) are still legacy classic
-    // source — they are converted to typed modules in Stages B/C and are
-    // ignored until then so the move lands with zero diffs to their logic.
+    // node:test suites (owned elsewhere). The editor monolith moved verbatim
+    // into src/ in Phase 1 Stage A is still legacy classic source — it is
+    // converted to typed modules in Stage C and ignored until then so the move
+    // lands with zero diffs to its logic. (The engine monolith was dissolved
+    // into typed src/engine/ modules in Stage B.)
     ignores: [
       "dist/**",
       "node_modules/**",
       "src-tauri/**",
       "js/**",
-      "src/engine/engine.js",
       "src/editor/editor.js",
       "tests/**",
       "tools/**",

@@ -1,18 +1,14 @@
 /* RPGAtlas — src/engine/state/engine-context.ts
-   The shared mutable engine context: the seam that replaces the monolith's
-   closure variables (Phase 1 Stage B). Extracted modules read and write live
-   engine state through `ctx` (project, scene, camera/shake/flash scalars, map
-   runtime state, DOM roots, late-bound message/input systems) and reach
-   engine functions that live in later-extracted modules — or still in the
-   shrinking engine.js — through the `fns` forward-ref registry.
-
-   While engine.js exists it installs getter/setter bridges over these fields
-   so both the remaining closure code and the extracted modules observe the
-   SAME live values (the generalized ctxScalars pattern from the interpreter
-   extraction). When boot.ts replaces the monolith, the bridges go away and
-   these become plain mutable fields. The initial values below mirror the
-   monolith's `let` initializers. Typed loosely this phase; Stage D tightens.
-   GPL-3.0-or-later (see LICENSE). */
+   The shared mutable engine context: the seam that replaced the engine
+   monolith's closure variables (Phase 1 Stage B). Engine modules read and
+   write live engine state through `ctx` (project, scene, camera/shake/flash
+   scalars, map runtime state, DOM roots, late-bound message/input systems)
+   and reach functions across scene boundaries — where a direct import would
+   create a cycle — through the `fns` forward-ref registry (each entry is
+   self-installed by its owning module at evaluation; boot.ts is the
+   composition root). The initial values below mirror the monolith's `let`
+   initializers; boot() assigns the DOM roots and project. Typed loosely this
+   phase; Stage D tightens. GPL-3.0-or-later (see LICENSE). */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -65,8 +61,8 @@ export const ctx: any = {
   dashPrev: false,
 };
 
-/** Late-bound engine functions. Modules that need functions defined in
- *  later-extracted modules (or still in engine.js) call through here; each
- *  owner installs its entries before they can be called (boot, or engine.js
- *  module evaluation). */
+/** Late-bound engine functions (refreshAllPages, openMenu, Battle, Plugins,
+ *  gameOver, toTitle). Modules that would need an upward/cyclic import call
+ *  through here instead; each owner self-installs its entries at module
+ *  evaluation, before anything can call them. */
 export const fns: any = {};

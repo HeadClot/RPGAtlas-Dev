@@ -43,7 +43,8 @@ const legacy = evaluate(`RA.migrateProject({
 assert.equal(legacy.system.windowColor, "#12182e", "migration backfills legacy projects");
 
 const editorSource = fs.readFileSync("src/editor/editor.js", "utf8");
-const engineSource = fs.readFileSync("src/engine/engine.js", "utf8");
+// applyScreenSettings moved to src/engine/boot.ts in Phase 1 Stage B.
+const engineSource = fs.readFileSync("src/engine/boot.ts", "utf8");
 const playCss = fs.readFileSync("css/play.css", "utf8");
 assert.match(editorSource, /field\("Window color"/, "System tab exposes the color picker");
 assert.match(engineSource, /RA\.windowColorPalette\(s\.windowColor\)/,
