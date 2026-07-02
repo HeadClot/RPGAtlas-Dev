@@ -37,18 +37,36 @@ import { openCharGenerator } from "./tools/character-generator";
 import {
   openLanguageSettings, openPatchNotes, openKeyboardShortcuts, openHelp, openAbout,
 } from "./help";
+import { openCommandPalette } from "./command-palette";
 
 const t = editorI18n.t;
 
 function playtestUrl() { return "play.html?playtest=" + Date.now(); }
 
 // ============================ actions / menus / toolbar ============================
-export const ACT: Record<string, any> = {};
-function act(id: any, def: any) {
+// The command registry (Phase 3 Stage A): every editor capability is a
+// registered EditorCommand, so the toolbar, menubar, shortcuts dialog, and the
+// command palette all drive one table. Stages B–F (and later plugin/graph
+// phases) add their commands through registerCommand.
+export interface EditorCommand {
+  label: string;              // i18n key; localized via actionLabel()
+  icon?: string;
+  key?: string;               // display-only key hint ("Ctrl+S") — boot.ts's binding table is the execution truth
+  tip?: string;
+  enabled?: () => boolean;
+  active?: () => boolean;
+  run: () => void;
+  labelKey?: string;          // set at registration (label/tip are re-localized on language change)
+  tipKey?: string;
+  btn?: any;                  // toolbar button, when the command is on the toolbar
+}
+export const ACT: Record<string, EditorCommand> = {};
+export function registerCommand(id: string, def: EditorCommand) {
   def.labelKey = def.label;
   def.tipKey = def.tip;
   ACT[id] = def;
 }
+const act = registerCommand;
 export function actionLabel(action: any) { return t(action.labelKey); }
 function actionTip(action: any) { return t(action.tipKey || action.labelKey); }
 export function runAct(id: any) {
@@ -131,6 +149,7 @@ act("audio", { label: "Audio Manager…", icon: "audio", tip: "Audio Manager —
 act("search", { label: "Event Searcher…", icon: "search", tip: "Event Searcher — find text / switches / variables across maps", run: openEventSearcher });
 act("resources", { label: "Resource Manager…", icon: "resources", tip: "Resource Manager — browse and export generated assets", run: openResourceManager });
 act("chargen", { label: "Character Generator…", icon: "chargen", tip: "Character Generator — build original walking sprites", run: openCharGenerator });
+act("cmdpal", { label: "Command Palette…", key: "Ctrl+P", tip: "Search and run any editor command", run: openCommandPalette });
 act("language", { label: "Interface Language…", run: openLanguageSettings });
 act("patchnotes", { label: "Patch Notes", run: openPatchNotes });
 act("shortcuts", { label: "Keyboard Shortcuts…", key: "?", run: openKeyboardShortcuts });
@@ -160,7 +179,7 @@ export function buildToolbar() {
         title: actionTip(a) + (a.key ? "  (" + a.key + ")" : ""),
         onclick: () => runAct(id),
       });
-      btn.innerHTML = ICONS[a.icon] || "";
+      btn.innerHTML = (a.icon && ICONS[a.icon]) || "";
       if (id === "play") btn.appendChild(document.createTextNode(actionLabel(a)));
       a.btn = btn;
       bar.appendChild(btn);
@@ -183,10 +202,40 @@ const MENUS = [
   { label: "Draw", items: ["tool-pen", "tool-erase", "tool-rect", "tool-circle", "tool-fill", "tool-shadow"] },
   { label: "Layer", items: ["layer-auto", "layer-ground", "layer-decor", "layer-decor2", "layer-over"] },
   { label: "Scale", items: ["zoomin", "zoomout", "zoom1", "zoomfit"] },
-  { label: "Tools", items: ["db", "plugins", "audio", "search", "resources", "chargen"] },
+  { label: "View", items: ["panel-maps", "panel-tiles", "panel-map", "-", "focus-next-panel", "-", "dock-reset", "dock-save", "dock-load"] },
+  { label: "Tools", items: ["db", "plugins", "audio", "search", "resources", "chargen", "-", "cmdpal"] },
   { label: "Game", items: ["play", "build", "-", "mapprops", "hdpreview", "mode-start"] },
   { label: "Help", items: ["language", "-", "shortcuts", "patchnotes", "help", "about"] },
 ];
+// Palette feed: every registered command with its localized label, key hint,
+// and a category derived from MENUS membership (first menu containing the id
+// wins; commands on no menu get "Other") — one source of truth for grouping.
+export interface CommandEntry {
+  id: string;
+  label: string;      // localized
+  category: string;   // localized menu label
+  key?: string;
+  enabled: boolean;
+}
+export function commandEntries(): CommandEntry[] {
+  const category: Record<string, string> = {};
+  for (const menu of MENUS) {
+    for (const it of menu.items) {
+      if (it !== "-" && !(it in category)) category[it] = menu.label;
+    }
+  }
+  return Object.keys(ACT).map((id) => {
+    const a = ACT[id];
+    return {
+      id,
+      label: actionLabel(a),
+      category: t(category[id] || "Other"),
+      key: a.key,
+      enabled: !(a.enabled && !a.enabled()),
+    };
+  });
+}
+
 let menuOpenRef: any = null;
 let menuDismissBound = false;
 export function closeMenus() {

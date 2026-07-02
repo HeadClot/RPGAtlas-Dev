@@ -30,6 +30,63 @@ import {
   closeMenus, isMenuOpen,
 } from "./workspace";
 import { openKeyboardShortcuts } from "./help";
+import { dispatchKey, type KeyBinding } from "./keymap";
+import { initDockWorkspace } from "./dock/panels";
+
+// The editor's global key bindings (Phase 3 Stage A). This table replaces the
+// old hardcoded keydown cascade one branch per binding, IN ORDER — the order
+// is load-bearing (height digits above layer digits above the zoom reset; the
+// bare {ctrl:true} barrier reproduces "an unmatched Ctrl chord still swallows
+// the event"). Command `key` strings in workspace.ts are display-only; THIS
+// table is the execution truth.
+const mapMode = () => S.mode === "map";
+const mapOrHeight = () => S.mode === "map" || S.mode === "height";
+const EDITOR_KEYS: KeyBinding[] = [
+  { codes: ["Escape"], run() {
+    if (isMenuOpen()) { closeMenus(); return; }
+    if (S.pasteMode || S.selection) { clearSelection(); return; }
+    if (S.selectedEvent) { S.selectedEvent = null; renderMap(); refreshToolbar(); }
+  } },
+  { key: "?", ctrl: false, preventDefault: true, run: () => openKeyboardShortcuts() },
+  // Mode cycle (always available). Tab forward, Shift+Tab back. Skip when Ctrl/Meta held.
+  { codes: ["Tab"], ctrl: false, preventDefault: true, run: (e) => cycleMode(e.shiftKey ? -1 : 1) },
+  // Ctrl/Meta chords
+  { codes: ["KeyZ"], ctrl: true, preventDefault: true, run: () => undo() },
+  { codes: ["KeyY"], ctrl: true, preventDefault: true, run: () => redo() },
+  { codes: ["KeyX"], ctrl: true, preventDefault: true, run: () => copySelection(true) },
+  { codes: ["KeyC"], ctrl: true, preventDefault: true, run: () => copySelection(false) },
+  { codes: ["KeyV"], ctrl: true, preventDefault: true, run: () => startPaste() },
+  { codes: ["KeyS"], ctrl: true, preventDefault: true, run: () => runAct("save") },
+  { codes: ["KeyP"], ctrl: true, preventDefault: true, run: () => runAct("cmdpal") }, // Ctrl+Shift+P too (shift: don't care)
+  { ctrl: true, run() {} }, // barrier: unmatched Ctrl chords never fall through
+  // Application shortcuts — global (any mode). F1/F5 override the browser's Help/Reload.
+  { codes: ["F1"], preventDefault: true, run: () => runAct("db") },
+  { codes: ["F2"], preventDefault: true, run: () => runAct("hdpreview") },
+  { codes: ["F5"], preventDefault: true, run: () => runAct("play") },
+  { codes: ["F6"], preventDefault: true, run: () => runAct("focus-next-panel") },
+  // Height mode consumes ALL digits for the painted elevation (0–9). Must stay above the layer gate.
+  { codes: ["Digit0", "Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9"],
+    when: () => S.mode === "height",
+    run(e) { S.heightVal = Number(e.code.slice(5)); setStatus(); } },
+  // Tools (Map or Height mode)
+  { codes: ["KeyQ"], when: mapOrHeight, run: () => setTool("pen") },
+  { codes: ["KeyW"], when: mapOrHeight, run: () => setTool("erase") },
+  { codes: ["KeyE"], when: mapOrHeight, run: () => setTool("rect") },
+  { codes: ["KeyR"], when: mapOrHeight, run: () => setTool("circle") },
+  { codes: ["KeyT"], when: mapOrHeight, run: () => setTool("fill") },
+  { codes: ["KeyY"], when: mapOrHeight, run: () => setTool("shadow") },
+  // Layers (Map mode)
+  { codes: ["Backquote"], when: mapMode, run: () => setLayer("auto") },
+  { codes: ["Digit1"], when: mapMode, run: () => setLayer("ground") },
+  { codes: ["Digit2"], when: mapMode, run: () => setLayer("decor") },
+  { codes: ["Digit3"], when: mapMode, run: () => setLayer("decor2") },
+  { codes: ["Digit4"], when: mapMode, run: () => setLayer("over") },
+  // View / selection
+  { codes: ["Equal", "NumpadAdd"], run: () => zoomStep(1) },
+  { codes: ["Minus", "NumpadSubtract"], run: () => zoomStep(-1) },
+  { codes: ["Digit0", "Numpad0"], run: () => setZoom(1) }, // reset to 100% (height mode consumes Digit0 above)
+  { codes: ["Delete", "Backspace"], when: () => S.mode === "event", run: () => deleteSelectedEvent() },
+];
 
 export function rebuildAll() {
   if (!RA.byId(S.proj.maps, S.curMapId)) S.curMapId = S.proj.maps[0].id;
@@ -49,6 +106,9 @@ async function boot() {
   S.palCanvas = $("palette");
 
   editorI18n.localizeStatic();
+  // Build the dockable workspace (registers the View-menu commands the menubar
+  // references) before the menubar/toolbar are built.
+  initDockWorkspace();
   buildMenubar();
   buildToolbar();
 
@@ -97,68 +157,7 @@ async function boot() {
   document.addEventListener("keydown", (e: any) => {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
     if (modalRoot().children.length) return;
-    if (e.code === "Escape") {
-      if (isMenuOpen()) { closeMenus(); return; }
-      if (S.pasteMode || S.selection) { clearSelection(); return; }
-      if (S.selectedEvent) { S.selectedEvent = null; renderMap(); refreshToolbar(); }
-      return;
-    }
-    if (e.key === "?" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); openKeyboardShortcuts(); return; }
-    // Mode cycle (always available). Tab forward, Shift+Tab back. Skip when Ctrl/Meta held.
-    if (e.code === "Tab" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); cycleMode(e.shiftKey ? -1 : 1); return; }
-
-    if (e.ctrlKey || e.metaKey) {
-      switch (e.code) {
-        case "KeyZ": e.preventDefault(); undo(); break;
-        case "KeyY": e.preventDefault(); redo(); break;
-        case "KeyX": e.preventDefault(); copySelection(true); break;
-        case "KeyC": e.preventDefault(); copySelection(false); break;
-        case "KeyV": e.preventDefault(); startPaste(); break;
-        case "KeyS": e.preventDefault(); runAct("save"); break;
-      }
-      return;
-    }
-    // Application shortcuts — global (any mode). F1/F5 override the browser's Help/Reload.
-    switch (e.code) {
-      case "F1": e.preventDefault(); runAct("db");        return;
-      case "F2": e.preventDefault(); runAct("hdpreview"); return;
-      case "F5": e.preventDefault(); runAct("play");      return;
-    }
-    // Height mode consumes ALL digits for the painted elevation (0–9). Must stay above the layer gate.
-    if (S.mode === "height" && /^Digit\d$/.test(e.code)) {
-      S.heightVal = Number(e.code.slice(5));
-      setStatus();
-      return;
-    }
-    // Tools
-    if (S.mode === "map" || S.mode === "height") {
-      switch (e.code) {
-        case "KeyQ": setTool("pen");    return;
-        case "KeyW": setTool("erase");  return;
-        case "KeyE": setTool("rect");   return;
-        case "KeyR": setTool("circle"); return;
-        case "KeyT": setTool("fill");   return;
-        case "KeyY": setTool("shadow"); return;
-      }
-    }
-    // Layers
-    if (S.mode === "map") {
-      switch (e.code) {
-        case "Backquote": setLayer("auto");   return;
-        case "Digit1":    setLayer("ground"); return;
-        case "Digit2":    setLayer("decor");  return;
-        case "Digit3":    setLayer("decor2"); return;
-        case "Digit4":    setLayer("over");   return;
-      }
-    }
-    switch (e.code) {
-      case "Equal": case "NumpadAdd": zoomStep(1); break;
-      case "Minus": case "NumpadSubtract": zoomStep(-1); break;
-      case "Digit0": case "Numpad0": setZoom(1); break; // reset to 100% (height mode consumes 0 above)
-      case "Delete": case "Backspace":
-        if (S.mode === "event") deleteSelectedEvent();
-        break;
-    }
+    dispatchKey(EDITOR_KEYS, e);
   });
 
   setTool("pen");
