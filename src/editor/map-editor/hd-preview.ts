@@ -1,15 +1,17 @@
 /* RPGAtlas — src/editor/map-editor/hd-preview.ts
    HD-2D live preview panel (WebGL renderer driven from editor data).
    Verbatim move from the editor monolith (Phase 1 Stage C, Package 1):
-   logic unchanged, closure vars routed through editor-state.ts; calls into
-   not-yet-extracted sections go through editorHooks.
+   logic unchanged, closure vars routed through editor-state.ts; refreshToolbar
+   is imported directly from workspace.ts (function-only cycle — workspace binds
+   the HD-2D preview toggle to an action; safe).
    Copyright (C) 2026 RPGAtlas contributors - GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Assets, GLRender, TILE, curMap, editorHooks } from "../editor-state";
+import { Assets, GLRender, TILE, curMap } from "../editor-state";
 import { h } from "../dom";
 import { effectivePass } from "./map-render";
 import { flashStatus } from "./status";
+import { refreshToolbar } from "../workspace";
 
   // ============================ HD-2D live preview ============================
   // A floating panel that renders the current map through the game's WebGL
@@ -121,7 +123,7 @@ import { flashStatus } from "./status";
     window.removeEventListener("mouseup", hdPanel._up);
     hdPanel.remove();
     hdPanel = null;
-    editorHooks.refreshToolbar();
+    refreshToolbar();
   }
   export async function toggleHdPreview() {
     if (hdPanel) { closeHdPreview(); return; }
@@ -171,7 +173,7 @@ import { flashStatus } from "./status";
     hdCamX = m.width * TILE / 2; hdCamY = m.height * TILE / 2;
     hdMapId = 0; hdDirty = true; hdLastBuild = 0;
     hdFrame();
-    editorHooks.refreshToolbar();
+    refreshToolbar();
   }
 
   // New helper (only deviation from verbatim): the toolbar active-state

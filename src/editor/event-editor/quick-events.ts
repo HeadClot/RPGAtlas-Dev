@@ -3,15 +3,17 @@
    dialog without opening the full event editor.
    Verbatim move from the editor monolith (Phase 1 Stage C, Package 2):
    logic unchanged, closure vars routed through editor-state.ts; the toolbar
-   refresh still goes through editorHooks (Package 3 owns actions/toolbar).
+   refresh is imported directly from workspace.ts (Package 3 owns actions/
+   toolbar; one-way edge — workspace does not import quick-events).
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { DataDefaults, RA, editorState as S, curMap, editorHooks } from "../editor-state";
+import { DataDefaults, RA, editorState as S, curMap } from "../editor-state";
 import { h, sel, nIn, field, row, dbOpts, DIR_OPTS } from "../dom";
 import { modal } from "../modals";
 import { touch } from "../persistence";
 import { renderMap } from "../map-editor/map-render";
+import { refreshToolbar } from "../workspace";
 import { pushUndo } from "../map-editor/history";
 import { eventAt } from "../map-editor/painting";
 import { flashStatus } from "../map-editor/status";
@@ -35,7 +37,7 @@ import { openLocationPicker } from "./location-picker";
     ev.pages = pages;
     curMap().events.push(ev);
     S.selectedEvent = ev;
-    touch(); renderMap(); editorHooks.refreshToolbar();
+    touch(); renderMap(); refreshToolbar();
     return ev;
   }
   export function quickSign(cell: any) {

@@ -3,18 +3,20 @@
    usage across every map; clicking a result jumps to and opens that event.
    Verbatim move from the editor monolith (Phase 1 Stage C, Package 3):
    logic unchanged, closure vars routed through editor-state.ts. setMode and
-   refreshToolbar still live in the editor.js workspace section, so they are
-   reached through editorHooks (dissolved when workspace.ts lands).
+   refreshToolbar are imported directly from workspace.ts (function-only import
+   cycle — workspace binds openEventSearcher to an action; both are called only
+   on user interaction, so evaluation order is irrelevant).
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { TILE, editorState as S, editorHooks } from "../editor-state";
+import { TILE, editorState as S } from "../editor-state";
 import { $, h, field } from "../dom";
 import { modal } from "../modals";
 import { renderMap } from "../map-editor/map-render";
 import { rebuildMapList } from "../map-editor/map-list";
 import { walkCommands } from "../event-editor/command-list";
 import { openEventEditor } from "../event-editor/event-editor";
+import { setMode, refreshToolbar } from "../workspace";
 
 export function openEventSearcher() {
   const results = h("div", { class: "search-results" });
@@ -76,9 +78,9 @@ export function openEventSearcher() {
       results.appendChild(h("div", { class: "search-row", onclick() {
         dlg.close();
         S.curMapId = r.m.id;
-        editorHooks.setMode("event");
+        setMode("event");
         S.selectedEvent = r.ev;
-        rebuildMapList(); renderMap(); editorHooks.refreshToolbar();
+        rebuildMapList(); renderMap(); refreshToolbar();
         const sc = $("mapscroll");
         sc.scrollLeft = r.ev.x * TILE * S.zoom - sc.clientWidth / 2;
         sc.scrollTop = r.ev.y * TILE * S.zoom - sc.clientHeight / 2;

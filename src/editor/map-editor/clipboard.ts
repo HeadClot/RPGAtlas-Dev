@@ -1,17 +1,19 @@
 /* RPGAtlas — src/editor/map-editor/clipboard.ts
    Tile / event clipboard: copy, cut, paste, selection.
    Verbatim move from the editor monolith (Phase 1 Stage C, Package 1):
-   logic unchanged, closure vars routed through editor-state.ts; calls into
-   not-yet-extracted sections go through editorHooks.
+   logic unchanged, closure vars routed through editor-state.ts; setMode and
+   refreshToolbar are imported directly from workspace.ts (function-only cycle —
+   workspace binds copy/cut/paste/deselect to actions; safe).
    Copyright (C) 2026 RPGAtlas contributors - GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { RA, LAYER_ORDER, editorState as S, curMap, editorHooks } from "../editor-state";
+import { RA, LAYER_ORDER, editorState as S, curMap } from "../editor-state";
 import { touch } from "../persistence";
 import { renderMap } from "./map-render";
 import { pushUndo } from "./history";
 import { eventAt, heightsOf } from "./painting";
 import { setStatus, flashStatus } from "./status";
+import { setMode, refreshToolbar } from "../workspace";
 
   // ---- clipboard ----
   export function canCopy() {
@@ -30,7 +32,7 @@ import { setStatus, flashStatus } from "./status";
         touch(); renderMap();
       }
       flashStatus((cut ? "Event cut" : "Event copied") + " — Paste (Ctrl+V), then click to place");
-      editorHooks.refreshToolbar();
+      refreshToolbar();
       return;
     }
     if (S.mode !== "map" || !S.selection) { flashStatus("Shift+drag on the map to select an area first"); return; }
@@ -62,21 +64,21 @@ import { setStatus, flashStatus } from "./status";
       touch(); renderMap();
     }
     flashStatus((cut ? "Cut " : "Copied ") + w + "×" + h2 + " tiles — Paste (Ctrl+V), then click to stamp");
-    editorHooks.refreshToolbar();
+    refreshToolbar();
   }
   export function startPaste() {
     if (S.clipEvent && (S.mode === "event" || !S.clipTiles)) {
-      if (S.mode !== "event") editorHooks.setMode("event");
+      if (S.mode !== "event") setMode("event");
       S.pasteMode = "event";
     } else if (S.clipTiles) {
-      if (S.mode !== "map") editorHooks.setMode("map");
+      if (S.mode !== "map") setMode("map");
       S.pasteMode = "tiles";
     } else {
       flashStatus("Clipboard is empty — Copy or Cut something first");
       return;
     }
     flashStatus("Click the map to paste (Esc or right-click cancels)");
-    editorHooks.refreshToolbar(); renderMap();
+    refreshToolbar(); renderMap();
   }
   export function stampPaste(cell: any) {
     if (S.pasteMode === "tiles" && S.clipTiles) {
@@ -103,15 +105,15 @@ import { setStatus, flashStatus } from "./status";
       m.events.push(ev);
       S.selectedEvent = ev;
       S.pasteMode = null; // events place one at a time
-      touch(); renderMap(); editorHooks.refreshToolbar(); setStatus();
+      touch(); renderMap(); refreshToolbar(); setStatus();
     }
   }
   export function cancelPaste() {
     S.pasteMode = null;
-    renderMap(); editorHooks.refreshToolbar(); setStatus();
+    renderMap(); refreshToolbar(); setStatus();
   }
   export function clearSelection() {
     S.selection = null;
     S.pasteMode = null;
-    renderMap(); editorHooks.refreshToolbar(); setStatus();
+    renderMap(); refreshToolbar(); setStatus();
   }

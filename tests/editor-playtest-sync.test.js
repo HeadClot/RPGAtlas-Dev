@@ -3,18 +3,18 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const editorSource = fs.readFileSync("src/editor/editor.js", "utf8");
+const workspaceSource = fs.readFileSync("src/editor/workspace.ts", "utf8");
 const mapRenderSource = fs.readFileSync("src/editor/map-editor/map-render.ts", "utf8");
 const indexSource = fs.readFileSync("index.html", "utf8");
 
 assert.match(
-  editorSource,
+  workspaceSource,
   /function playtestUrl\(\) \{ return "play\.html\?playtest=" \+ Date\.now\(\); \}/,
   "browser playtests use a fresh play.html URL",
 );
 
 assert.match(
-  editorSource,
+  workspaceSource,
   /window\.open\(playtestUrl\(\), "rpgatlas_play"\)/,
   "Playtest command opens the cache-busted browser URL",
 );

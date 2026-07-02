@@ -1,12 +1,13 @@
 /* RPGAtlas — src/editor/map-editor/painting.ts
    Painting tools, layer resolution, event-mode canvas actions & handlers.
    Verbatim move from the editor monolith (Phase 1 Stage C, Package 1):
-   logic unchanged, closure vars routed through editor-state.ts; calls into
-   not-yet-extracted sections go through editorHooks.
+   logic unchanged, closure vars routed through editor-state.ts; setMode and
+   refreshToolbar are imported directly from workspace.ts (one-way edge —
+   workspace does not import painting.ts).
    Copyright (C) 2026 RPGAtlas contributors - GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Assets, DataDefaults, RA, TILE, editorState as S, curMap, editorHooks } from "../editor-state";
+import { Assets, DataDefaults, RA, TILE, editorState as S, curMap } from "../editor-state";
 import { showPopupMenu } from "../modals";
 import { touch } from "../persistence";
 import { renderMap, renderPalette, normRect } from "./map-render";
@@ -15,6 +16,7 @@ import { stampPaste, cancelPaste, copySelection } from "./clipboard";
 import { setStatus, flashStatus } from "./status";
 import { quickTransfer, quickSign, quickChest } from "../event-editor/quick-events";
 import { openEventEditor } from "../event-editor/event-editor";
+import { setMode, refreshToolbar } from "../workspace";
 
   // ============================ painting ============================
   export function cellFromMouse(e: any) {
@@ -127,7 +129,7 @@ import { openEventEditor } from "../event-editor/event-editor";
     if (existing) {
       // Existing event → edit in place; commits on OK, unchanged behavior.
       S.selectedEvent = existing;
-      renderMap(); editorHooks.refreshToolbar();
+      renderMap(); refreshToolbar();
       openEventEditor(existing);
       return existing;
     }
@@ -138,7 +140,7 @@ import { openEventEditor } from "../event-editor/event-editor";
     openEventEditor(ev, () => {
       curMap().events.push(ev);
       S.selectedEvent = ev;
-      editorHooks.refreshToolbar();
+      refreshToolbar();
     });
     return ev;
   }
@@ -154,7 +156,7 @@ import { openEventEditor } from "../event-editor/event-editor";
     const m = curMap();
     m.events = m.events.filter((x: any) => x !== S.selectedEvent);
     S.selectedEvent = null;
-    touch(); renderMap(); editorHooks.refreshToolbar();
+    touch(); renderMap(); refreshToolbar();
   }
 
   // Right-click in Event mode: select what's under the cursor, then show a context-sensitive menu.
@@ -162,7 +164,7 @@ import { openEventEditor } from "../event-editor/event-editor";
     const cell = cellFromMouse(e);
     if (!cell) return;
     S.selectedEvent = eventAt(cell.x, cell.y);
-    renderMap(); editorHooks.refreshToolbar();
+    renderMap(); refreshToolbar();
     const ev = S.selectedEvent;
     if (ev) {
       showPopupMenu(e.clientX, e.clientY, [
@@ -218,7 +220,7 @@ import { openEventEditor } from "../event-editor/event-editor";
     if (e.button !== 0) return;
     if (S.mode === "start") {
       setStartHere(cell);
-      editorHooks.setMode("event");
+      setMode("event");
       return;
     }
     if (S.mode === "pass") {
@@ -242,7 +244,7 @@ import { openEventEditor } from "../event-editor/event-editor";
       S.selectedEvent = eventAt(cell.x, cell.y);
       S.dragEvent = S.selectedEvent;
       S.dragPushed = false;
-      renderMap(); editorHooks.refreshToolbar();
+      renderMap(); refreshToolbar();
       return;
     }
     // map mode
@@ -250,7 +252,7 @@ import { openEventEditor } from "../event-editor/event-editor";
       S.selecting = true;
       S.selAnchor = cell;
       S.selection = normRect(cell, cell);
-      renderMap(); editorHooks.refreshToolbar();
+      renderMap(); refreshToolbar();
       return;
     }
     S.painting = true;
@@ -291,7 +293,7 @@ import { openEventEditor } from "../event-editor/event-editor";
   export function onCanvasUp() {
     if (S.selecting) {
       S.selecting = false; S.selAnchor = null;
-      editorHooks.refreshToolbar(); renderMap();
+      refreshToolbar(); renderMap();
     }
     if ((S.mode === "map" || S.mode === "height") && S.painting && (S.tool === "rect" || S.tool === "circle") && S.rectStart && S.hoverCell) {
       const m = curMap();

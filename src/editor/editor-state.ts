@@ -12,12 +12,11 @@
      S.proj, S.curMapId = 2, S.undoStack.push(...)
 
    No framework, no reactivity: change notification stays what it always was —
-   explicit calls (touch(), renderMap(), editorHooks.refreshToolbar(), …).
-   `editorHooks` is the one indirection: named slots for functions that still
-   live inside the editor.js closure (or in a not-yet-extracted package) but
-   are called from extracted modules. editor.js registers its implementations
-   at module-evaluation time, before boot() runs. Packages 2/3 shrink this
-   registry as the remaining sections become real modules.
+   explicit calls (touch(), renderMap(), refreshToolbar(), …).
+   `editorHooks` is the one remaining indirection after Package 3: a single
+   slot for rebuildAll, which lives in boot.ts (the composition root). All the
+   other former slots (refreshToolbar, setMode, eventIcon) were dissolved into
+   direct module imports as their owning sections became real modules.
 
    GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -123,16 +122,15 @@ export function curMap() {
   return RA.byId(editorState.proj.maps, editorState.curMapId);
 }
 
-// ---- change-notification / cross-boundary hooks ----
-// Slots for functions that live in a section that has not been extracted yet
-// (still inside src/editor/editor.js) but are called from extracted modules.
-// editor.js fills these at module-evaluation time (before boot()). When a
-// later package extracts the implementation, the extracted module keeps the
-// registration (or callers switch to a direct import and the slot is removed).
+// ---- change-notification / cross-boundary hook ----
+// One remaining indirection: rebuildAll (the full editor rebuild) lives in
+// boot.ts, the composition root, which also side-effect-boots the editor at
+// module-evaluation time. persistence.ts and workspace.ts call it after
+// loading / resetting a project, but importing boot.ts from them would drag
+// boot's top-level side effects into a cycle — so boot.ts registers its
+// implementation here and callers reach it through this slot.
 export interface EditorHooks {
-  refreshToolbar: () => void;                              // actions/toolbar section
-  setMode: (m: string) => void;                            // modes/zoom section
-  rebuildAll: () => void;                                  // boot/wiring section
+  rebuildAll: () => void;                                  // boot/wiring section (boot.ts)
 }
 
 export const editorHooks = {} as EditorHooks;
