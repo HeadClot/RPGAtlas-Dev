@@ -3,13 +3,6 @@
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 "use strict";
 
-import {
-  exportProjectFile,
-  exportStandaloneHtml as writeStandaloneHtml,
-  exportWindowsExecutable as writeWindowsExecutable,
-  loadStoredProject,
-  saveProject,
-} from "../../js/editor/project-io.js";
 import * as host from "../../js/editor/host.js";
 import { PATCH_NOTES } from "../../js/patch-notes.js?v=4";
 import {
@@ -20,11 +13,21 @@ import {
   editorHooks,
   curMap,
 } from "./editor-state";
+import {
+  $, h, esc, tIn, nIn, sel, chk, rangeIn, field, row,
+  dbOpts, switchOpts, varOpts, cmpOpts, charsetOpts,
+  DIR_OPTS, SE_NAMES, MUSIC_OPTS,
+  elementSelOpts, skillTypeSelOpts, typeSelOpts, stringSelOpts,
+} from "./dom";
+import { modalRoot, modal, confirmBox, closePopupMenu, showPopupMenu } from "./modals";
+import {
+  touch, saveNow, loadStored, desktopSave, exportProject,
+  openStandaloneExport, importProject,
+} from "./persistence";
 
 (() => {
   const t = editorI18n.t;
 
-  const $ = (id) => document.getElementById(id);
   function playtestUrl() { return "play.html?playtest=" + Date.now(); }
 
   // Cross-boundary hook registrations: functions that still live in this
@@ -39,104 +42,12 @@ import {
     quickSign,
     quickChest,
     walkCommands,
+    // temporary slots — implementations move to src/editor/map-editor/* in the
+    // next extraction commit, which switches persistence.ts to direct imports:
+    flashStatus,
+    hdMarkDirty,
   });
 
-  // ============================ tiny DOM builder ============================
-  function h(tag, attrs, ...kids) {
-    const e = document.createElement(tag);
-    if (attrs) for (const [k, v] of Object.entries(attrs)) {
-      if (k === "class") e.className = v;
-      else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
-      else if (k === "html") e.innerHTML = v;
-      else e.setAttribute(k, v);
-    }
-    for (const k of kids) {
-      if (k == null) continue;
-      e.appendChild(typeof k === "string" ? document.createTextNode(k) : k);
-    }
-    return e;
-  }
-  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
-
-  // bound inputs ---------------------------------------------------------
-  function tIn(obj, key, cls) {
-    return h("input", { type: "text", value: obj[key] == null ? "" : obj[key], class: cls || "",
-      oninput(e) { obj[key] = e.target.value; touch(); } });
-  }
-  function nIn(obj, key, min, max, step) {
-    return h("input", { type: "number", value: obj[key] == null ? 0 : obj[key],
-      min: min == null ? -99999 : min, max: max == null ? 99999 : max, step: step || 1,
-      oninput(e) { obj[key] = Number(e.target.value) || 0; touch(); } });
-  }
-  function sel(obj, key, options, onchange) {
-    const s = h("select", {
-      onchange(e) {
-        const raw = e.target.value;
-        obj[key] = isNaN(Number(raw)) || raw === "" || options.stringValues ? raw : Number(raw);
-        touch();
-        if (onchange) onchange(obj[key]);
-      },
-    });
-    for (const o of options) s.appendChild(h("option", { value: o.v }, o.l));
-    s.value = String(obj[key] == null ? "" : obj[key]);
-    return s;
-  }
-  function chk(obj, key) {
-    return h("input", { type: "checkbox", onchange(e) { obj[key] = e.target.checked; touch(); } , ...(obj[key] ? { checked: "" } : {}) });
-  }
-  function rangeIn(obj, key, min, max, suffix) {
-    const out = h("span", { class: "range-val" }, String(obj[key] == null ? min : obj[key]) + (suffix || ""));
-    const r = h("input", { type: "range", min, max, value: obj[key] == null ? min : obj[key],
-      oninput(e) { obj[key] = Number(e.target.value); out.textContent = e.target.value + (suffix || ""); touch(); } });
-    return h("span", { class: "rangewrap" }, r, out);
-  }
-  function field(label, input) {
-    return h("label", { class: "fld" }, h("span", null, t(label)), input);
-  }
-  function row(...kids) { return h("div", { class: "frow" }, ...kids); }
-
-  // option helpers -------------------------------------------------------
-  function dbOpts(arr, noneLabel) {
-    const o = arr.map((e) => ({
-      v: e.id,
-      l: e.id + ": " + (e.icon == null ? "" : "Icon " + String(e.icon).padStart(2, "0") + " · ") + e.name,
-    }));
-    if (noneLabel != null) o.unshift({ v: 0, l: noneLabel });
-    return o;
-  }
-  function switchOpts() {
-    return [{ v: 0, l: "(none)" }].concat(S.proj.system.switches.map((n, i) => ({ v: i + 1, l: (i + 1) + ": " + (n || "—") })));
-  }
-  function varOpts() {
-    return [{ v: 0, l: "(none)" }].concat(S.proj.system.variables.map((n, i) => ({ v: i + 1, l: (i + 1) + ": " + (n || "—") })));
-  }
-  function cmpOpts() {
-    return [{ v: ">=", l: "≥" }, { v: "==", l: "=" }, { v: "<=", l: "≤" }, {v: "<", l: "<"}, {v: ">", l: ">"}, {v: "!=", l: "≠"}];
-  }
-  function charsetOpts(humansOnly) {
-    const o = [{ v: "", l: "(none)" }];
-    Assets.charsets.forEach((c) => {
-      if (humansOnly && c.kind !== "human") return;
-      o.push({ v: c.key, l: c.name });
-    });
-    o.stringValues = true;
-    return o;
-  }
-  const DIR_OPTS = [{ v: 0, l: "Down" }, { v: 1, l: "Left" }, { v: 2, l: "Right" }, { v: 3, l: "Up" }];
-  const SE_NAMES = ["cursor", "ok", "cancel", "buzzer", "hit", "crit", "magic", "heal", "item", "chest", "door", "levelup", "save", "escape", "miss", "encounter", "gameover"];
-  const MUSIC_OPTS = () => [{ v: "none", l: "(none)" }].concat(Sfx.THEMES.map((t) => ({ v: t, l: t })));
-
-  // Type-list options (sourced from Database ▸ Types) ---------------------
-  function elementSelOpts() {
-    const o = RA.typeList(S.proj, "elements").map((e) => ({ v: e.key, l: e.name }));
-    o.stringValues = true;
-    return o;
-  }
-  function skillTypeSelOpts() {
-    const st = RA.typeList(S.proj, "skillTypes");
-    const base = [{ v: "phys", l: "Physical" }, { v: "magic", l: "Magical" }, { v: "heal", l: "Heal" }];
-    return base.map((b) => { const f = st.find((s) => s.key === b.v); return { v: b.v, l: f ? f.name : b.l }; });
-  }
   function skillTypeTraitOpts() {
     const st = RA.typeList(S.proj, "skillTypes");
     const o = TRAIT_SKILL_TYPES.map((d) => {
@@ -146,254 +57,6 @@ import {
     o.stringValues = true;
     return o;
   }
-  function typeSelOpts(kind, noneLabel) {
-    const o = RA.typeList(S.proj, kind).map((t) => ({ v: t.id, l: t.name }));
-    if (noneLabel != null) o.unshift({ v: 0, l: noneLabel });
-    return o;
-  }
-  function stringSelOpts(values) {
-    const o = values.map((v) => ({ v, l: v }));
-    o.stringValues = true;
-    return o;
-  }
-
-  // ============================ modal framework ============================
-  const modalRoot = () => $("modal-root");
-  function modal(opts) {
-    const overlay = h("div", { class: "overlay" });
-    const win = h("div", { class: "modal " + (opts.wide ? "wide " : "") + (opts.resizable ? "resizable " : "") + (opts.class || "") });
-    win.appendChild(h("div", { class: "modal-title" }, t(opts.title || "")));
-    const body = h("div", { class: "modal-body" });
-    if (opts.content) body.appendChild(opts.content);
-    win.appendChild(body);
-    let onKey = null;
-    function close(result) {
-      if (onKey) document.removeEventListener("keydown", onKey);
-      overlay.remove();
-      if (opts.onClose) opts.onClose(result);
-    }
-    // A caller can supply a fully custom footer node (its own button layout); otherwise we
-    // generate the standard right-aligned button row from opts.buttons.
-    if (opts.footer) {
-      win.appendChild(opts.footer);
-    } else {
-      const btnrow = h("div", { class: "modal-btns" });
-      (opts.buttons || [{ label: "Close" }]).forEach((b) => {
-        btnrow.appendChild(h("button", {
-          class: b.primary ? "primary" : "",
-          onclick() { if (b.onClick) b.onClick(close); else close(); },
-        }, t(b.label)));
-      });
-      win.appendChild(btnrow);
-    }
-    overlay.appendChild(win);
-    overlay.addEventListener("mousedown", (e) => { if (e.target === overlay && opts.dismissable !== false) close(); });
-    // Opt-in keyboard shortcuts for small dialogs: Enter = primary (OK/Save), Esc = Cancel/Close.
-    // Only the topmost dialog responds, and Enter is ignored while typing in a textarea/select so
-    // multi-line fields (Show Text, Script) keep their newline behavior.
-    if (opts.dialogKeys) {
-      const runBtn = (b) => { if (!b) return; if (b.onClick) b.onClick(close); else close(); };
-      onKey = (e) => {
-        if (overlay !== modalRoot().lastElementChild) return;
-        if (e.key === "Escape") {
-          const cancel = (opts.buttons || []).find((b) => b.label && /^(cancel|close|no)$/i.test(b.label));
-          if (cancel) { e.preventDefault(); runBtn(cancel); }
-          else if (opts.dismissable !== false) { e.preventDefault(); close(); }
-        } else if (e.key === "Enter") {
-          const ae = document.activeElement, tag = ae && ae.tagName;
-          if (tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON" || (ae && ae.isContentEditable)) return;
-          const primary = (opts.buttons || []).find((b) => b.primary);
-          if (primary) { e.preventDefault(); runBtn(primary); }
-        }
-      };
-      document.addEventListener("keydown", onKey);
-    }
-    modalRoot().appendChild(overlay);
-    return { close, body, el: win };
-  }
-  function confirmBox(text, onYes) {
-    modal({
-      title: "Confirm",
-      content: h("div", null, text),
-      buttons: [
-        { label: "OK", primary: true, onClick(c) { c(); onYes(); } },
-        { label: "Cancel" },
-      ],
-      dialogKeys: true,
-    });
-  }
-
-  // Reusable lightweight popup menu (reuses the menu-drop / menu-item / mi-key / menu-sep CSS that
-  // the event-editor menus use). `items` is an array of "separator" or
-  // { label, key?, enabled?, onClick, submenu? }. A submenu (its own items array) opens to the side
-  // on hover; entering a different top-level row closes it. NOTE: openCmdMenu/openPageMenu predate
-  // this and hand-roll the same pattern — left as-is to avoid regressions.
-  function closePopupMenu() {
-    if (S.popupSubTimer) { clearTimeout(S.popupSubTimer); S.popupSubTimer = null; }
-    if (!S.popupMenuEl) return;
-    S.popupMenuEl.remove(); S.popupMenuEl = null;
-    document.removeEventListener("mousedown", onPopupOutside, true);
-    document.removeEventListener("keydown", onPopupKey, true);
-  }
-  function onPopupOutside(e) { if (S.popupMenuEl && !S.popupMenuEl.contains(e.target)) closePopupMenu(); }
-  function onPopupKey(e) { if (e.key === "Escape") { e.preventDefault(); closePopupMenu(); } }
-  function buildPopupList(items, isSub) {
-    const menu = h("div", { class: "menu-drop" + (isSub ? " menu-sub" : "") });
-    const rows = [];
-    for (const it of items) {
-      if (it === "separator") { menu.appendChild(h("div", { class: "menu-sep" })); continue; }
-      const on = it.enabled !== false;
-      const hasSub = Array.isArray(it.submenu) && it.submenu.length;
-      const rowEl = h("div", { class: "menu-item" + (on ? "" : " disabled") },
-        h("span", { class: "mi-label" }, it.label),
-        it.key ? h("span", { class: "mi-key" }, it.key) : (hasSub ? h("span", { class: "mi-key" }, "▸") : null));
-      if (!isSub) {
-        rowEl.addEventListener("mouseenter", () => {
-          // A pass-through (mouse skimming across rows) shouldn't flash a submenu open: defer the
-          // open behind a short hover-intent delay, cancelled if the pointer leaves first.
-          if (S.popupSubTimer) { clearTimeout(S.popupSubTimer); S.popupSubTimer = null; }
-          rows.forEach((r) => { if (r !== rowEl && r._sub) { r._sub.remove(); r._sub = null; } });
-          if (hasSub && on && !rowEl._sub) {
-            S.popupSubTimer = setTimeout(() => {
-              S.popupSubTimer = null;
-              if (rowEl._sub) return;
-              const sub = buildPopupList(it.submenu, true);
-              rowEl.appendChild(sub);
-              rowEl._sub = sub;
-              if (sub.getBoundingClientRect().right > window.innerWidth - 4) sub.classList.add("flip-left");
-            }, 220);
-          }
-        });
-        rowEl.addEventListener("mouseleave", () => {
-          // Cancel a not-yet-fired open; an already-open submenu stays (it's a child of this row, so
-          // moving onto it doesn't fire this leave) until a different row is hovered.
-          if (S.popupSubTimer) { clearTimeout(S.popupSubTimer); S.popupSubTimer = null; }
-        });
-      }
-      if (on && !hasSub) {
-        rowEl.addEventListener("mousedown", (e) => { e.stopPropagation(); closePopupMenu(); it.onClick(); });
-      }
-      rows.push(rowEl);
-      menu.appendChild(rowEl);
-    }
-    return menu;
-  }
-  function showPopupMenu(x, y, items) {
-    closePopupMenu();
-    const menu = buildPopupList(items, false);
-    document.body.appendChild(menu);
-    menu.style.left = Math.max(4, Math.min(x, window.innerWidth - menu.offsetWidth - 4)) + "px";
-    menu.style.top = Math.max(4, Math.min(y, window.innerHeight - menu.offsetHeight - 4)) + "px";
-    S.popupMenuEl = menu;
-    document.addEventListener("mousedown", onPopupOutside, true);
-    document.addEventListener("keydown", onPopupKey, true);
-  }
-
-  // ============================ persistence ============================
-  let saveTimer = null;
-  function touch() {
-    $("save-ind").textContent = "● " + t("unsaved");
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveNow, 700);
-    hdMarkDirty(); // keep the HD-2D preview in sync with edits
-  }
-  function saveNow() {
-    try {
-      saveProject(localStorage, S.proj);
-      $("save-ind").textContent = "✓ " + t("saved");
-    } catch (e) {
-      $("save-ind").textContent = "⚠ " + t("save failed");
-      console.error(e);
-    }
-  }
-  function loadStored() {
-    return loadStoredProject(localStorage, (project) => RA.migrateProject(project));
-  }
-  // Desktop: the .json file the project is bound to. Save (Ctrl+S) writes here
-  // silently once set; the first save — or Export (Save As) — prompts for it.
-  let currentProjectPath = null;
-  function baseName(p) { return String(p).replace(/^.*[\\/]/, ""); }
-  async function desktopSave(saveAs) {
-    saveNow(); // keep the local autosave as a crash-recovery copy
-    try {
-      if (saveAs || !currentProjectPath) {
-        const path = await host.saveProjectToFile(S.proj); // native Save dialog
-        if (!path) { flashStatus("Saved locally — file save cancelled"); return; }
-        currentProjectPath = path;
-      } else {
-        await host.saveProjectToPath(currentProjectPath, S.proj); // silent overwrite
-      }
-      flashStatus("Project saved to " + baseName(currentProjectPath));
-    } catch (e) {
-      flashStatus("Save failed: " + e.message);
-    }
-  }
-  async function exportProject() {
-    if (host.isTauri) { desktopSave(true); return; } // Export = Save As on desktop
-    try {
-      const result = await exportProjectFile(S.proj);
-      if (result && result.cancelled) {
-        flashStatus("Project export cancelled");
-      } else if (result && result.method === "picker") {
-        flashStatus("Project exported to " + result.fileName);
-      } else if (result) {
-        flashStatus("Project export downloaded as " + result.fileName);
-      }
-    } catch (e) {
-      alert("Project export failed: " + ((e && e.message) || e));
-    }
-  }
-  function openStandaloneExport() {
-    const content = h("div", null,
-      h("p", null, "Build the current project as one self-contained game file. The editor, engine folder, web server, and project .json are not required."),
-      h("p", null, "Windows EXE includes a small launcher that extracts the game and opens it in the player's default browser. Standalone HTML works across platforms."),
-      h("p", { class: "dim" }, "The launcher is unsigned, so Windows may show a security warning. Save slots are kept in the player's browser."),
-    );
-    modal({
-      title: "Export Standalone Game",
-      content,
-      buttons: [
-        { label: "Windows EXE", primary: true, async onClick(close) {
-          try {
-            await writeWindowsExecutable(S.proj, Assets);
-            close();
-            flashStatus("Windows game executable exported");
-          } catch (e) {
-            alert("Game export failed: " + e.message);
-          }
-        } },
-        { label: "Standalone HTML", async onClick(close) {
-          try {
-            await writeStandaloneHtml(S.proj, Assets);
-            close();
-            flashStatus("Standalone HTML game exported");
-          } catch (e) {
-            alert("Game export failed: " + e.message);
-          }
-        } },
-        { label: "Cancel" },
-      ],
-    });
-  }
-  function importProject(file) {
-    const r = new FileReader();
-    r.onload = async () => {
-      try {
-        const p = JSON.parse(r.result);
-        if (!p || !p.meta || (p.meta.engine !== "rpgatlas" && p.meta.engine !== "driftwood")) throw new Error("Not an RPGAtlas project file.");
-        S.proj = RA.migrateProject(p);
-        Assets.registerCustomChars(S.proj.customChars);
-        await Assets.loadExternalAssets(S.proj);
-        S.curMapId = S.proj.maps[0].id;
-        S.selectedEvent = null;
-        S.undoStack.length = 0; S.redoStack.length = 0;
-        rebuildAll();
-        touch();
-      } catch (e) { alert("Import failed: " + e.message); }
-    };
-    r.readAsText(file);
-  }
-
   // ============================ map rendering ============================
   function layerAlpha(li) {
     if (S.mode !== "map") return li === 3 ? 0.8 : 1;
