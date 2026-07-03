@@ -35,6 +35,8 @@ import { activeEditScope } from "./edit-scope";
 import { initDockWorkspace } from "./dock/panels";
 import { initAutotileUI, renderAutotileBar, stepBrush } from "./map-editor/autotile-ui";
 import { syncAutotileRegistry } from "./autotile-store";
+import { consumeEmbeddedAssets, initAssetLibrary } from "../shared/asset-library";
+import { createDefaultAssetStore } from "../platform/default-asset-store";
 
 // The editor's global key bindings (Phase 3 Stage A). This table replaces the
 // old hardcoded keydown cascade one branch per binding, IN ORDER — the order
@@ -118,6 +120,12 @@ export function rebuildAll() {
 
 async function boot() {
   S.proj = loadStored() || DataDefaults.newProject();
+  // The device asset library must publish its catalog before external-asset
+  // discovery runs (Phase 6); a failed store degrades to shipped-only inside
+  // initAssetLibrary. Pre-strip autosaves never carry embedded assets, but a
+  // file restored by other means might — intake them like a file open.
+  await initAssetLibrary(await createDefaultAssetStore());
+  await consumeEmbeddedAssets(S.proj);
   Assets.registerCustomChars(S.proj.customChars);
   await Promise.all([Assets.loadIconSet(), Assets.loadExternalAssets(S.proj)]);
   S.mapCanvas = $("mapcanvas");

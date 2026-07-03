@@ -31,6 +31,15 @@ export function loadStoredProject(storage, migrateProject) {
 }
 
 export function saveProject(storage, project) {
+  // Autosaves must stay blob-free (Phase 6): assets.external carries embedded
+  // asset data URLs only inside SAVED FILES — this device's library already
+  // holds those blobs, and localStorage has the quota the library exists to
+  // escape. Shallow-copy so the live project is untouched.
+  if (project && project.assets && project.assets.external) {
+    const assets = Object.assign({}, project.assets);
+    delete assets.external;
+    project = Object.assign({}, project, { assets });
+  }
   storage.setItem("rpgatlas_project", JSON.stringify(project));
 }
 

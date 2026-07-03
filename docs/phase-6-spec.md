@@ -3,6 +3,42 @@
 **Status:** IN PROGRESS (branch `phase-6-assets`, off `main` after the Phase 5
 merge). Stage log will be prepended here, newest first, as stages land.
 
+Stage A COMPLETE (2026-07-02): the asset store foundation. **Contracts**
+(`services.ts`): `AssetMeta` (key/type/name/tags/bytes/sha-256 hash/mime/
+kind/dims/dur/importer meta) + async `AssetStore`
+(list/get/put/remove/setMeta). **Drivers**: `src/platform/browser/
+idb-asset-store.ts` (IndexedDB `rpgatlas_library`, split meta/blobs stores so
+list() never copies blobs, lazy+retrying open) and `src/platform/tauri/
+fs-asset-store.ts` over five new Rust commands (`library_list/read/write/
+delete/set_meta` in src-tauri/src/lib.rs; `<app-data>/library/index.json`
+written via temp-file rename + content-addressed `blobs/<sha>` files shared
+by hash, base64 IPC, hex-validated file names; base64 crate added; cargo
+check green). `src/platform/default-asset-store.ts` picks FS under
+`__TAURI__` (editor + playtest windows share one library), else IDB, else
+null. **Service** (`src/shared/asset-library.ts`): catalog init publishes
+image entries to `window.RPGATLAS_LIBRARY_ASSETS` (object URLs, audio stays
+internal); `importAssets` (slugging, collision suffixes that respect
+`.pass`/`.terrain`, hash dedupe w/ tag merge, injectable probe, audio-kind
+guessing); `usedAssetKeys` audit (all Phase ≤6 surfaces incl. audio keys,
+ambience, system sounds, vehicle charsets, anim flipbook sheets, painted-tile
+id inversion, character→faceset pairing); `rewriteAssetKey` + `renameAsset`;
+embedded-asset helpers. **assets.js hook**: `discoverExternalAssets` appends
+library entries after the shipped catalog (library shadows by bind order;
+standalone exports keep the RPGATLAS_ASSETS early return) + new
+`registerExternalAssets(items, project)` for mid-session imports
+(discovery-warming + dedupe against prepared entries). **Embed policy
+wired**: file saves/exports embed used library assets
+(persistence.desktopSave/exportProject → `embedUsedAssets`), localStorage
+autosaves strip `assets.external` (project-io.saveProject), file
+opens/imports consume embeds into the library with reference rewrites on
+collision/dedupe landing keys (boot + importProject →
+`consumeEmbeddedAssets`). Engine boot inits the library only when
+`RPGATLAS_ASSETS` is absent. 21-test vitest suite
+(tests-unit/asset-library.test.ts). No user-facing UI yet — patch-note entry
+lands with Stage B's browser. `assets.js?v=15` both HTMLs. Full gate green:
+tsc, eslint, node --test (16), vitest (**167**), Playwright **34/34**
+(renderer goldens byte-stable), cargo check.
+
 **Branch:** `phase-6-assets`
 **Architect & implementation:** Claude Fable 5 (roadmap assignment: "asset
 reference model — stable IDs across libraries"; per the standing choreography

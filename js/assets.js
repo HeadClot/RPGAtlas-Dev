@@ -265,8 +265,17 @@ const Assets = (() => {
       return [];
     }
   }
+  // Device-library entries (Phase 6): the asset-library service publishes
+  // image-type records here (same {type,name,src} shape as RPGATLAS_ASSETS)
+  // before loadExternalAssets runs. Appended AFTER the shipped img/ catalog so
+  // a same-key library asset shadows the shipped one at bind time.
+  function libraryEntries() {
+    const list = window.RPGATLAS_LIBRARY_ASSETS;
+    if (!Array.isArray(list)) return [];
+    return list.filter((item) => item && external[item.type] !== undefined && item.src);
+  }
   async function discoverExternalAssets() {
-    if (window.RPGATLAS_ASSETS) return window.RPGATLAS_ASSETS;
+    if (window.RPGATLAS_ASSETS) return window.RPGATLAS_ASSETS; // standalone export: embedded only
     try {
       const res = await fetch("img/assets.json");
       if (res.ok) {
@@ -277,15 +286,15 @@ const Assets = (() => {
             listed.push({ type, name: assetName(file), src: new URL("img/" + type + "/" + file, location.href).href });
           }
         }
-        return listed;
+        return listed.concat(libraryEntries());
       } else if (res.status !== 404) {
           console.warn("Asset manifest fetch failed with status " + res.status);
       }
-    } catch (e) { 
+    } catch (e) {
         // Silenciar erro de rede ou parse
     }
     const groups = await Promise.all(Object.keys(external).map(discoverFolder));
-    return groups.flat().sort((a, b) => (a.type + "/" + a.name).localeCompare(b.type + "/" + b.name));
+    return groups.flat().sort((a, b) => (a.type + "/" + a.name).localeCompare(b.type + "/" + b.name)).concat(libraryEntries());
   }
   async function prepareExternalAssets(catalog) {
     const ready = [];
@@ -1383,6 +1392,21 @@ const Assets = (() => {
     if (!preparedExternal) preparedExternal = await prepareExternalAssets(await discoverExternalAssets());
     return bindExternalAssets(project);
   }
+  // Live registration for assets imported mid-session (Phase 6): prepare the
+  // new {type,name,src} entries and bind them into the running registries
+  // without a reload. Entries already prepared (same type+name+src) are
+  // skipped, so callers may pass the whole library list; a same-key entry
+  // with a NEW src re-binds and shadows the old image (bind order wins).
+  async function registerExternalAssets(items, project) {
+    // Discovery must run before the cache is appended to, or a pre-boot call
+    // would mark it warm and the shipped img/ catalog would never load.
+    if (!preparedExternal) preparedExternal = await prepareExternalAssets(await discoverExternalAssets());
+    const fresh = (items || []).filter((item) =>
+      item && external[item.type] !== undefined && item.src &&
+      !(preparedExternal || []).some((p) => p.type === item.type && p.name === item.name && p.src === item.src));
+    if (fresh.length) preparedExternal = (preparedExternal || []).concat(await prepareExternalAssets(fresh));
+    return bindExternalAssets(project);
+  }
   function collectUsedExternalKeys(project) {
     const used = new Set();
     const use = (key) => { if (externalByKey.has(key)) used.add(key); };
@@ -1452,7 +1476,7 @@ const Assets = (() => {
     TILE, PALETTE_COLS, tiles, T, drawTile, tileCanvas, tilesetCanvas,
     charsets, charsetIndex, drawChar, charFrameCanvas, faceCanvas, charSheetCanvas,
     HAIR_STYLES, registerHuman, removeCharset, registerCustomChars,
-    ENEMY_TYPES, enemyCanvas, assetLabel, loadExternalAssets, bindExternalAssets, exportUsedExternalAssets,
+    ENEMY_TYPES, enemyCanvas, assetLabel, loadExternalAssets, bindExternalAssets, registerExternalAssets, exportUsedExternalAssets,
     ICON_SIZE, ICON_COUNT, loadIconSet, iconSpan, iconHtml, iconCanvas,
     inputGlyphCanvas, inputGlyphDataUrl, inputGlyphHtml,
   };

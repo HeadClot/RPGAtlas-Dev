@@ -964,10 +964,26 @@ export interface CommandPreset {
  *  the shape is owned by js/assets.js registerCustomChars. */
 export type CustomChar = Record<string, any>;
 
+/** One embedded asset inside a saved project FILE (Phase 6): a library asset
+ *  carried as a data URL so the file opens complete on another device. Never
+ *  present in localStorage autosaves (stripped on save) or in the in-memory
+ *  project (consumed into the device library on load). */
+export interface EmbeddedAsset {
+  type: string; // "characters" | "facesets" | "enemies" | "tilesets" | "audio"
+  name: string;
+  src: string; // data URL
+  kind?: string; // audio role
+  tags?: string[];
+  meta?: Record<string, any>;
+}
+
 /** Project asset registry (proj.assets): tile overrides + external asset
- *  blobs. Free-form: owned by js/assets.js. */
+ *  blobs. Free-form: owned by js/assets.js (tiles) and
+ *  src/shared/asset-library.ts (external). */
 export interface ProjectAssets {
   tiles: Record<string, any>;
+  /** File-save embedding only — see EmbeddedAsset. */
+  external?: EmbeddedAsset[];
   [k: string]: any;
 }
 

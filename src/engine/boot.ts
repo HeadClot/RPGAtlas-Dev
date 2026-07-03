@@ -48,6 +48,8 @@ import { Battle } from "./scenes/battle.js";
 import { toTitle, showTitle } from "./scenes/title.js";
 import { gameOver } from "./scenes/gameover.js";
 import { playMapAnimation } from "./anim-glue.js";
+import { initAssetLibrary } from "../shared/asset-library.js";
+import { createDefaultAssetStore } from "../platform/default-asset-store.js";
 
 const TILE = Assets.TILE;
 // defaults (overridden at boot from system.screenWidth/Height)
@@ -231,6 +233,13 @@ async function boot(): Promise<void> {
   });
   fitStage();
   Assets.registerCustomChars(ctx.proj.customChars);
+  // Device asset library (Phase 6): the playtest player resolves the same
+  // library the editor imported into (shared IndexedDB origin in the browser,
+  // shared app-data dir under Tauri). Standalone exports carry their assets
+  // embedded (RPGATLAS_ASSETS) and skip the library entirely.
+  if (!(window as any).RPGATLAS_ASSETS) {
+    await initAssetLibrary(await createDefaultAssetStore());
+  }
   await Promise.all([Assets.loadIconSet(), Assets.loadExternalAssets(ctx.proj)]);
   Plugins.runAll();
   document.title = (ctx.proj.system.title || "RPGAtlas") + " — RPGAtlas Player";
