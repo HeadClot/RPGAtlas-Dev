@@ -5,6 +5,19 @@
 export const PATCH_NOTES = [
   {
     date: "July 3, 2026",
+    title: "Sample maps — a dozen ready-made maps, one click away",
+    summary:
+      "The Maps panel gains a 🗺 button that opens a library of twelve hand-crafted starter maps — villages, caves, castles, beaches, and more — each added to your project with a single click.",
+    items: [
+      "New 🗺 button in the Maps panel (next to ＋, −, and 🎲) opens the Sample Maps browser.",
+      "Twelve themed layouts: Cozy Cottage, Village Square, Sunny Cove, Deep Forest Clearing, Desert Oasis, Snowy Outpost, Crystal Cavern, Lava Depths, Murky Swamp, Castle Great Hall, General Store, and Mountain Pass.",
+      "Every card shows a live tile-rendered preview; Add to project drops a fresh copy into your map list (add the same one as often as you like) and selects it for editing.",
+      "Sample maps arrive event-free on purpose — they're clean scenery, ready for your own stories.",
+      "Under the hood: layouts are stored as readable ASCII art, and an automated test keeps every layout rectangular, every tile reference real, and every map shaped exactly like a hand-made one.",
+    ],
+  },
+  {
+    date: "July 3, 2026",
     title: "RPGAtlas 1.0 — the Atlas HD overhaul is complete",
     summary:
       "Eight phases, one goal: a modern HD-2D RPG maker that stays true to what made RPGAtlas special. Version 1.0 caps it with a documentation site, an API reference, a migration guide, and a full release QA pass.",

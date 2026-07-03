@@ -20,6 +20,7 @@ import { undo, redo } from "./map-editor/history";
 import { copySelection, startPaste, clearSelection } from "./map-editor/clipboard";
 import { setStatus } from "./map-editor/status";
 import { rebuildMapList, addMap, deleteMap, openMapGenProps } from "./map-editor/map-list";
+import { openSampleMapsBrowser } from "./map-editor/sample-maps";
 import {
   deleteSelectedEvent, openCanvasMenu,
   onCanvasDown, onCanvasMove, onCanvasUp, onCanvasDbl,
@@ -185,6 +186,7 @@ async function boot() {
   $("map-add").addEventListener("click", addMap);
   $("map-del").addEventListener("click", deleteMap);
   $("map-gen").addEventListener("click", openMapGenProps);
+  $("map-samples").addEventListener("click", openSampleMapsBrowser);
 
   document.addEventListener("keydown", (e: any) => {
     if (modalRoot().children.length) {

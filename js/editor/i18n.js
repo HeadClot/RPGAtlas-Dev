@@ -20,6 +20,7 @@ const SHARED = {
       "Ready": "Listo", "Zoom": "Zoom",
       "saved": "guardado", "unsaved": "sin guardar", "save failed": "error al guardar",
       "New map": "Nuevo mapa", "Delete map": "Eliminar mapa", "Generate random map": "Generar mapa aleatorio",
+      "Add sample map": "Añadir mapa de ejemplo",
       // dock tab captions
       "Map": "Mapa", "HD-2D": "HD-2D", "World": "Mundo",
       // menus
@@ -89,6 +90,7 @@ const SHARED = {
       "Ready": "Prêt", "Zoom": "Zoom",
       "saved": "enregistré", "unsaved": "non enregistré", "save failed": "échec de l'enregistrement",
       "New map": "Nouvelle carte", "Delete map": "Supprimer la carte", "Generate random map": "Générer une carte aléatoire",
+      "Add sample map": "Ajouter une carte d'exemple",
       // dock tab captions
       "Map": "Carte", "HD-2D": "HD-2D", "World": "Monde",
       // menus
@@ -158,6 +160,7 @@ const SHARED = {
       "Ready": "Bereit", "Zoom": "Zoom",
       "saved": "gespeichert", "unsaved": "ungespeichert", "save failed": "Speichern fehlgeschlagen",
       "New map": "Neue Karte", "Delete map": "Karte löschen", "Generate random map": "Zufallskarte erzeugen",
+      "Add sample map": "Beispielkarte hinzufügen",
       // dock tab captions
       "Map": "Karte", "HD-2D": "HD-2D", "World": "Welt",
       // menus
