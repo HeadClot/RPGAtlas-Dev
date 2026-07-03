@@ -386,7 +386,13 @@ button.danger:hover { background: #6a3636; }
 }
 .dbtab { display: flex; gap: 12px; min-height: 380px; }
 .dbside { width: 190px; flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
-.dbbtns { display: flex; gap: 5px; }
+/* Toolbar above the entry list. It must survive the 190px .dbside column:
+   labels never wrap inside a button, and overflowing buttons (e.g. the
+   reorder pair on the Quests tab) wrap onto their own row instead of
+   spilling under the form. */
+.dbbtns { display: flex; flex-wrap: wrap; gap: 5px; }
+.dbbtns button { white-space: nowrap; }
+.dbbtns .dbmove { flex: 1 1 auto; }
 .dblist { list-style: none; margin: 0; padding: 0; overflow-y: auto; max-height: 420px; border: 1px solid var(--line); border-radius: 5px; }
 .dblist li { padding: 3px 8px; cursor: pointer; display: flex; align-items: center; gap: 5px; min-height: 30px; }
 .dblist li:hover { background: var(--hover); }

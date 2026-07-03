@@ -5,6 +5,17 @@
 export const PATCH_NOTES = [
   {
     date: "July 3, 2026",
+    title: "Database list toolbar no longer overlaps the form",
+    summary:
+      "On the Database's Quests tab, the list toolbar had one button too many for its column — the Delete button slid under the Title box and the sub-tab strip. The toolbar now wraps neatly instead of overlapping.",
+    items: [
+      "Toolbar buttons that don't fit the list column wrap onto a second row instead of spilling under the form.",
+      "The Quests tab's reorder buttons are now labeled \"↑ Move up\" and \"↓ Move down\" and sit together on their own row.",
+      "Delete moved next to + New and Paste, so the main list actions stay grouped.",
+    ],
+  },
+  {
+    date: "July 3, 2026",
     title: "Exports start in your Downloads folder",
     summary:
       "Exporting a project file now opens the save window in your Downloads folder instead of Documents — the same place your browser puts every other download.",

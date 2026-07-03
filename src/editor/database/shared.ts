@@ -210,27 +210,7 @@ export function listFormTab(spec: any) {
       cur = e; touch(); redrawList(); redrawForm();
     } }, "+ New"),
     h("button", { class: "mini", title: "Paste entries from the cross-project clipboard", onclick: pasteClip }, "Paste"),
-    ...(spec.reorderable ? [
-      h("button", { class: "mini", title: "Move earlier", onclick() {
-        if (!cur) return;
-        const arr = spec.list();
-        const i = arr.indexOf(cur);
-        if (i <= 0) return;
-        const [moved] = arr.splice(i, 1);
-        arr.splice(i - 1, 0, moved);
-        touch(); redrawList(); redrawForm();
-      } }, "↑"),
-      h("button", { class: "mini", title: "Move later", onclick() {
-        if (!cur) return;
-        const arr = spec.list();
-        const i = arr.indexOf(cur);
-        if (i < 0 || i >= arr.length - 1) return;
-        const [moved] = arr.splice(i, 1);
-        arr.splice(i + 1, 0, moved);
-        touch(); redrawList(); redrawForm();
-      } }, "↓"),
-    ] : []),
-    h("button", { onclick() {
+    h("button", { title: "Delete the selected entry", onclick() {
       if (!cur) return;
       if (spec.allowEmpty !== true && spec.list().length <= 1) { alert("Keep at least one entry."); return; }
       confirmBox("Delete \"" + cur.name + "\"?", () => {
@@ -240,6 +220,28 @@ export function listFormTab(spec: any) {
         touch(); redrawList(); redrawForm();
       });
     } }, "Delete"),
+    // Reorder buttons go last so on narrow toolbars they wrap onto their own
+    // row as a pair instead of splitting the New/Paste/Delete group.
+    ...(spec.reorderable ? [
+      h("button", { class: "mini dbmove", title: "Move earlier", onclick() {
+        if (!cur) return;
+        const arr = spec.list();
+        const i = arr.indexOf(cur);
+        if (i <= 0) return;
+        const [moved] = arr.splice(i, 1);
+        arr.splice(i - 1, 0, moved);
+        touch(); redrawList(); redrawForm();
+      } }, "↑ Move up"),
+      h("button", { class: "mini dbmove", title: "Move later", onclick() {
+        if (!cur) return;
+        const arr = spec.list();
+        const i = arr.indexOf(cur);
+        if (i < 0 || i >= arr.length - 1) return;
+        const [moved] = arr.splice(i, 1);
+        arr.splice(i + 1, 0, moved);
+        touch(); redrawList(); redrawForm();
+      } }, "↓ Move down"),
+    ] : []),
   );
   cur = spec.list()[0] || null;
   redrawList(); redrawForm();
