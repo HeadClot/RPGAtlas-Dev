@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "rpgatlas-exe",
+      "runtimeExecutable": "M:\\AI\\DriftwoodEngine\\RPGAtlas\\RPGAtlas.exe",
+      "runtimeArgs": ["--no-browser"],
+      "port": 8080
+    },
+    {
       "name": "rpgatlas-editor",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "http-server", "-p", "3742", "-c-1"],

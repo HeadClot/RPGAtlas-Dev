@@ -1,22 +1,18 @@
 /* RPGAtlas engine launcher. GPL-3.0-or-later (see LICENSE).
 
-   Double-clicking RPGAtlas.exe starts a tiny local web server that serves the
-   engine folder and opens the editor in the default browser. No Python, no
-   Node, no install, and no admin rights: HttpListener loopback prefixes
-   (http://localhost:PORT/) are exempt from the Windows URL-ACL requirement.
+   Double-clicking RPGAtlas.exe boots the Vite dev server for the engine
+   folder and opens the editor in the default browser.
 
-   The editor needs a real HTTP origin for two reasons:
-     * localStorage / autosave is blocked on file:// pages, and
-     * custom-asset discovery does fetch("img/<type>/") and parses the
-       directory listing (see js/assets.js), which file:// cannot provide.
-   This server returns python-style directory listings so that discovery works
-   exactly as it does under `python -m http.server`. */
+   Since the Phase 1 module build, index.html loads the editor runtime as
+   <script type="module" src="/src/editor/main.ts"> — raw TypeScript that only
+   Vite can transpile and serve. A plain static file server (what this
+   launcher used to be) hands the browser an unexecutable .ts file and the
+   editor never boots, so the launcher now requires Node.js plus an installed
+   node_modules (npm install) and delegates serving to Vite. */
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
-using System.Text;
+using System.Net.Sockets;
 using System.Threading;
 
 internal static class RPGAtlasEngine
@@ -24,195 +20,127 @@ internal static class RPGAtlasEngine
     private const int FirstPort = 8080;
     private const int LastPort = 8099;
 
-    private static readonly Dictionary<string, string> MimeTypes =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    private static int Main(string[] args)
     {
-        { ".html", "text/html; charset=utf-8" },
-        { ".htm",  "text/html; charset=utf-8" },
-        { ".js",   "text/javascript; charset=utf-8" },
-        { ".mjs",  "text/javascript; charset=utf-8" },
-        { ".css",  "text/css; charset=utf-8" },
-        { ".json", "application/json; charset=utf-8" },
-        { ".svg",  "image/svg+xml" },
-        { ".png",  "image/png" },
-        { ".webp", "image/webp" },
-        { ".jpg",  "image/jpeg" },
-        { ".jpeg", "image/jpeg" },
-        { ".gif",  "image/gif" },
-        { ".ico",  "image/x-icon" },
-        { ".wav",  "audio/wav" },
-        { ".ogg",  "audio/ogg" },
-        { ".mp3",  "audio/mpeg" },
-        { ".txt",  "text/plain; charset=utf-8" },
-        { ".md",   "text/plain; charset=utf-8" },
-        { ".map",  "application/json; charset=utf-8" },
-        { ".exe",  "application/octet-stream" },
-    };
+        Console.Title = "RPGAtlas";
+        string root = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+        bool openBrowser = Array.IndexOf(args, "--no-browser") < 0;
 
-    private static string _root;
-
-    private static int Main()
-    {
-        _root = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
-
-        if (!File.Exists(Path.Combine(_root, "index.html")))
+        if (!File.Exists(Path.Combine(root, "index.html")))
         {
-            Console.WriteLine("RPGAtlas could not find index.html next to this program.");
-            Console.WriteLine("Keep RPGAtlas.exe inside the RPGAtlas folder, then run it again.");
-            Console.WriteLine();
-            Console.WriteLine("Press Enter to close.");
-            Console.ReadLine();
-            return 1;
+            return Fail(
+                "RPGAtlas could not find index.html next to this program.",
+                "Keep RPGAtlas.exe inside the RPGAtlas folder, then run it again.");
         }
 
-        HttpListener listener = null;
-        int port = 0;
-        for (int candidate = FirstPort; candidate <= LastPort; candidate++)
+        string viteScript = Path.Combine(root, "node_modules", "vite", "bin", "vite.js");
+        if (!File.Exists(viteScript))
         {
-            try
-            {
-                HttpListener attempt = new HttpListener();
-                attempt.Prefixes.Add("http://localhost:" + candidate + "/");
-                attempt.Start();
-                listener = attempt;
-                port = candidate;
-                break;
-            }
-            catch (HttpListenerException) { /* port busy — try the next one */ }
+            return Fail(
+                "RPGAtlas could not find the Vite dev server (node_modules\\vite).",
+                "Open a terminal in the RPGAtlas folder and run:  npm install");
         }
 
-        if (listener == null)
+        int port = FindFreePort();
+        if (port == 0)
         {
-            Console.WriteLine("RPGAtlas could not open a local port (" + FirstPort + "-" + LastPort + ").");
-            Console.WriteLine("Close any other copy of RPGAtlas that may already be running, then try again.");
-            Console.WriteLine();
-            Console.WriteLine("Press Enter to close.");
-            Console.ReadLine();
-            return 1;
+            return Fail(
+                "RPGAtlas could not find a free local port (" + FirstPort + "-" + LastPort + ").",
+                "Close any other copy of RPGAtlas that may already be running, then try again.");
+        }
+
+        ProcessStartInfo startInfo = new ProcessStartInfo();
+        startInfo.FileName = "node";
+        startInfo.Arguments = "\"" + viteScript + "\" --port " + port + " --strictPort";
+        startInfo.WorkingDirectory = root;
+        startInfo.UseShellExecute = false;
+
+        Process vite;
+        try
+        {
+            vite = Process.Start(startInfo);
+        }
+        catch (Exception)
+        {
+            return Fail(
+                "RPGAtlas could not start Node.js (is it installed and on PATH?).",
+                "Install Node.js 18 or newer from https://nodejs.org/ and try again.");
         }
 
         string url = "http://localhost:" + port + "/";
-
-        Console.Title = "RPGAtlas";
         Console.WriteLine();
-        Console.WriteLine("  RPGAtlas is running.");
+        Console.WriteLine("  RPGAtlas is starting (Vite dev server)...");
         Console.WriteLine();
         Console.WriteLine("  Editor:  " + url);
         Console.WriteLine("  Player:  " + url + "play.html");
         Console.WriteLine();
-        Console.WriteLine("  Your browser should open automatically.");
         Console.WriteLine("  Keep this window open while you work. Close it to stop RPGAtlas.");
         Console.WriteLine();
 
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
-        catch { Console.WriteLine("  (Open " + url + " in your browser to begin.)"); }
-
-        while (listener.IsListening)
+        if (!WaitForServer(port, vite))
         {
-            HttpListenerContext context;
-            try { context = listener.GetContext(); }
-            catch { break; }
-            ThreadPool.QueueUserWorkItem(delegate { Handle(context); });
+            return Fail(
+                "The Vite dev server stopped before it was ready (see output above).",
+                "Fix the reported error, or run \"npm run dev\" in the RPGAtlas folder to debug.");
+        }
+
+        if (openBrowser)
+        {
+            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+            catch { Console.WriteLine("  (Open " + url + " in your browser to begin.)"); }
+        }
+
+        // Vite shares this console, so closing the window shuts both down.
+        vite.WaitForExit();
+        return vite.ExitCode;
+    }
+
+    private static int FindFreePort()
+    {
+        for (int candidate = FirstPort; candidate <= LastPort; candidate++)
+        {
+            try
+            {
+                TcpListener probe = new TcpListener(System.Net.IPAddress.Loopback, candidate);
+                probe.Start();
+                probe.Stop();
+                return candidate;
+            }
+            catch (SocketException) { /* port busy — try the next one */ }
         }
         return 0;
     }
 
-    private static void Handle(HttpListenerContext context)
+    private static bool WaitForServer(int port, Process vite)
     {
-        try
+        // Vite is normally up within a second or two; allow a cold minute.
+        for (int attempt = 0; attempt < 240; attempt++)
         {
-            string relative = Uri.UnescapeDataString(context.Request.Url.AbsolutePath).TrimStart('/');
-            string fullPath = Path.GetFullPath(Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar)));
-
-            // Refuse anything that escapes the engine folder.
-            if (!fullPath.StartsWith(_root, StringComparison.OrdinalIgnoreCase))
+            if (vite.HasExited) return false;
+            try
             {
-                WriteStatus(context, 403, "Forbidden");
-                return;
-            }
-
-            if (Directory.Exists(fullPath))
-            {
-                string indexFile = Path.Combine(fullPath, "index.html");
-                if (File.Exists(indexFile) && relative.Length == 0)
+                using (TcpClient client = new TcpClient())
                 {
-                    ServeFile(context, indexFile);
-                    return;
+                    client.Connect("localhost", port);
+                    return true;
                 }
-                ServeDirectoryListing(context, fullPath);
-                return;
             }
-
-            if (File.Exists(fullPath))
+            catch (SocketException)
             {
-                ServeFile(context, fullPath);
-                return;
+                Thread.Sleep(250);
             }
-
-            WriteStatus(context, 404, "Not found");
         }
-        catch
-        {
-            try { WriteStatus(context, 500, "Server error"); } catch { }
-        }
+        return !vite.HasExited;
     }
 
-    private static void ServeFile(HttpListenerContext context, string path)
+    private static int Fail(string problem, string advice)
     {
-        string ext = Path.GetExtension(path);
-        string mime;
-        if (!MimeTypes.TryGetValue(ext, out mime)) mime = "application/octet-stream";
-        context.Response.ContentType = mime;
-        context.Response.Headers["Cache-Control"] = "no-store";
-
-        byte[] body = File.ReadAllBytes(path);
-        context.Response.ContentLength64 = body.Length;
-        context.Response.OutputStream.Write(body, 0, body.Length);
-        context.Response.OutputStream.Close();
-    }
-
-    // Python-style directory listing: js/assets.js scans these <a href> links
-    // to discover custom characters/facesets/enemies/tilesets.
-    private static void ServeDirectoryListing(HttpListenerContext context, string directory)
-    {
-        StringBuilder html = new StringBuilder();
-        html.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>RPGAtlas</title></head><body><ul>");
-
-        foreach (string dir in Directory.GetDirectories(directory))
-        {
-            string name = Path.GetFileName(dir);
-            html.Append("<li><a href=\"" + Encode(name) + "/\">" + Encode(name) + "/</a></li>");
-        }
-        foreach (string file in Directory.GetFiles(directory))
-        {
-            string name = Path.GetFileName(file);
-            html.Append("<li><a href=\"" + Encode(name) + "\">" + Encode(name) + "</a></li>");
-        }
-        html.Append("</ul></body></html>");
-
-        byte[] body = Encoding.UTF8.GetBytes(html.ToString());
-        context.Response.ContentType = "text/html; charset=utf-8";
-        context.Response.ContentLength64 = body.Length;
-        context.Response.OutputStream.Write(body, 0, body.Length);
-        context.Response.OutputStream.Close();
-    }
-
-    private static void WriteStatus(HttpListenerContext context, int code, string message)
-    {
-        context.Response.StatusCode = code;
-        byte[] body = Encoding.UTF8.GetBytes(message);
-        context.Response.ContentType = "text/plain; charset=utf-8";
-        context.Response.ContentLength64 = body.Length;
-        context.Response.OutputStream.Write(body, 0, body.Length);
-        context.Response.OutputStream.Close();
-    }
-
-    private static string Encode(string value)
-    {
-        return value
-            .Replace("&", "&amp;")
-            .Replace("\"", "&quot;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;");
+        Console.WriteLine();
+        Console.WriteLine("  " + problem);
+        Console.WriteLine("  " + advice);
+        Console.WriteLine();
+        Console.WriteLine("  Press Enter to close.");
+        Console.ReadLine();
+        return 1;
     }
 }
