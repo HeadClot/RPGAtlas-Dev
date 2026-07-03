@@ -2,7 +2,31 @@
 
 **Status:** IN PROGRESS (started 2026-07-03). Stage log below, newest first.
 
-*(stage log entries land here as stages complete)*
+Stage A COMPLETE (2026-07-03): the performance pass. **Perf overlay**
+(`src/engine/perf-hud.ts`, wired in boot + loop): `?perf=1` or F3 (capture-
+phase listener) toggles a `.perf-hud` DOM box on #stage — fps / frame ms
+avg+p95 (120-frame ring) / per-frame work ms, HD-2D GPU counters via the new
+`Renderer.stats()` (three renderer.info: calls, triangles, alive geometries/
+textures, programs), JS heap where exposed. Zero cost hidden (loop gates on
+`perfActive()` before any timing). **Diagnostics hooks**: engine + editor
+boots set `window.RPGATLAS_BOOT_MS` at boot-complete; engine exposes
+`window.RPGATLAS_RENDERER_STATS()`. **New gate**
+(`tests-e2e/load-perf.spec.mjs`, 4 specs): editor/player boot budgets
+(measured 42/36 ms in-harness; 15 s budgets = order-of-magnitude canaries),
+160×160 stress map (200 cloned-page random-move events, 16 lights, all
+features: ~190 ms/frame SwiftShader vs 500 ms budget) + overlay smoke (F3
+show/verify/hide), and the memory canary: transfer cycles via seeded common
+events + `Atlas.game.callCommonEvent`, geometries must hold baseline EXACTLY
+(15→15), textures +6 slack for the lazy walk-frame CanvasTexture cache
+(bounded; a real setMap dispose leak adds ~4/cycle and trips it; measured
+31→31). Audit conclusion: **no disposal leaks** (mapDisposables covers map
+resources; sprite tex cache is a WeakMap on frame canvases). Learned live:
+transfers driven from evaluate must wait for scene==="map" && player after
+New Game (first attempt raced the new-game load, G.player null). Wiki:
+Troubleshooting gains a Performance section (overlay, per-map feature cost,
+big-map guidance). Patch note; `play.css?v=23` (.perf-hud);
+`patch-notes.js?v=21` (+shim +help.ts). Full gate green: tsc, eslint,
+node --test (16), vitest (186), Playwright **42/42** (goldens byte-stable).
 
 **Branch:** `phase-7-release`
 **Architect & implementation:** Claude Fable 5 (per the standing choreography
