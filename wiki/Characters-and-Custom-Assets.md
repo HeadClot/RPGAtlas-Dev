@@ -77,8 +77,10 @@ icons). To reskin all 64 at once, replace `img/system/icon_set.png` with your ow
 
 ## If custom art doesn't show up
 
-The editor discovers your files by scanning the `img` folders. If your assets aren't appearing after
-a reload, run `tools/update-assets.ps1` to write a manifest (`img/assets.json`) the editor can read.
-More in [Troubleshooting & FAQ](Troubleshooting-and-FAQ).
+The editor discovers your files by scanning the `img` folders. On downloaded copies this just works —
+the `RPGAtlas.exe` launcher's server provides the directory listings the scan reads. On a **source
+checkout** the Vite dev server doesn't, so run `tools/update-assets.ps1` to write a manifest
+(`img/assets.json`) the editor can read instead. More in
+[Troubleshooting & FAQ](Troubleshooting-and-FAQ).
 
 **Next:** [Audio →](Audio)

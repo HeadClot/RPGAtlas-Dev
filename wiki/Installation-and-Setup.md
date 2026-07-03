@@ -1,33 +1,22 @@
 # Installation & Setup
 
-RPGAtlas runs in your web browser, but it can't just be opened from a file on your disk — the editor
-is served by a small local dev server at a local web address (`http://localhost`), which also handles
-saving and asset features that browsers block on plain files. Don't worry: you don't have to
-understand any of that. On Windows there's a one-click launcher that runs the server for you.
+RPGAtlas runs in your web browser, but it can't just be opened from a file on your disk — browsers
+block the saving and asset features that the editor needs unless the files are *served* over a tiny
+local web address (`http://localhost`). Don't worry: you don't have to understand any of that. On
+Windows there's a one-click launcher that runs the right server for you.
 
 ---
 
 ## Windows: the easy way (recommended)
 
-1. **Install [Node.js](https://nodejs.org/)** (version 18 or newer) if you don't have it — take the
-   big green "LTS" download and click through the installer. You only do this once, ever.
-2. **Download RPGAtlas** and unzip it somewhere you'll remember, like your Desktop or Documents.
+1. **Download RPGAtlas** and unzip it somewhere you'll remember, like your Desktop or Documents.
    Keep all the files together in the `RPGAtlas` folder.
-3. **One-time setup:** open a terminal in the RPGAtlas folder (in File Explorer, click the address
-   bar, type `cmd`, press Enter) and run:
-
-   ```
-   npm install
-   ```
-
-   Wait for it to finish — this downloads the editor's tooling into a `node_modules` folder. You
-   won't need to do it again.
-4. **Double-click `RPGAtlas.exe`.**
-5. A small black window appears and your web browser opens to the editor automatically. That's it —
+2. **Double-click `RPGAtlas.exe`.**
+3. A small black window appears and your web browser opens to the editor automatically. That's it —
    you're making games.
 
-If you skip a step, the launcher tells you: it asks you to run `npm install` if the setup is missing,
-or to install Node.js if it can't find it.
+Downloaded copies ship the editor **pre-built**, so there is nothing else to install — no Python, no
+Node.js, no admin rights.
 
 **Keep the little black window open** while you work. It runs the local server that powers the
 editor; closing it stops RPGAtlas. When you're done for the day, close the browser tab and then close
@@ -40,6 +29,26 @@ say, from a script or shortcut — start it with the `--no-browser` flag:
 ```
 RPGAtlas.exe --no-browser
 ```
+
+### Running from a source checkout (git clone)
+
+The editor's *source* is TypeScript, which browsers can't run directly — it needs the Vite dev
+server. That means two one-time steps before the double-click works:
+
+1. **Install [Node.js](https://nodejs.org/)** (version 18 or newer) — take the big green "LTS"
+   download and click through the installer.
+2. Open a terminal in the RPGAtlas folder (in File Explorer, click the address bar, type `cmd`,
+   press Enter) and run:
+
+   ```
+   npm install
+   ```
+
+   Wait for it to finish — this downloads the editor's tooling into a `node_modules` folder.
+
+`RPGAtlas.exe` then detects the tooling and boots the dev server automatically. If you skip a step,
+the launcher tells you: it asks you to run `npm install` if the setup is missing, or to install
+Node.js if it can't find it.
 
 ### Put RPGAtlas on your Desktop
 
@@ -58,22 +67,31 @@ To run it: click **More info**, then **Run anyway**.
 
 ## Any platform: the manual way
 
-If you're on macOS or Linux, or you'd rather not use the `.exe`, you can run the dev server yourself.
-You still need [Node.js](https://nodejs.org/) 18 or newer:
+If you're on macOS or Linux, or you'd rather not use the `.exe`:
 
-```
-cd RPGAtlas
-npm install   # one-time setup
-npm run dev
-```
+- **Downloaded (pre-built) copy** — any static file server works, e.g. with
+  [Python](https://www.python.org/) (most Macs and Linux machines already have it):
 
-Then open the **http://localhost:…** address it prints in your browser. That page *is* the editor.
+  ```
+  cd RPGAtlas
+  python -m http.server 8080
+  ```
 
-> **Why a server at all?** Two reasons. The editor's code is TypeScript, which browsers can't run
-> directly — the dev server (Vite) translates it on the fly. And browsers refuse to let a page saved
-> on your disk (`file://...`) use `localStorage` (where your work is auto-saved) or scan folders for
-> custom art. The server — whether started by the `.exe` or by `npm run dev` — solves both. Nothing
-> leaves your computer; "localhost" means "this machine."
+- **Source checkout** — you need [Node.js](https://nodejs.org/) 18 or newer:
+
+  ```
+  cd RPGAtlas
+  npm install   # one-time setup
+  npm run dev
+  ```
+
+Then open the printed **http://localhost:…** address in your browser. That page *is* the editor.
+
+> **Why a server at all?** Browsers refuse to let a page saved on your disk (`file://...`) use
+> `localStorage` (where your work is auto-saved) or scan folders for custom art — and a source
+> checkout's TypeScript editor additionally needs the dev server (Vite) to translate it on the fly.
+> Serving over `http://localhost` solves all of it. Nothing leaves your computer; "localhost" means
+> "this machine."
 
 ---
 

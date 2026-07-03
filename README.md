@@ -16,10 +16,10 @@
 **RPGAtlas 1.0** is a complete, original, **free and open source** RPG making engine in the spirit of
 classic 2D RPG makers — with a modern **HD-2D renderer** (tilted perspective, dynamic lights and
 shadows, animated water, day/night, weather, full post-processing) layered on top. No copyrighted
-assets, nothing for players to install — everything (code, tiles, sprites, monsters,
+assets, nothing to install for creators or players — everything (code, tiles, sprites, monsters,
 sound effects, even the music) is generated procedurally, imports are welcome when you want them,
-and exported games are single self-contained files. Creators need only free
-[Node.js](https://nodejs.org/) to run the editor.
+and exported games are single self-contained files. (Only working from a *source checkout* needs
+free [Node.js](https://nodejs.org/); downloaded copies ship the editor pre-built.)
 
 📖 **Documentation:** the [project wiki](wiki/Home.md) — also available as a static
 [docs site](docs-site/index.html) (`docs-site/`, GitHub Pages-ready), including the
@@ -29,34 +29,32 @@ and exported games are single self-contained files. Creators need only free
 
 ## Quick start
 
-**Windows:**
+**Windows — just double-click `RPGAtlas.exe`.** On a downloaded copy (which ships the pre-built
+editor) it starts a tiny local server and opens the editor in your browser — no Python, no Node, no
+install, no admin rights. Keep the little black window open while you work; close it to stop.
+(Windows may show an "unknown publisher" warning the first time — the launcher is unsigned; choose
+*More info → Run anyway*.)
 
-1. Install [Node.js](https://nodejs.org/) 18 or newer (one-time).
-2. Open a terminal in the RPGAtlas folder and run `npm install` (one-time).
-3. **Double-click `RPGAtlas.exe`.** It starts the local dev server and opens the editor in your browser.
+Working from a **source checkout** (git clone) instead? The editor source is TypeScript, which needs
+the Vite dev server: install [Node.js](https://nodejs.org/) 18 or newer, run `npm install` once in
+the RPGAtlas folder, and the same double-click then works — the launcher detects the tooling and
+boots Vite automatically.
 
-Keep the little black window open while you work; close it to stop. (Windows may show an "unknown
-publisher" warning the first time — the launcher is unsigned; choose *More info → Run anyway*.)
-
-The launcher picks the first free port in the **8080–8099** range. Pass `--no-browser` if you don't
-want it to open a browser tab automatically.
+The launcher picks the first free port in the **8080–8099** range (the address is printed in the
+black window). Pass `--no-browser` if you don't want it to open a browser tab automatically.
 
 Want it on your Desktop? Double-click **`Create Desktop Shortcut.cmd`** once and an RPGAtlas icon appears
 on your Desktop — launch from there any time.
 
-Why a launcher at all? The editor is written in TypeScript, which browsers can't run straight off the
-disk — a dev server (Vite) transpiles and serves it over `http://localhost`. The `.exe` starts that
-server for you.
+Why a launcher at all? Browsers block `localStorage`/file access on `file://` pages, so the engine has
+to be served over `http://` — and a source checkout's TypeScript editor additionally needs Vite to
+translate it on the fly. The `.exe` handles both for you.
 
-**Other platforms (or no `.exe`)** — run the dev server yourself:
+**Other platforms (or no `.exe`)** — serve it yourself. On a downloaded (pre-built) copy any static
+server works, e.g. `python -m http.server 8080` in the folder; on a source checkout run
+`npm install` once, then `npm run dev`.
 
-```
-cd RPGAtlas
-npm install   # one-time
-npm run dev
-```
-
-Then open the **http://localhost:…** address it prints — that's the editor. Either way, hit
+Then open the printed **http://localhost:…** address — that's the editor. Either way, hit
 **▶ Playtest** to play your game (or open `play.html` on the same address to play the bundled sample,
 *Atlas Quest*).
 
@@ -108,8 +106,9 @@ database picker or map palette. Custom tile filenames control passability:
 - `bridge.pass.png` is passable.
 - `meadow.terrain.png` is passable and selected as terrain by Auto Layer.
 
-See [`img/README.md`](img/README.md) for formats. If new files don't show up after a reload, run
-`tools/update-assets.ps1` to write the `img/assets.json` manifest the editor scans.
+See [`img/README.md`](img/README.md) for formats. On downloaded copies the launcher's server provides
+the directory listings the scan needs; on a source checkout the Vite dev server doesn't — there, run
+`tools/update-assets.ps1` to write the `img/assets.json` manifest, then reload.
 Projects save references rather than image copies, and standalone exports embed only referenced files.
 
 Classes, skills, items, weapons, and armors each have a selectable icon. Replace

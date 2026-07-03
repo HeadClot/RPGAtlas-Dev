@@ -14,14 +14,15 @@ Quick fixes for the snags people hit most. If your problem isn't here, check the
   error. Open that address in your browser manually if a tab didn't pop up.
 
 ### "RPGAtlas needs its one-time setup first"
-The launcher needs the editor's tooling downloaded once. Open a terminal in the RPGAtlas folder
+This only appears when running from a **source checkout** (downloaded copies are pre-built and never
+need it). The editor's tooling has to be downloaded once: open a terminal in the RPGAtlas folder
 (in File Explorer, click the address bar, type `cmd`, press Enter) and run `npm install`. When it
 finishes, double-click `RPGAtlas.exe` again. See
-[Installation & Setup](Installation-and-Setup#windows-the-easy-way-recommended).
+[Installation & Setup](Installation-and-Setup#running-from-a-source-checkout-git-clone).
 
 ### "RPGAtlas could not start Node.js (is it installed?)"
-The launcher needs [Node.js](https://nodejs.org/) **18 or newer** on your computer. Install the LTS
-version from nodejs.org (one-time), then run `RPGAtlas.exe` again.
+Running from a source checkout needs [Node.js](https://nodejs.org/) **18 or newer** on your computer.
+Install the LTS version from nodejs.org (one-time), then run `RPGAtlas.exe` again.
 
 ### "Windows protected your PC" / unknown publisher
 Expected — the launcher is **unsigned**. Click **More info ▸ Run anyway**. It only starts a local
@@ -32,9 +33,10 @@ Other programs are using all of those ports — usually other copies of RPGAtlas
 windows and try again; the launcher picks the first free port in the 8080–8099 range automatically.
 
 ### I opened `index.html` directly and it's broken
-The editor's TypeScript code has to be served by the dev server, and browsers also block
-`localStorage` on `file://` pages. You **must** start RPGAtlas properly — use `RPGAtlas.exe`
-(Windows) or `npm run dev` (any platform). See [Installation & Setup](Installation-and-Setup).
+Browsers block `localStorage` and asset scanning on `file://` pages (and a source checkout's
+TypeScript editor can't run without the dev server at all). You **must** start RPGAtlas properly —
+use `RPGAtlas.exe` (Windows), `python -m http.server 8080` (pre-built copy), or `npm run dev`
+(source checkout). See [Installation & Setup](Installation-and-Setup).
 
 ### The browser opens on its own and I don't want it to
 Start the launcher with the `--no-browser` flag (`RPGAtlas.exe --no-browser`), then open the printed
@@ -66,9 +68,10 @@ infinite. Save `.json` checkpoints at milestones.
   `tilesets`, `system`) and are valid PNG/WebP/JPG. See
   [Characters & Custom Assets](Characters-and-Custom-Assets).
 - **Reload the editor** after adding files.
-- If the scan still can't see the files, run `tools/update-assets.ps1` to write a manifest
-  (`img/assets.json`), then reload. The dev server started by `RPGAtlas.exe` / `npm run dev` doesn't
-  provide directory listings, so the manifest is how the editor finds custom art.
+- On a **source checkout** the Vite dev server (what `RPGAtlas.exe` and `npm run dev` run there)
+  doesn't provide the directory listings the scan reads — run `tools/update-assets.ps1` to write a
+  manifest (`img/assets.json`), then reload. Downloaded copies aren't affected: the launcher's
+  built-in server (and `python -m http.server`) provide listings, so the scan just works.
 
 ### The player can walk through a wall (or can't cross a bridge)
 Passability comes from the topmost tile, but you can fix any cell directly: switch to
