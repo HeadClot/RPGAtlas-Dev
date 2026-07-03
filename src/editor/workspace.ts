@@ -35,6 +35,7 @@ import { openPluginManager } from "./tools/plugin-manager";
 import { openAudioManager } from "./tools/audio-manager";
 import { openEventSearcher } from "./tools/event-searcher";
 import { openResourceManager } from "./tools/resource-manager";
+import { openAssetBrowser } from "./tools/asset-browser";
 import { openCharGenerator } from "./tools/character-generator";
 import {
   openLanguageSettings, openPatchNotes, openKeyboardShortcuts, openHelp, openAbout,
@@ -160,6 +161,7 @@ act("plugins", { label: "Plugin Manager…", icon: "plugins", tip: "Plugin Manag
 act("audio", { label: "Audio Manager…", icon: "audio", tip: "Audio Manager — preview sounds and music", run: openAudioManager });
 act("search", { label: "Event Searcher…", icon: "search", tip: "Event Searcher — find text / switches / variables across maps", run: openEventSearcher });
 act("resources", { label: "Resource Manager…", icon: "resources", tip: "Resource Manager — browse and export generated assets", run: openResourceManager });
+act("assetbrowser", { label: "Asset Browser…", tip: "Asset Browser — import and manage image/audio files", run: openAssetBrowser });
 act("chargen", { label: "Character Generator…", icon: "chargen", tip: "Character Generator — build original walking sprites", run: openCharGenerator });
 act("autotile-import", { label: "Import Autotile Sheet…", tip: "Import an RPG-Maker A2 autotile sheet as terrain brushes", run: importAutotile });
 act("cmdpal", { label: "Command Palette…", key: "Ctrl+P", tip: "Search and run any editor command", run: openCommandPalette });
@@ -217,7 +219,7 @@ const MENUS = [
   { label: "Layer", items: ["layer-auto", "layer-ground", "layer-decor", "layer-decor2", "layer-over"] },
   { label: "Scale", items: ["zoomin", "zoomout", "zoom1", "zoomfit"] },
   { label: "View", items: ["panel-maps", "panel-tiles", "panel-map", "hdpreview", "worldview", "-", "focus-next-panel", "-", "dock-reset", "dock-save", "dock-load"] },
-  { label: "Tools", items: ["db", "plugins", "audio", "search", "resources", "chargen", "-", "autotile-import", "-", "cmdpal"] },
+  { label: "Tools", items: ["db", "plugins", "audio", "search", "resources", "assetbrowser", "chargen", "-", "autotile-import", "-", "cmdpal"] },
   { label: "Game", items: ["play", "build", "-", "mapprops", "hdpreview", "mode-start"] },
   { label: "Help", items: ["language", "-", "shortcuts", "patchnotes", "help", "about"] },
 ];

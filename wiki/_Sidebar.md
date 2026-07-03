@@ -12,6 +12,7 @@
 - [The Database](The-Database)
 - [Battles & States](Battles-and-States)
 - [Characters & Custom Assets](Characters-and-Custom-Assets)
+- [The Asset Browser](The-Asset-Browser)
 - [Audio](Audio)
 
 **Polish & ship**
