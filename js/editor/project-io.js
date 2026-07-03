@@ -145,6 +145,9 @@ async function saveBlobWithPicker(blob, fileName) {
 
   const handle = await picker({
     suggestedName: fileName,
+    // Exports are downloads: start in the OS Downloads folder rather than the
+    // picker's Documents default (Chromium honors relocated known folders).
+    startIn: "downloads",
     types: [{
       description: "RPGAtlas project",
       accept: { "application/json": [".json"] },

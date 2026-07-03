@@ -117,6 +117,7 @@ try {
     system: { title: "Picker: Quest!" },
   });
   assert.equal(pickerOptions.suggestedName, "Picker_Quest.json");
+  assert.equal(pickerOptions.startIn, "downloads");
   assert.deepEqual(pickerOptions.types[0].accept, { "application/json": [".json"] });
   assert.deepEqual(pickedExport, { method: "picker", fileName: "Chosen_Project.json" });
   assert.match(pickerWrites[0], /"title": "Picker: Quest!"/);

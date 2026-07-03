@@ -5,6 +5,17 @@
 export const PATCH_NOTES = [
   {
     date: "July 3, 2026",
+    title: "Exports start in your Downloads folder",
+    summary:
+      "Exporting a project file now opens the save window in your Downloads folder instead of Documents — the same place your browser puts every other download.",
+    items: [
+      "The browser editor's Export Project save window starts in Downloads (it follows your system's Downloads location, even if you've moved it to another drive).",
+      "The desktop app's Save As / Export dialog starts in Downloads too.",
+      "Standalone game exports (HTML, Windows EXE, web zip) are unchanged — they already go wherever your browser saves downloads.",
+    ],
+  },
+  {
+    date: "July 3, 2026",
     title: "Twice the icons, twice the starting database",
     summary:
       "The icon sheet doubles from 64 to 128 icons, and new projects now start with twice as many classes, skills, items, weapons, and armors — more ready-made pieces to build with before you add your own.",

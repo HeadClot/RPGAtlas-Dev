@@ -18,12 +18,17 @@ fn save_project(
     json: String,
     suggested: String,
 ) -> Result<Option<String>, String> {
-    let picked = app
+    let mut dialog = app
         .dialog()
         .file()
         .add_filter("RPGAtlas project", &["json"])
-        .set_file_name(format!("{suggested}.json"))
-        .blocking_save_file();
+        .set_file_name(format!("{suggested}.json"));
+    // Exports default to the user's Downloads folder (honors a relocated known
+    // folder on Windows) instead of the dialog's Documents default.
+    if let Ok(dir) = app.path().download_dir() {
+        dialog = dialog.set_directory(dir);
+    }
+    let picked = dialog.blocking_save_file();
 
     match picked {
         Some(file) => {
