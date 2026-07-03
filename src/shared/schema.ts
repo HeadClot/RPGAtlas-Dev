@@ -131,6 +131,30 @@ export interface SystemData {
   music: Record<string, string>;
   types: SystemTypes;
   input: InputBindings;
+  // ---- Phase 5 (all backfilled by the v2 migration) ----
+  /** Battle scheduling mode. "turn" = the classic Phase 1 round loop. */
+  battleSystem?: "turn" | "atb" | "ctb";
+  /** ATB flavor (reserved; v1 always waits during command input). */
+  atbWait?: boolean;
+  /** Party followers trail the player on the map (Stage C). */
+  followers?: boolean;
+  /** Corner minimap in play (Stage D). */
+  minimap?: boolean;
+  /** Vehicle definitions (Stage C); an absent entry = vehicle unused. */
+  vehicles?: {
+    boat?: VehicleDef;
+    ship?: VehicleDef;
+    airship?: VehicleDef;
+  };
+}
+
+/** One vehicle's charset + starting placement (Phase 5 Stage C). */
+export interface VehicleDef {
+  charset: string;
+  mapId: number;
+  x: number;
+  y: number;
+  music?: string;
 }
 
 // ============================================================================
@@ -146,6 +170,8 @@ export interface Actor {
   weaponId?: number;
   armorId?: number;
   icon?: number;
+  /** Starting battle row (Phase 5). Absent = "front". */
+  row?: "front" | "back";
 }
 
 export interface Learning {
@@ -183,6 +209,9 @@ export interface Skill {
   animationId?: number;
   /** Number of damage applications per use (Phase 5). Absent = 1. */
   hits?: number;
+  /** Common event run after the skill resolves in battle (Phase 5) — the
+   *  action-sequence escape hatch, graph-authorable. Absent/0 = none. */
+  commonEventId?: number;
 }
 
 export interface StateDef {
@@ -228,9 +257,23 @@ export interface Armor {
   params?: Params;
 }
 
+/** Condition gating one enemy action row (Phase 5). Absent = always valid —
+ *  pre-Phase-5 action lists pick identically. */
+export interface EnemyActionCond {
+  kind: "always" | "turn" | "hpBelow" | "hpAbove" | "random" | "stateSelf" | string;
+  /** turn: fires on turn a + b·x (b=0: exactly turn a). */
+  a?: number;
+  b?: number;
+  /** hpBelow/hpAbove/random: percentage 0–100. */
+  pct?: number;
+  /** stateSelf: the state that must be on this enemy. */
+  stateId?: number;
+}
+
 export interface EnemyAction {
   skillId: number;
   weight: number;
+  cond?: EnemyActionCond;
 }
 
 export interface Enemy {
@@ -244,11 +287,32 @@ export interface Enemy {
   actions?: EnemyAction[];
 }
 
+/** A troop battle-event page condition (Phase 5). An empty cond never fires. */
+export interface TroopPageCond {
+  /** Fires on turn a + b·x (b=0: exactly turn a). */
+  turn?: { a: number; b: number };
+  /** Troop-slot `index`'s HP fell to `pct`% or below. */
+  enemyHpBelow?: { index: number; pct: number };
+  /** Actor `actorId`'s HP fell to `pct`% or below. */
+  actorHpBelow?: { actorId: number; pct: number };
+  switchId?: number;
+}
+
+/** A troop battle-event page (Phase 5): commands run mid-battle through the
+ *  ordinary interpreter while the loop pauses. span gates re-firing. */
+export interface TroopPage {
+  cond: TroopPageCond;
+  span: "battle" | "turn" | "moment";
+  commands: AnyCommand[];
+}
+
 export interface Troop {
   id: number;
   name: string;
   /** enemy ids composing the troop. */
   enemies: number[];
+  /** Battle-event pages (Phase 5). Backfilled to [] by the v2 migration. */
+  pages?: TroopPage[];
 }
 
 // ============================================================================
@@ -808,6 +872,8 @@ export interface GameMap {
   passOv?: number[];
   /** HD-2D elevation in tile units per tile (visual only). */
   heights?: number[];
+  /** Region tag per tile: 0 = none, 1–63 (Phase 5). Backfilled by v2. */
+  regions?: number[];
   events: MapEvent[];
   hd2d?: Hd2dConfig;
   lights?: MapLight[];

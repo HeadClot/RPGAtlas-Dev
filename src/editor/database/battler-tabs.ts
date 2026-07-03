@@ -30,11 +30,21 @@ export const actorsTab = () => listFormTab({
     }
     box.appendChild(row(field("Name", nameRefresher(e, redrawList)), field("Class", sel(e, "classId", dbOpts(S.proj.classes))), field("Initial level", nIn(e, "level", 1, 99))));
     box.appendChild(row(field("Sprite", sel(e, "charset", charsetOpts(true), rp)), preview));
+    if (e.row !== "back") e.row = "front";
     box.appendChild(row(field("Initial weapon", sel(e, "weaponId", dbOpts(S.proj.weapons, "(none)"))),
-      field("Initial armor", sel(e, "armorId", dbOpts(S.proj.armors, "(none)")))));
+      field("Initial armor", sel(e, "armorId", dbOpts(S.proj.armors, "(none)"))),
+      field("Battle row", sel(e, "row", rowOpts()))));
     rp();
   },
 });
+
+// Battle row options (Phase 5): back row deals/takes 25% less physical
+// damage and is targeted less. Absent = front, so old actors are unchanged.
+function rowOpts() {
+  const o: any = [{ v: "front", l: "Front row" }, { v: "back", l: "Back row" }];
+  o.stringValues = true;
+  return o;
+}
 
 export const classesTab = () => listFormTab({
   kind: "classes",
@@ -207,13 +217,16 @@ export const skillsTab = () => listFormTab({
     box.appendChild(field("Scope", sel(e, "scope", [
       { v: "enemy", l: "One enemy" }, { v: "enemies", l: "All enemies" },
       { v: "ally", l: "One ally" }, { v: "allies", l: "All allies" }])));
-    // Battle animation + multi-hit (Phase 5). Animation "(default FX)" keeps
-    // the legacy castFx/travel/burst effects.
+    // Battle animation + multi-hit + action-sequence hook (Phase 5).
+    // Animation "(default FX)" keeps the legacy castFx/travel/burst effects;
+    // the common event runs after the skill resolves in battle.
     if (e.animationId == null) e.animationId = 0;
     if (e.hits == null) e.hits = 1;
+    if (e.commonEventId == null) e.commonEventId = 0;
     box.appendChild(row(
       field("Battle animation", sel(e, "animationId", dbOpts(S.proj.animations || [], "(default FX)"))),
-      field("Hits", nIn(e, "hits", 1, 8))));
+      field("Hits", nIn(e, "hits", 1, 8)),
+      field("After-use common event", sel(e, "commonEventId", dbOpts(S.proj.commonEvents || [], "(none)")))));
     if (e.stateId == null) e.stateId = 0;
     if (!e.stateOp) e.stateOp = "add";
     if (e.stateChance == null) e.stateChance = 100;
@@ -278,12 +291,50 @@ export const enemiesTab = () => listFormTab({
     box.appendChild(st);
     box.appendChild(row(field("EXP reward", nIn(e, "exp", 0)), field("Gold reward", nIn(e, "gold", 0))));
     const abox = h("div", { class: "minilist" });
+    // Per-action condition (Phase 5): rows whose condition fails drop out of
+    // the weighted roll that turn. "(always)" = pre-Phase-5 behavior.
+    function condKindOpts() {
+      const o: any = [
+        { v: "always", l: "(always)" },
+        { v: "turn", l: "Turn a + b·x" },
+        { v: "hpBelow", l: "HP ≤ %" },
+        { v: "hpAbove", l: "HP ≥ %" },
+        { v: "random", l: "Chance %" },
+        { v: "stateSelf", l: "Has state" },
+      ];
+      o.stringValues = true;
+      return o;
+    }
+    function condFields(a: any): any {
+      const wrap = h("span", { class: "cond-fields" });
+      const cond = a.cond;
+      if (!cond || cond.kind === "always") return wrap;
+      if (cond.kind === "turn") {
+        wrap.appendChild(h("span", null, "a")); wrap.appendChild(nIn(cond, "a", 0, 999));
+        wrap.appendChild(h("span", null, "+ b·x")); wrap.appendChild(nIn(cond, "b", 0, 999));
+      } else if (cond.kind === "stateSelf") {
+        wrap.appendChild(sel(cond, "stateId", dbOpts(S.proj.states)));
+      } else {
+        wrap.appendChild(nIn(cond, "pct", 0, 100)); wrap.appendChild(h("span", null, "%"));
+      }
+      return wrap;
+    }
     function redrawA() {
       abox.innerHTML = "";
       (e.actions || []).forEach((a: any, i: any) => {
+        const kindHolder = { v: (a.cond && a.cond.kind) || "always" };
         abox.appendChild(h("div", { class: "minirow" },
           sel(a, "skillId", [{ v: 0, l: "(basic attack)" }].concat(dbOpts(S.proj.skills))),
           h("span", null, "weight"), nIn(a, "weight", 1, 99),
+          h("span", null, "if"),
+          sel(kindHolder, "v", condKindOpts(), (kind: any) => {
+            if (kind === "always") delete a.cond;
+            else if (kind === "turn") a.cond = { kind, a: 1, b: 0 };
+            else if (kind === "stateSelf") a.cond = { kind, stateId: S.proj.states[0] ? S.proj.states[0].id : 1 };
+            else a.cond = { kind, pct: 50 };
+            touch(); redrawA();
+          }),
+          condFields(a),
           h("button", { class: "mini", onclick() { e.actions.splice(i, 1); touch(); redrawA(); } }, "✕")));
       });
       abox.appendChild(h("button", { class: "mini", onclick() {
@@ -293,7 +344,7 @@ export const enemiesTab = () => listFormTab({
       } }, "+ add action"));
     }
     redrawA();
-    box.appendChild(h("div", { class: "subhead" }, "Actions (picked by weight)"));
+    box.appendChild(h("div", { class: "subhead" }, "Actions (picked by weight among rows whose condition holds)"));
     box.appendChild(abox);
     rp();
   },

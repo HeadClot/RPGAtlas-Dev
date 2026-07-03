@@ -2,6 +2,47 @@
 
 **Status:** IN PROGRESS. Stage log accumulates here, phase-2/3/4-spec style.
 
+Stage B COMPLETE (2026-07-02): battle v2. The per-command resolution body of
+the Phase 1 round loop was extracted VERBATIM into `resolveAction(c)`
+(anchor-scripted move: outer continue/break → return; the round loop calls
+it — turn mode is behavior-frozen, existing tests untouched). New pure module
+`src/engine/scenes/battle-logic.ts` (rows, condition-weighted AI, troop-page
+conditions/spans, ATB/CTB scheduling — rng/state injected, 17-test vitest
+suite). **Modes** (`system.battleSystem`, System-tab select): turn (default,
+frozen) · **atb** — per-battler gauges fill with `atbRate(agi)·8` per 30 ms
+tick to ATB_FULL=6000 (≈¾ s per refill), wait-flavor (fill pauses during
+command input; `atbWait` reserved), gauges rendered on party rows + under
+enemies (recreated after every refreshParty — it rebuilds rows) · **ctb** —
+`ctbForecast` (pure, deterministic, lower-index tie-break) drives one act at
+a time + an 8-chip turn-order strip (`.ctb-order`, `.now` highlight).
+Both timed modes: guard persists until the battler's next act; a "turn" =
+one act per living battler (tickStates + turnNumber at the boundary).
+**Troop battle events**: `troop.pages[] {cond{turn a+b·x, enemyHpBelow
+{index,pct}, actorHpBelow{actorId,pct}, switchId}, span battle|turn|moment
+(moment = edge-triggered), commands}` checked at battle start, after every
+action, and at turn boundaries; fire = `new Interp(null).runList` while the
+loop pauses (battle.ts now imports Interp — safe, no cycle). Empty/zeroed
+cond never fires (editor backfills zeroed blocks). Troops tab: page strip +
+cond form + the shared cmdListWidget (graphs NOT on troop pages — command
+lists only). **Enemy AI**: `EnemyAction.cond {always|turn a+b·x|hpBelow|
+hpAbove|random|stateSelf}` filters rows before the existing weighted roll
+(absent = always, empty ⇒ basic attack); per-row cond editor in the Enemies
+tab. **Rows**: `actor.row`/party-record `row` (makeActor defaults "front"),
+back row = physical dealt & taken ×0.75 (`applyRowScale` no-ops at scale 1 —
+pre-Phase-5 damage byte-identical), enemy targeting weights front 3:1
+(uniform when all-front), ▽ marker in party rows, **Formation** pause-menu
+entry (index 4; Journal…To-Title shifted +1). **skill.commonEventId** runs
+after party skill resolution (offense + heal paths). Verified live on the
+dev server (ATB: gauges fill/pause, full battle to win; CTB: strip + troop
+page fired turn-1 text mid-battle; turn mode + Formation toggle regression)
+and by 2 new Playwright specs driving REAL battles per mode (Enter-spam on
+.cmdwin/.targetwin; 90 s timeout). `editor.css?v=47`, `play.css?v=21`
+(covers Stage A's missed bump too), `patch-notes.js?v=14` (+shim), patch
+note, wiki (Battles-and-States: three systems, Formation, troop events, AI
+conds). Full gate green: tsc, eslint, node --test (16), vitest (**137**),
+Playwright **32/32** (goldens byte-stable). Deviation noted: ATB ships
+wait-flavor only (`atbWait` schema field reserved; active-fill deferred).
+
 Stage A COMPLETE (2026-07-02): the animation engine + timeline editor.
 Schema: `AnimItem`/`BattleAnimation`, `Project.animations`, `Skill.animationId/
 hits`, `Weapon.animationId`, `CmdPlayAnim` in the union; **FORMAT_VERSION 2**

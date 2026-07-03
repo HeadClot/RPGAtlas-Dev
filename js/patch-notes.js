@@ -5,6 +5,19 @@
 export const PATCH_NOTES = [
   {
     date: "July 2, 2026",
+    title: "Battle systems — ATB, CTB, battle events, smarter enemies & rows",
+    summary:
+      "Choose your battle flow: beside the classic turn-based rounds, battles can now run as ATB (active-time gauges) or CTB (a turn-order timeline). Troops gain mid-battle event pages, enemies gain conditional AI, and the party gains front/back rows.",
+    items: [
+      "Database ▸ System ▸ Battle system: Turn-based (unchanged default), ATB — agility fills each battler's gauge and they act when it's full (gauges shown on party rows and under enemies), or CTB — one battler acts at a time in an agility-driven order previewed in a strip at the top of the battle.",
+      "Troop battle events (Database ▸ Troops): pages of ordinary event commands that run mid-battle when their condition hits — on a turn (a + b·x), when an enemy's or actor's HP drops below a threshold, or while a switch is ON; spans control refiring (once per battle / per turn / each time it becomes true). Perfect for boss dialogue and phase changes.",
+      "Smarter enemy AI: each action row can carry a condition (turn pattern, own HP above/below %, random chance, has-state) — invalid rows drop out of the weighted pick that turn.",
+      "Formation: a new pause-menu entry toggles each member between front and back row. Back row deals and takes 25% less physical damage and is targeted less often (▽ marks back-row members in battle).",
+      "Skills can now run a common event after resolving in battle (Database ▸ Skills ▸ After-use common event) — the action-sequence hook, graph-authorable.",
+    ],
+  },
+  {
+    date: "July 2, 2026",
     title: "Battle animations — keyframed skill FX with a timeline editor",
     summary:
       "A new animation engine: author keyframed particle/flash/shake/projectile/flipbook animations on a timeline in Database ▸ Animations, assign them to skills and weapons, and play them on the map with the new Play Animation event command.",
