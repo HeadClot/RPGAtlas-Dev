@@ -49,6 +49,14 @@ class MemoryStorage {
 
 assert.equal(normalizeEditorLocale("fr-CA"), "fr");
 assert.equal(normalizeEditorLocale("unknown"), "en");
+assert.equal(normalizeEditorLocale("pt-BR"), "pt");
+assert.equal(normalizeEditorLocale("ja-JP"), "ja");
+assert.equal(normalizeEditorLocale("ko_KR"), "ko");
+assert.equal(normalizeEditorLocale("zh"), "zh-cn");
+assert.equal(normalizeEditorLocale("zh-CN"), "zh-cn");
+assert.equal(normalizeEditorLocale("zh-Hans-SG"), "zh-cn");
+assert.equal(normalizeEditorLocale("zh-TW"), "zh-tw");
+assert.equal(normalizeEditorLocale("zh-Hant-HK"), "zh-tw");
 const localeStorage = new MemoryStorage();
 const i18n = createEditorI18n({ storage: localeStorage, browserLocale: "es-MX" });
 assert.equal(i18n.locale, "es");
@@ -62,7 +70,10 @@ i18n.setLocale("de-DE");
 assert.equal(i18n.locale, "de");
 assert.equal(i18n.t("Maps"), "Karten");
 assert.equal(localeStorage.getItem(EDITOR_LOCALE_STORAGE_KEY), "de");
-assert.deepEqual(i18n.locales().map((locale) => locale.id), ["en", "es", "fr", "de"]);
+assert.deepEqual(
+  i18n.locales().map((locale) => locale.id),
+  ["en", "es", "fr", "de", "ja", "zh-tw", "zh-cn", "pt", "ko"],
+);
 
 const storage = new MemoryStorage({
   driftwood_project: JSON.stringify({ meta: { engine: "driftwood" }, system: {} }),

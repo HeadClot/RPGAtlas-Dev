@@ -5,6 +5,17 @@
 export const PATCH_NOTES = [
   {
     date: "July 3, 2026",
+    title: "Five new interface languages",
+    summary:
+      "The editor now speaks Japanese, Traditional Chinese, Simplified Chinese, Portuguese, and Korean — nine languages in total. Pick yours in Help ▸ Interface Language.",
+    items: [
+      "New in the language selector: 日本語 (Japanese), 繁體中文 (Traditional Chinese), 简体中文 (Simplified Chinese), Português (Portuguese), and 한국어 (Korean), joining English, Español, Français, and Deutsch.",
+      "First launch now auto-detects these languages from your browser or system locale too — including picking the right Chinese script for zh-TW, zh-HK, and zh-Hant tags.",
+      "Same scope as always: menus, panels, buttons, and status lines are translated; your project's content never is.",
+    ],
+  },
+  {
+    date: "July 3, 2026",
     title: "The Console — a command line for power users",
     summary:
       "A new Console tab sits beside the Map view: type commands to inspect, search, build, and steer playtests. Completely optional — everything it does also lives in the menus — but much faster once you know it.",
