@@ -10,7 +10,7 @@
 import { RA, editorState as S } from "../editor-state";
 import { h, tIn, nIn, sel, chk, field, row, dbOpts, switchOpts, varOpts, stringSelOpts } from "../dom";
 import { touch } from "../persistence";
-import { listFormTab, nameRefresher } from "./shared";
+import { listFormTab, nameRefresher, subTabs } from "./shared";
 
 export const questsTab = () => listFormTab({
   list: () => S.proj.quests,
@@ -130,7 +130,7 @@ export const questsTab = () => listFormTab({
       warningWrap.appendChild(warningBox);
     }
 
-    function effectEditor(list: any, title: any, addLabel: any, blank: any, kinds: any) {
+    function effectEditor(parent: any, list: any, title: any, addLabel: any, blank: any, kinds: any) {
       const panel = h("div", { class: "minilist" });
       function redraw() {
         panel.innerHTML = "";
@@ -177,10 +177,10 @@ export const questsTab = () => listFormTab({
         renderWarnings();
       }
       redraw();
-      box.appendChild(h("div", { class: "subhead" }, title));
-      box.appendChild(panel);
+      parent.appendChild(h("div", { class: "subhead" }, title));
+      parent.appendChild(panel);
     }
-    function failConditionEditor() {
+    function failConditionEditor(parent: any) {
       const panel = h("div", { class: "minilist" });
       function redraw() {
         panel.innerHTML = "";
@@ -213,11 +213,11 @@ export const questsTab = () => listFormTab({
         renderWarnings();
       }
       redraw();
-      box.appendChild(h("div", { class: "subhead" }, "Fail conditions"));
-      box.appendChild(panel);
+      parent.appendChild(h("div", { class: "subhead", style: "margin-top:0" }, "Fail conditions"));
+      parent.appendChild(panel);
     }
 
-    function requirementEditor() {
+    function requirementEditor(parent: any) {
       const panel = h("div", { class: "minilist" });
       function redraw() {
         panel.innerHTML = "";
@@ -251,10 +251,10 @@ export const questsTab = () => listFormTab({
         renderWarnings();
       }
       redraw();
-      box.appendChild(h("div", { class: "subhead" }, "Availability / start requirements"));
-      box.appendChild(panel);
+      parent.appendChild(h("div", { class: "subhead", style: "margin-top:0" }, "Availability / start requirements"));
+      parent.appendChild(panel);
     }
-    function objectiveEditor() {
+    function objectiveEditor(parent: any) {
       const panel = h("div", { class: "minilist" });
       function redraw() {
         panel.innerHTML = "";
@@ -306,66 +306,99 @@ export const questsTab = () => listFormTab({
         renderWarnings();
       }
       redraw();
-      box.appendChild(h("div", { class: "subhead" }, "Objectives"));
-      box.appendChild(panel);
+      parent.appendChild(h("div", { class: "subhead", style: "margin-top:0" }, "Objectives"));
+      parent.appendChild(panel);
     }
 
+    // Post-1.0 UX: the identity row and the live warnings stay always visible
+    // on top; the heavy sections live on sub-tabs. warningWrap is a persistent
+    // node, so renderWarnings() calls from any panel keep updating it.
     box.appendChild(row(field("Title", nameRefresher(e, redrawList)),
       field("Category", sel(e, "category", stringSelOpts(["main", "side", "guild", "hidden"]))),
       field("Visible in journal", chk(e, "visible"))));
-    const shortDesc = h("input", { type: "text", value: e.shortDesc || "", oninput(ev: any) { e.shortDesc = ev.target.value; touch(); } });
-    const desc = h("textarea", { rows: 5, oninput(ev: any) { e.desc = ev.target.value; touch(); } }, e.desc || "");
-    box.appendChild(field("Short description", shortDesc));
-    box.appendChild(field("Long description", desc));
     renderWarnings();
     box.appendChild(warningWrap);
+    box.appendChild(subTabs("quests", [
+      { label: "General", build: buildGeneral },
+      { label: "Objectives", build: buildObjectives },
+      { label: "Requirements", build: buildRequirements },
+      { label: "Failure", build: buildFailure },
+      { label: "Rewards & next", build: buildRewardsNext },
+    ]));
+    return;
 
-    objectiveEditor();
-    requirementEditor();
-    failConditionEditor();
-
-    effectEditor(e.rewards, "Rewards", "+ add reward", () => ({ kind: "gold", amount: 100 }), [
-      { v: "exp", l: "XP" },
-      { v: "gold", l: "Money" },
-      { v: "item", l: "Item" },
-    ]);
-
-    effectEditor(e.failEffects, "Fail effects", "+ add fail effect", () => ({ kind: "switch", id: 1, val: "true" }), [
-      { v: "gold", l: "Money" },
-      { v: "item", l: "Item" },
-      { v: "switch", l: "Switch" },
-      { v: "var", l: "Variable" },
-      { v: "questUnlock", l: "Unlock quest" },
-      { v: "questLock", l: "Lock quest" },
-    ]);
-    box.appendChild(field("Failure / consequence text", h("textarea", { rows: 3, oninput(ev: any) { e.failText = ev.target.value; touch(); } }, e.failText || "")));
-
-    const nextBox = h("div", { class: "minilist" });
-    function redrawNext() {
-      nextBox.innerHTML = "";
-      e.nextQuestIds.forEach((id: any, i: any) => {
-        const slot = { id };
-        const options = [{ v: 0, l: "(none)" }].concat(S.proj.quests.filter((q: any) => q !== e).map((q: any) => ({ v: q.id, l: q.id + ": " + (q.name || "Quest") })));
-        nextBox.appendChild(h("div", { class: "minirow" },
-          sel(slot, "id", options, () => {
-            e.nextQuestIds[i] = slot.id;
-            e.nextQuestIds = e.nextQuestIds.filter((qid: any) => qid && qid !== e.id);
-            touch();
-          }),
-          h("button", { class: "mini", onclick() { e.nextQuestIds.splice(i, 1); touch(); redrawNext(); } }, "✕")));
-      });
-      nextBox.appendChild(h("button", { class: "mini", onclick() {
-        const candidate = S.proj.quests.find((q: any) => q !== e && !e.nextQuestIds.includes(q.id));
-        if (!candidate) return;
-        e.nextQuestIds.push(candidate.id);
-        touch(); redrawNext();
-      } }, "+ add next quest"));
-      renderWarnings();
+    function buildGeneral() {
+      const p = h("div");
+      const shortDesc = h("input", { type: "text", value: e.shortDesc || "", oninput(ev: any) { e.shortDesc = ev.target.value; touch(); } });
+      const desc = h("textarea", { rows: 5, oninput(ev: any) { e.desc = ev.target.value; touch(); } }, e.desc || "");
+      p.appendChild(field("Short description", shortDesc));
+      p.appendChild(field("Long description", desc));
+      p.appendChild(field("Player can abandon", chk(e, "canAbandon")));
+      return p;
     }
-    redrawNext();
-    box.appendChild(h("div", { class: "subhead" }, "Next quests"));
-    box.appendChild(nextBox);
-    box.appendChild(field("Auto-start next quests", chk(e, "autoStartNext")));
-    box.appendChild(row(field("Allow restart after fail", chk(e, "allowRestartOnFail")), field("Player can abandon", chk(e, "canAbandon"))));
+
+    function buildObjectives() {
+      const p = h("div");
+      objectiveEditor(p);
+      return p;
+    }
+
+    function buildRequirements() {
+      const p = h("div");
+      requirementEditor(p);
+      return p;
+    }
+
+    function buildFailure() {
+      const p = h("div");
+      failConditionEditor(p);
+      effectEditor(p, e.failEffects, "Fail effects", "+ add fail effect", () => ({ kind: "switch", id: 1, val: "true" }), [
+        { v: "gold", l: "Money" },
+        { v: "item", l: "Item" },
+        { v: "switch", l: "Switch" },
+        { v: "var", l: "Variable" },
+        { v: "questUnlock", l: "Unlock quest" },
+        { v: "questLock", l: "Lock quest" },
+      ]);
+      p.appendChild(field("Failure / consequence text", h("textarea", { rows: 3, oninput(ev: any) { e.failText = ev.target.value; touch(); } }, e.failText || "")));
+      p.appendChild(field("Allow restart after fail", chk(e, "allowRestartOnFail")));
+      return p;
+    }
+
+    function buildRewardsNext() {
+      const p = h("div");
+      effectEditor(p, e.rewards, "Rewards", "+ add reward", () => ({ kind: "gold", amount: 100 }), [
+        { v: "exp", l: "XP" },
+        { v: "gold", l: "Money" },
+        { v: "item", l: "Item" },
+      ]);
+      const nextBox = h("div", { class: "minilist" });
+      function redrawNext() {
+        nextBox.innerHTML = "";
+        e.nextQuestIds.forEach((id: any, i: any) => {
+          const slot = { id };
+          const options = [{ v: 0, l: "(none)" }].concat(S.proj.quests.filter((q: any) => q !== e).map((q: any) => ({ v: q.id, l: q.id + ": " + (q.name || "Quest") })));
+          nextBox.appendChild(h("div", { class: "minirow" },
+            sel(slot, "id", options, () => {
+              e.nextQuestIds[i] = slot.id;
+              e.nextQuestIds = e.nextQuestIds.filter((qid: any) => qid && qid !== e.id);
+              touch();
+            }),
+            h("button", { class: "mini", onclick() { e.nextQuestIds.splice(i, 1); touch(); redrawNext(); } }, "✕")));
+        });
+        nextBox.appendChild(h("button", { class: "mini", onclick() {
+          const candidate = S.proj.quests.find((q: any) => q !== e && !e.nextQuestIds.includes(q.id));
+          if (!candidate) return;
+          e.nextQuestIds.push(candidate.id);
+          touch(); redrawNext();
+        } }, "+ add next quest"));
+        renderWarnings();
+      }
+      redrawNext();
+      p.appendChild(h("div", { class: "subhead" }, "Next quests"));
+      p.appendChild(nextBox);
+      p.appendChild(field("Auto-start next quests", chk(e, "autoStartNext")));
+      return p;
+    }
   },
 });

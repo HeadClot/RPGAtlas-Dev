@@ -42,6 +42,27 @@ export function traitDefault(type: any) {
   return { type: "param", key: "atk", value: 100 };
 }
 
+// Sub-tabs (post-1.0 UX): a horizontal tab strip that splits a big tab's
+// content into digestible panels inside the main section. `key` remembers the
+// active sub-tab for the whole session, so switching entries, leaving the tab,
+// or an undo-refresh rebuild all land back on the same panel. Builders run
+// fresh on every activation — the same contract as the main dbTabs show().
+const subTabMemory = new Map<string, number>();
+
+export function subTabs(key: string, tabs: Array<{ label: string; build: () => any }>) {
+  const bar = h("div", { class: "dbsubtabs" });
+  const body = h("div", { class: "dbsubbody" });
+  function show(i: number) {
+    subTabMemory.set(key, i);
+    bar.querySelectorAll("button").forEach((b: any, bi: any) => b.classList.toggle("sel", bi === i));
+    body.innerHTML = "";
+    body.appendChild(tabs[i].build());
+  }
+  tabs.forEach((t, i) => bar.appendChild(h("button", { type: "button", onclick: () => show(i) }, t.label)));
+  show(Math.min(subTabMemory.get(key) || 0, tabs.length - 1));
+  return h("div", { class: "dbsubwrap" }, bar, body);
+}
+
 export function listFormTab(spec: any) {
   // spec: {list(), blank(), form(e, box), kind?, reorderable?, allowEmpty?}
   // Stage E upgrades: a search box filters the list; per-row checkboxes drive

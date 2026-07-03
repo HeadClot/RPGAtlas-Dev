@@ -5,6 +5,22 @@
 export const PATCH_NOTES = [
   {
     date: "July 3, 2026",
+    title: "Database sub-tabs — big tabs, digestible pages",
+    summary:
+      "The Database's busiest tabs now split their settings across sub-tabs inside the main panel, so each screen shows one topic at a time. Nothing moved out of its tab and nothing was removed — same settings, better organized.",
+    items: [
+      "System is now five pages: General (title, start position, party, battle system), Map systems (followers, minimap, vehicles), Screen, Windows & fonts, and Audio (system sounds & music).",
+      "Classes: Stats & curve, Traits, and Skills learned each get their own page; the name and icon stay on top.",
+      "Skills: General on one page; the optional state effect and the live damage preview on Effects & preview.",
+      "Enemies: Stats & rewards and Actions (AI) split, with the sprite preview always visible.",
+      "Troops: Members and Battle events are now separate pages.",
+      "Quests: General, Objectives, Requirements, Failure, and Rewards & next — with the live warnings list always visible above the sub-tabs.",
+      "The editor remembers which sub-tab you were on: switching entries, hopping to another tab, or undoing an edit won't bounce you back to the first page.",
+      "Compact tabs (Items, Weapons, Armors, Actors, States, and friends) stay exactly as they were — they already fit at a glance.",
+    ],
+  },
+  {
+    date: "July 3, 2026",
     title: "Seven new interface languages",
     summary:
       "The editor now speaks Japanese, Traditional Chinese, Simplified Chinese, Portuguese, Korean, Italian, and Russian — eleven languages in total. Pick yours in Help ▸ Interface Language.",

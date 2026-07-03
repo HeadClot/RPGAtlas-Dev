@@ -10,102 +10,127 @@ import { Assets, RA, Sfx, editorState as S } from "../editor-state";
 import { h, tIn, nIn, sel, chk, rangeIn, field, row, dbOpts, charsetOpts, DIR_OPTS, SE_OPTS, MUSIC_OPTS } from "../dom";
 import { modal, confirmBox } from "../modals";
 import { touch } from "../persistence";
+import { subTabs } from "./shared";
 
 export function systemTab() {
   // Dynamic form editor over the system blob: indexes s.input[device][action]
   // and s[key] with runtime-string keys and writes s.party[i] = undefined
   // before filtering. Kept locally `any` — tightening these dynamic-index sites
   // is tracked in the Stage D any-debt list, not chased here (behavior-frozen).
+  // Post-1.0 UX: the tab's five sections now live on sub-tabs (subTabs) so
+  // each screen stays digestible; the fields themselves are unchanged.
   const s: any = S.proj.system;
   const box = h("div", { class: "dbform single" });
-  box.appendChild(field("Game title", tIn(s, "title")));
-  box.appendChild(row(field("Start map", sel(s, "startMapId", dbOpts(S.proj.maps))),
-    field("X", nIn(s, "startX", 0, 200)), field("Y", nIn(s, "startY", 0, 200)),
-    field("Facing", sel(s, "startDir", DIR_OPTS)),
-    field("Start transparent", chk(s, "startTransparent"))));
-  box.appendChild(h("div", { class: "dim" }, "Tip: use the “Start” mode button and click the map to set this visually. A transparent player is invisible until an event runs “Change Transparency” — handy for intro cutscenes."));
-  const partyRow = h("div");
-  for (let i = 0; i < 4; i++) {
-    const slot = { v: s.party[i] || 0 };
-    partyRow.appendChild(field("Member " + (i + 1), sel(slot, "v", dbOpts(S.proj.actors, "(empty)"), () => {
-      s.party[i] = slot.v || undefined;
-      s.party = s.party.filter(Boolean);
-      touch();
-    })));
-  }
-  box.appendChild(h("div", { class: "subhead" }, "Starting party"));
-  box.appendChild(h("div", { class: "frow" }, partyRow));
-  box.appendChild(row(field("Starting gold", nIn(s, "startGold", 0)), field("Currency name", tIn(s, "currency")),
-    field("Battle view", sel(s, "battleView", [{ v: "side", l: "Side view (party sprites)" }, { v: "front", l: "Front view (classic)" }]))));
-  // Battle scheduling mode (Phase 5): classic rounds, ATB gauges, or CTB order
-  if (!s.battleSystem) s.battleSystem = "turn";
-  box.appendChild(row(field("Battle system", sel(s, "battleSystem", [
-    { v: "turn", l: "Turn-based (classic rounds)" },
-    { v: "atb", l: "ATB (active-time gauges)" },
-    { v: "ctb", l: "CTB (turn-order timeline)" },
-  ]))));
-  box.appendChild(h("div", { class: "dim" }, "ATB: gauges fill with agility; a battler acts when full (gauges pause during command input). CTB: one battler acts at a time in an agility-driven order shown at the top of the battle."));
-
-  // ---- map systems (Phase 5 Stage C) ----
-  box.appendChild(h("div", { class: "subhead" }, "Map systems"));
-  if (s.followers == null) s.followers = false;
-  if (s.minimap == null) s.minimap = false;
-  box.appendChild(row(
-    field("Party followers (members trail the player)", chk(s, "followers")),
-    field("Minimap (corner map + quest tracker HUD; M toggles)", chk(s, "minimap"))));
-  s.vehicles = s.vehicles && typeof s.vehicles === "object" ? s.vehicles : {};
-  const vehicleRows = h("div");
-  for (const [type, label] of [["boat", "Boat (shallow water)"], ["ship", "Ship (all water)"], ["airship", "Airship (flies anywhere)"]] as any[]) {
-    const v = (s.vehicles[type] = s.vehicles[type] || { charset: "", mapId: 0, x: 0, y: 0, music: "none" });
-    if (!v.music) v.music = "none";
-    vehicleRows.appendChild(row(
-      field(label + " — sprite", sel(v, "charset", charsetOpts())),
-      field("Map", sel(v, "mapId", dbOpts(S.proj.maps, "(unused)"))),
-      field("X", nIn(v, "x", 0, 200)), field("Y", nIn(v, "y", 0, 200)),
-      field("Music while riding", sel(v, "music", MUSIC_OPTS()))));
-  }
-  box.appendChild(vehicleRows);
-  box.appendChild(h("div", { class: "dim" }, "A vehicle needs a sprite AND a map to appear (the boat/ship/airship object sprites ship built in). Players board by facing it and pressing the action key; boats sail shallow water, ships any water, airships fly over everything and land on open ground."));
-
-  box.appendChild(h("div", { class: "subhead" }, "Screen"));
-  box.appendChild(row(field("Game width (px)", nIn(s, "screenWidth", 384, 3840)),
-    field("Game height (px)", nIn(s, "screenHeight", 288, 2160)),
-    field("Screen scale (max zoom)", nIn(s, "screenScale", 0.5, 4, 0.1))));
-  box.appendChild(row(field("UI area width (0 = full)", nIn(s, "uiWidth", 0, 3840)),
-    field("UI area height (0 = full)", nIn(s, "uiHeight", 0, 2160))));
-  box.appendChild(h("div", { class: "dim" }, "The UI area centres message windows and menus inside the game screen — useful on very wide screens. Changes apply on the next playtest."));
-
-  box.appendChild(h("div", { class: "subhead" }, "Windows & fonts"));
-  const fontOpts: any = RA.FONTS.slice();
-  fontOpts.stringValues = true;
-  box.appendChild(row(field("Message font", sel(s, "fontText", fontOpts)),
-    field("Menu font", sel(s, "fontMenu", fontOpts))));
-  const windowColor = h("input", {
-    type: "color",
-    value: RA.normalizeWindowColor(s.windowColor),
-    oninput(e: any) { s.windowColor = RA.normalizeWindowColor(e.target.value); touch(); },
-  });
-  box.appendChild(row(field("Font size (px)", nIn(s, "fontSize", 8, 48)),
-    field("Window opacity", rangeIn(s, "windowOpacity", 0, 100, "%")),
-    field("Window color", windowColor)));
-
-  box.appendChild(h("div", { class: "subhead" }, "System sounds"));
-  const seOpts: any = SE_OPTS(); // procedural + imported (Phase 6)
-  const sgrid = h("div", { class: "sysgrid" });
-  for (const def of RA.SYSTEM_SOUNDS) {
-    sgrid.appendChild(field(def.label, h("span", { class: "frow", style: "gap:4px; flex-wrap:nowrap" },
-      sel(s.sounds, def.key, seOpts),
-      h("button", { class: "mini", onclick() { Sfx.play(s.sounds[def.key] || def.def); } }, "▶"))));
-  }
-  box.appendChild(sgrid);
-
-  box.appendChild(h("div", { class: "subhead" }, "System music"));
-  box.appendChild(row(field("Title theme", sel(s.music, "title", MUSIC_OPTS())),
-    field("Battle theme", sel(s.music, "battle", MUSIC_OPTS()))));
-
-  box.appendChild(h("div", { class: "subhead" }, "Controls"));
-  box.appendChild(h("div", { class: "dim" }, "Default key & gamepad bindings now have their own “Controls” tab."));
+  box.appendChild(subTabs("system", [
+    { label: "General", build: buildGeneral },
+    { label: "Map systems", build: buildMapSystems },
+    { label: "Screen", build: buildScreen },
+    { label: "Windows & fonts", build: buildWindowsFonts },
+    { label: "Audio", build: buildAudio },
+  ]));
   return box;
+
+  function buildGeneral() {
+    const p = h("div");
+    p.appendChild(field("Game title", tIn(s, "title")));
+    p.appendChild(row(field("Start map", sel(s, "startMapId", dbOpts(S.proj.maps))),
+      field("X", nIn(s, "startX", 0, 200)), field("Y", nIn(s, "startY", 0, 200)),
+      field("Facing", sel(s, "startDir", DIR_OPTS)),
+      field("Start transparent", chk(s, "startTransparent"))));
+    p.appendChild(h("div", { class: "dim" }, "Tip: use the “Start” mode button and click the map to set this visually. A transparent player is invisible until an event runs “Change Transparency” — handy for intro cutscenes."));
+    const partyRow = h("div");
+    for (let i = 0; i < 4; i++) {
+      const slot = { v: s.party[i] || 0 };
+      partyRow.appendChild(field("Member " + (i + 1), sel(slot, "v", dbOpts(S.proj.actors, "(empty)"), () => {
+        s.party[i] = slot.v || undefined;
+        s.party = s.party.filter(Boolean);
+        touch();
+      })));
+    }
+    p.appendChild(h("div", { class: "subhead" }, "Starting party"));
+    p.appendChild(h("div", { class: "frow" }, partyRow));
+    p.appendChild(row(field("Starting gold", nIn(s, "startGold", 0)), field("Currency name", tIn(s, "currency")),
+      field("Battle view", sel(s, "battleView", [{ v: "side", l: "Side view (party sprites)" }, { v: "front", l: "Front view (classic)" }]))));
+    // Battle scheduling mode (Phase 5): classic rounds, ATB gauges, or CTB order
+    if (!s.battleSystem) s.battleSystem = "turn";
+    p.appendChild(row(field("Battle system", sel(s, "battleSystem", [
+      { v: "turn", l: "Turn-based (classic rounds)" },
+      { v: "atb", l: "ATB (active-time gauges)" },
+      { v: "ctb", l: "CTB (turn-order timeline)" },
+    ]))));
+    p.appendChild(h("div", { class: "dim" }, "ATB: gauges fill with agility; a battler acts when full (gauges pause during command input). CTB: one battler acts at a time in an agility-driven order shown at the top of the battle."));
+    p.appendChild(h("div", { class: "dim", style: "margin-top:8px" }, "Default key & gamepad bindings have their own “Controls” tab."));
+    return p;
+  }
+
+  function buildMapSystems() {
+    // ---- map systems (Phase 5 Stage C) ----
+    const p = h("div");
+    if (s.followers == null) s.followers = false;
+    if (s.minimap == null) s.minimap = false;
+    p.appendChild(row(
+      field("Party followers (members trail the player)", chk(s, "followers")),
+      field("Minimap (corner map + quest tracker HUD; M toggles)", chk(s, "minimap"))));
+    s.vehicles = s.vehicles && typeof s.vehicles === "object" ? s.vehicles : {};
+    const vehicleRows = h("div");
+    for (const [type, label] of [["boat", "Boat (shallow water)"], ["ship", "Ship (all water)"], ["airship", "Airship (flies anywhere)"]] as any[]) {
+      const v = (s.vehicles[type] = s.vehicles[type] || { charset: "", mapId: 0, x: 0, y: 0, music: "none" });
+      if (!v.music) v.music = "none";
+      vehicleRows.appendChild(row(
+        field(label + " — sprite", sel(v, "charset", charsetOpts())),
+        field("Map", sel(v, "mapId", dbOpts(S.proj.maps, "(unused)"))),
+        field("X", nIn(v, "x", 0, 200)), field("Y", nIn(v, "y", 0, 200)),
+        field("Music while riding", sel(v, "music", MUSIC_OPTS()))));
+    }
+    p.appendChild(vehicleRows);
+    p.appendChild(h("div", { class: "dim" }, "A vehicle needs a sprite AND a map to appear (the boat/ship/airship object sprites ship built in). Players board by facing it and pressing the action key; boats sail shallow water, ships any water, airships fly over everything and land on open ground."));
+    return p;
+  }
+
+  function buildScreen() {
+    const p = h("div");
+    p.appendChild(row(field("Game width (px)", nIn(s, "screenWidth", 384, 3840)),
+      field("Game height (px)", nIn(s, "screenHeight", 288, 2160)),
+      field("Screen scale (max zoom)", nIn(s, "screenScale", 0.5, 4, 0.1))));
+    p.appendChild(row(field("UI area width (0 = full)", nIn(s, "uiWidth", 0, 3840)),
+      field("UI area height (0 = full)", nIn(s, "uiHeight", 0, 2160))));
+    p.appendChild(h("div", { class: "dim" }, "The UI area centres message windows and menus inside the game screen — useful on very wide screens. Changes apply on the next playtest."));
+    return p;
+  }
+
+  function buildWindowsFonts() {
+    const p = h("div");
+    const fontOpts: any = RA.FONTS.slice();
+    fontOpts.stringValues = true;
+    p.appendChild(row(field("Message font", sel(s, "fontText", fontOpts)),
+      field("Menu font", sel(s, "fontMenu", fontOpts))));
+    const windowColor = h("input", {
+      type: "color",
+      value: RA.normalizeWindowColor(s.windowColor),
+      oninput(e: any) { s.windowColor = RA.normalizeWindowColor(e.target.value); touch(); },
+    });
+    p.appendChild(row(field("Font size (px)", nIn(s, "fontSize", 8, 48)),
+      field("Window opacity", rangeIn(s, "windowOpacity", 0, 100, "%")),
+      field("Window color", windowColor)));
+    return p;
+  }
+
+  function buildAudio() {
+    const p = h("div");
+    p.appendChild(h("div", { class: "subhead", style: "margin-top:0" }, "System sounds"));
+    const seOpts: any = SE_OPTS(); // procedural + imported (Phase 6)
+    const sgrid = h("div", { class: "sysgrid" });
+    for (const def of RA.SYSTEM_SOUNDS) {
+      sgrid.appendChild(field(def.label, h("span", { class: "frow", style: "gap:4px; flex-wrap:nowrap" },
+        sel(s.sounds, def.key, seOpts),
+        h("button", { class: "mini", onclick() { Sfx.play(s.sounds[def.key] || def.def); } }, "▶"))));
+    }
+    p.appendChild(sgrid);
+    p.appendChild(h("div", { class: "subhead" }, "System music"));
+    p.appendChild(row(field("Title theme", sel(s.music, "title", MUSIC_OPTS())),
+      field("Battle theme", sel(s.music, "battle", MUSIC_OPTS()))));
+    return p;
+  }
 }
 
 export function controlsTab() {

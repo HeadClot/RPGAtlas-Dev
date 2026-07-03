@@ -355,6 +355,18 @@ button.danger:hover { background: #6a3636; }
 .dbtabs-vert button.sel { background: var(--accent); color: #fff; border-color: var(--accent-edge); }
 .dbbody { flex: 1; min-width: 0; }
 
+/* Database sub-tabs — a horizontal strip that splits a big tab's content
+   into digestible panels inside the main section (post-1.0 UX). */
+.dbsubwrap { min-width: 0; }
+.dbsubtabs {
+  display: flex; flex-wrap: wrap; gap: 3px;
+  border-bottom: 1px solid var(--line-2);
+  padding-bottom: 7px; margin-bottom: 10px;
+}
+.dbsubtabs button { border-radius: 5px; padding: 4px 12px; font-size: var(--fs-small); }
+.dbsubtabs button.sel { background: var(--accent); color: #fff; border-color: var(--accent-edge); }
+.dbsubbody { min-width: 0; }
+
 /* Types tab — element / skill / weapon / armor / equipment categories */
 .types-cols { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; align-items: flex-start; }
 .types-col {

@@ -11,7 +11,7 @@ import { RA, editorState as S } from "../editor-state";
 import { h, tIn, nIn, sel, field, row, dbOpts, switchOpts, typeSelOpts } from "../dom";
 import { touch } from "../persistence";
 import { cmdListWidget } from "../event-editor/command-list";
-import { PARAM_KEYS, listFormTab, nameRefresher, iconPickerField } from "./shared";
+import { PARAM_KEYS, listFormTab, nameRefresher, iconPickerField, subTabs } from "./shared";
 
 export const itemsTab = () => listFormTab({
   kind: "items",
@@ -61,94 +61,110 @@ export const troopsTab = () => listFormTab({
   list: () => S.proj.troops,
   blank: () => ({ id: 0, name: "Troop", enemies: [], pages: [] }),
   form(e: any, box: any, redrawList: any) {
+    // Post-1.0 UX: name stays on top; members and battle-event pages live on
+    // sub-tabs. curPage sits at form scope so switching sub-tabs (or back)
+    // keeps the selected battle-event page.
     box.appendChild(field("Name", nameRefresher(e, redrawList)));
-    const mbox = h("div", { class: "frow" });
-    function redrawM() {
-      mbox.innerHTML = "";
-      for (let i = 0; i < 4; i++) {
-        const slot = { v: e.enemies[i] || 0 };
-        mbox.appendChild(field("Slot " + (i + 1), sel(slot, "v", dbOpts(S.proj.enemies, "(empty)"), () => {
-          const arr: any[] = [];
-          const slots = mbox.querySelectorAll("select");
-          slots.forEach((s2: any) => { const v = Number(s2.value); if (v) arr.push(v); });
-          e.enemies = arr;
-          touch();
-        })));
-      }
-    }
-    redrawM();
-    box.appendChild(h("div", { class: "subhead" }, "Members (up to 4)"));
-    box.appendChild(mbox);
-
-    // ---- battle-event pages (Phase 5): commands that run mid-battle ----
     e.pages = Array.isArray(e.pages) ? e.pages : [];
     let curPage = e.pages[0] || null;
-    const pageBar = h("div", { class: "troop-pagebar" });
-    const pageBody = h("div");
-    function blankPage() {
-      return { cond: { turn: { a: 1, b: 0 } }, span: "battle", commands: [] };
-    }
-    function redrawPages() {
-      pageBar.innerHTML = "";
-      e.pages.forEach((pg: any, i: any) => {
-        pageBar.appendChild(h("button", { class: "mini" + (pg === curPage ? " sel" : ""),
-          onclick() { curPage = pg; redrawPages(); } }, "Page " + (i + 1)));
-      });
-      pageBar.appendChild(h("button", { class: "mini", title: "Add a battle-event page", onclick() {
-        const pg = blankPage();
-        e.pages.push(pg); curPage = pg; touch(); redrawPages();
-      } }, "+ page"));
-      if (curPage) {
-        pageBar.appendChild(h("button", { class: "mini danger", title: "Delete this page", onclick() {
-          e.pages.splice(e.pages.indexOf(curPage), 1);
-          curPage = e.pages[0] || null;
-          touch(); redrawPages();
-        } }, "× delete"));
+    box.appendChild(subTabs("troops", [
+      { label: "Members", build: buildMembers },
+      { label: "Battle events", build: buildBattleEvents },
+    ]));
+    return;
+
+    function buildMembers() {
+      const p = h("div");
+      const mbox = h("div", { class: "frow" });
+      function redrawM() {
+        mbox.innerHTML = "";
+        for (let i = 0; i < 4; i++) {
+          const slot = { v: e.enemies[i] || 0 };
+          mbox.appendChild(field("Slot " + (i + 1), sel(slot, "v", dbOpts(S.proj.enemies, "(empty)"), () => {
+            const arr: any[] = [];
+            const slots = mbox.querySelectorAll("select");
+            slots.forEach((s2: any) => { const v = Number(s2.value); if (v) arr.push(v); });
+            e.enemies = arr;
+            touch();
+          })));
+        }
       }
-      redrawPageBody();
+      redrawM();
+      p.appendChild(h("div", { class: "subhead", style: "margin-top:0" }, "Members (up to 4)"));
+      p.appendChild(mbox);
+      return p;
     }
-    function redrawPageBody() {
-      pageBody.innerHTML = "";
-      const pg = curPage;
-      if (!pg) {
-        pageBody.appendChild(h("div", { class: "dim" },
-          "No battle events. Add a page to run event commands mid-battle when its condition is met (boss dialogue, reinforcement switches, phase changes…)."));
-        return;
+
+    function buildBattleEvents() {
+      const p = h("div");
+      // ---- battle-event pages (Phase 5): commands that run mid-battle ----
+      const pageBar = h("div", { class: "troop-pagebar" });
+      const pageBody = h("div");
+      function blankPage() {
+        return { cond: { turn: { a: 1, b: 0 } }, span: "battle", commands: [] };
       }
-      pg.cond = pg.cond || {};
-      if (!["battle", "turn", "moment"].includes(pg.span)) pg.span = "battle";
-      pg.commands = Array.isArray(pg.commands) ? pg.commands : [];
-      const c = pg.cond;
-      // condition editors: each block is optional; ALL set blocks must hold
-      c.turn = c.turn || { a: 0, b: 0 };
-      c.enemyHpBelow = c.enemyHpBelow || { index: 0, pct: 0 };
-      c.actorHpBelow = c.actorHpBelow || { actorId: 0, pct: 0 };
-      if (c.switchId == null) c.switchId = 0;
-      pageBody.appendChild(row(
-        field("Turn a (0 = off)", nIn(c.turn, "a", 0, 999)),
-        field("+ every b turns", nIn(c.turn, "b", 0, 999)),
-        field("Span", sel(pg, "span", [
-          { v: "battle", l: "Once per battle" },
-          { v: "turn", l: "Once per turn" },
-          { v: "moment", l: "Each time it becomes true" },
-        ]))));
-      pageBody.appendChild(row(
-        field("Enemy slot", sel(c.enemyHpBelow, "index",
-          e.enemies.map((eid: any, i: any) => {
-            const en = RA.byId(S.proj.enemies, eid);
-            return { v: i, l: "Slot " + (i + 1) + (en ? " · " + en.name : "") };
-          }))),
-        field("enemy HP ≤ % (0 = off)", nIn(c.enemyHpBelow, "pct", 0, 100)),
-        field("Actor", sel(c.actorHpBelow, "actorId", dbOpts(S.proj.actors, "(off)"))),
-        field("actor HP ≤ %", nIn(c.actorHpBelow, "pct", 0, 100)),
-        field("Switch ON", sel(c, "switchId", switchOpts()))));
-      pageBody.appendChild(h("div", { class: "subhead" }, "Commands (run while the battle pauses)"));
-      pageBody.appendChild(cmdListWidget(() => pg.commands, { snapshot() {} }).el);
+      function redrawPages() {
+        pageBar.innerHTML = "";
+        e.pages.forEach((pg: any, i: any) => {
+          pageBar.appendChild(h("button", { class: "mini" + (pg === curPage ? " sel" : ""),
+            onclick() { curPage = pg; redrawPages(); } }, "Page " + (i + 1)));
+        });
+        pageBar.appendChild(h("button", { class: "mini", title: "Add a battle-event page", onclick() {
+          const pg = blankPage();
+          e.pages.push(pg); curPage = pg; touch(); redrawPages();
+        } }, "+ page"));
+        if (curPage) {
+          pageBar.appendChild(h("button", { class: "mini danger", title: "Delete this page", onclick() {
+            e.pages.splice(e.pages.indexOf(curPage), 1);
+            curPage = e.pages[0] || null;
+            touch(); redrawPages();
+          } }, "× delete"));
+        }
+        redrawPageBody();
+      }
+      function redrawPageBody() {
+        pageBody.innerHTML = "";
+        const pg = curPage;
+        if (!pg) {
+          pageBody.appendChild(h("div", { class: "dim" },
+            "No battle events. Add a page to run event commands mid-battle when its condition is met (boss dialogue, reinforcement switches, phase changes…)."));
+          return;
+        }
+        pg.cond = pg.cond || {};
+        if (!["battle", "turn", "moment"].includes(pg.span)) pg.span = "battle";
+        pg.commands = Array.isArray(pg.commands) ? pg.commands : [];
+        const c = pg.cond;
+        // condition editors: each block is optional; ALL set blocks must hold
+        c.turn = c.turn || { a: 0, b: 0 };
+        c.enemyHpBelow = c.enemyHpBelow || { index: 0, pct: 0 };
+        c.actorHpBelow = c.actorHpBelow || { actorId: 0, pct: 0 };
+        if (c.switchId == null) c.switchId = 0;
+        pageBody.appendChild(row(
+          field("Turn a (0 = off)", nIn(c.turn, "a", 0, 999)),
+          field("+ every b turns", nIn(c.turn, "b", 0, 999)),
+          field("Span", sel(pg, "span", [
+            { v: "battle", l: "Once per battle" },
+            { v: "turn", l: "Once per turn" },
+            { v: "moment", l: "Each time it becomes true" },
+          ]))));
+        pageBody.appendChild(row(
+          field("Enemy slot", sel(c.enemyHpBelow, "index",
+            e.enemies.map((eid: any, i: any) => {
+              const en = RA.byId(S.proj.enemies, eid);
+              return { v: i, l: "Slot " + (i + 1) + (en ? " · " + en.name : "") };
+            }))),
+          field("enemy HP ≤ % (0 = off)", nIn(c.enemyHpBelow, "pct", 0, 100)),
+          field("Actor", sel(c.actorHpBelow, "actorId", dbOpts(S.proj.actors, "(off)"))),
+          field("actor HP ≤ %", nIn(c.actorHpBelow, "pct", 0, 100)),
+          field("Switch ON", sel(c, "switchId", switchOpts()))));
+        pageBody.appendChild(h("div", { class: "subhead" }, "Commands (run while the battle pauses)"));
+        pageBody.appendChild(cmdListWidget(() => pg.commands, { snapshot() {} }).el);
+      }
+      p.appendChild(pageBar);
+      p.appendChild(pageBody);
+      redrawPages();
+      return p;
     }
-    box.appendChild(h("div", { class: "subhead" }, "Battle events"));
-    box.appendChild(pageBar);
-    box.appendChild(pageBody);
-    redrawPages();
   },
 });
 
