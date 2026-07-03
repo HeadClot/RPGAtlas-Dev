@@ -18,7 +18,7 @@
 import { $, h } from "../dom";
 import { editorI18n } from "../editor-state";
 import {
-  defaultLayout, validateLayout, collectPanels, hasPanel,
+  defaultLayout, validateLayout, collectPanels, hasPanel, insertPanelBefore,
   dockTab, dockSplit, dockFloatTab, floatPanel, showPanel, closePanel,
   type DockLayout, type TabsNode, type FloatWin, type DropSide,
 } from "./layout";
@@ -79,6 +79,16 @@ export function initDock(hostEl: HTMLElement) {
   const raw = (() => { try { return JSON.parse(localStorage.getItem(LS_CUR) || "null"); } catch { return null; } })();
   layout = validateLayout(raw, knownPanels()) || defaultLayout();
   if (!hasPanel(layout, "map")) showPanel(layout, "map"); // map view can never be lost
+  // Introduce the Console tab ONCE into layouts saved before it existed
+  // (validateLayout can't know about it). The flag means "the user has seen
+  // it" — closing it afterwards sticks; View ▸ Console Panel brings it back.
+  const CONSOLE_SEEN = "rpgatlas_console_intro_v1";
+  try {
+    if (!localStorage.getItem(CONSOLE_SEEN)) {
+      if (defs.has("console")) insertPanelBefore(layout, "console", "map");
+      localStorage.setItem(CONSOLE_SEEN, "1");
+    }
+  } catch { /* storage denied — default layout already carries the tab */ }
   render();
 }
 

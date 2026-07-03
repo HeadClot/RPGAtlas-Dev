@@ -22,7 +22,7 @@ const SHARED = {
       "New map": "Nuevo mapa", "Delete map": "Eliminar mapa", "Generate random map": "Generar mapa aleatorio",
       "Add sample map": "Añadir mapa de ejemplo",
       // dock tab captions
-      "Map": "Mapa", "HD-2D": "HD-2D", "World": "Mundo",
+      "Map": "Mapa", "HD-2D": "HD-2D", "World": "Mundo", "Console": "Consola",
       // menus
       "File": "Archivo", "Edit": "Editar", "Mode": "Modo", "Draw": "Dibujar", "Layer": "Capa",
       "Scale": "Escala", "View": "Ver", "Tools": "Herramientas", "Game": "Juego", "Help": "Ayuda",
@@ -52,6 +52,7 @@ const SHARED = {
       "Fit Map In View": "Ajustar mapa a la vista",
       // View menu / dock
       "Maps Panel": "Panel de mapas", "Tiles Panel": "Panel de mosaicos", "Focus Map": "Enfocar mapa",
+      "Console Panel": "Panel de consola",
       "Focus Next Panel": "Enfocar siguiente panel", "Reset Panel Layout": "Restablecer disposición",
       "Save Layout As…": "Guardar disposición como…", "Saved Layouts…": "Disposiciones guardadas…",
       // Tools menu
@@ -92,7 +93,7 @@ const SHARED = {
       "New map": "Nouvelle carte", "Delete map": "Supprimer la carte", "Generate random map": "Générer une carte aléatoire",
       "Add sample map": "Ajouter une carte d'exemple",
       // dock tab captions
-      "Map": "Carte", "HD-2D": "HD-2D", "World": "Monde",
+      "Map": "Carte", "HD-2D": "HD-2D", "World": "Monde", "Console": "Console",
       // menus
       "File": "Fichier", "Edit": "Édition", "Mode": "Mode", "Draw": "Dessin", "Layer": "Calque",
       "Scale": "Échelle", "View": "Affichage", "Tools": "Outils", "Game": "Jeu", "Help": "Aide",
@@ -122,6 +123,7 @@ const SHARED = {
       "Fit Map In View": "Ajuster la carte à la vue",
       // View menu / dock
       "Maps Panel": "Panneau des cartes", "Tiles Panel": "Panneau des tuiles", "Focus Map": "Focus sur la carte",
+      "Console Panel": "Panneau de console",
       "Focus Next Panel": "Panneau suivant", "Reset Panel Layout": "Réinitialiser la disposition",
       "Save Layout As…": "Enregistrer la disposition sous…", "Saved Layouts…": "Dispositions enregistrées…",
       // Tools menu
@@ -162,7 +164,7 @@ const SHARED = {
       "New map": "Neue Karte", "Delete map": "Karte löschen", "Generate random map": "Zufallskarte erzeugen",
       "Add sample map": "Beispielkarte hinzufügen",
       // dock tab captions
-      "Map": "Karte", "HD-2D": "HD-2D", "World": "Welt",
+      "Map": "Karte", "HD-2D": "HD-2D", "World": "Welt", "Console": "Konsole",
       // menus
       "File": "Datei", "Edit": "Bearbeiten", "Mode": "Modus", "Draw": "Zeichnen", "Layer": "Ebene",
       "Scale": "Maßstab", "View": "Ansicht", "Tools": "Werkzeuge", "Game": "Spiel", "Help": "Hilfe",
@@ -192,6 +194,7 @@ const SHARED = {
       "Fit Map In View": "Karte einpassen",
       // View menu / dock
       "Maps Panel": "Kartenpanel", "Tiles Panel": "Kachelpanel", "Focus Map": "Karte fokussieren",
+      "Console Panel": "Konsolenpanel",
       "Focus Next Panel": "Nächstes Panel fokussieren", "Reset Panel Layout": "Panel-Layout zurücksetzen",
       "Save Layout As…": "Layout speichern unter…", "Saved Layouts…": "Gespeicherte Layouts…",
       // Tools menu

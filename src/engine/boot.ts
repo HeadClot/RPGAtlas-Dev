@@ -51,7 +51,8 @@ import { startLoop } from "./loop.js";
 import { initJournalView } from "./scenes/menus.js";
 import { Shop } from "./scenes/shop.js";
 import { Battle } from "./scenes/battle.js";
-import { toTitle, showTitle } from "./scenes/title.js";
+import { toTitle, showTitle, newGame } from "./scenes/title.js";
+import { consumePlaytestStart, initPlaytestBridge } from "./playtest-bridge.js";
 import { gameOver } from "./scenes/gameover.js";
 import { playMapAnimation } from "./anim-glue.js";
 import { initPerfHud } from "./perf-hud.js";
@@ -260,8 +261,17 @@ async function boot(): Promise<void> {
   await Promise.all([Assets.loadIconSet(), Assets.loadExternalAssets(ctx.proj)]);
   Plugins.runAll();
   document.title = (ctx.proj.system.title || "RPGAtlas") + " — RPGAtlas Player";
-  ctx.scene = "title";
-  showTitle();
+  // Editor-Console playtest link — local player only (standalone exports set
+  // RPGATLAS_PROJECT and never open the channel). A pending "playtest at…"
+  // handoff skips the title screen and starts on the requested map.
+  const ptStart = (window as any).RPGATLAS_PROJECT ? null : consumePlaytestStart();
+  if (!(window as any).RPGATLAS_PROJECT) initPlaytestBridge();
+  if (ptStart) {
+    await newGame(ptStart);
+  } else {
+    ctx.scene = "title";
+    showTitle();
+  }
   startLoop(); // kick off the fixed-timestep loop (rAF, so it gets a real timestamp)
   // Perf overlay (?perf=1 / F3) + diagnostics hooks (Phase 7 Stage A): the
   // boot mark feeds the load-time budget e2e; the stats fn feeds the

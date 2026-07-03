@@ -9,7 +9,7 @@
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { PATCH_NOTES } from "../../js/patch-notes.js?v=27";
+import { PATCH_NOTES } from "../../js/patch-notes.js?v=28";
 import { editorI18n } from "./editor-state";
 import { $, h, field } from "./dom";
 import { modal } from "./modals";
@@ -135,6 +135,13 @@ export function openHelp() {
 <li><b>▶ Playtest</b> opens the player. In game: Arrows/WASD move, Shift dashes, Z/Enter confirms, X/Esc menu/cancel.</li>
 <li>Your project autosaves to this browser (<kbd>Ctrl+S</kbd> forces it). Use File ▸ Export for a .json backup; Open to load one.</li>
 <li><b>Export Standalone Game</b> creates a Windows .exe or cross-platform .html that runs without the editor or engine folder.</li>
+</ul>
+<h3>Console (for power users)</h3>
+<ul>
+<li>The <b>Console</b> tab (next to Map; View ▸ Console Panel if closed) is a command line over the engine — entirely optional, everything it does also has a menu.</li>
+<li>Type <code>help</code> for the full list. Highlights: <code>validate</code> finds broken references, <code>stats</code> sizes up the project, <code>find</code> searches everything with clickable results, <code>build web</code> exports without dialogs.</li>
+<li>While a playtest runs: <code>give potion 3</code>, <code>switch 5 on</code>, <code>var 2 100</code>, <code>goto 3 10 8</code> act on the live game. <code>playtest 2 5 7</code> starts straight on map 2 at (5,7), skipping the title screen.</li>
+<li>Scripts and tools can drive it too: <code>window.AtlasConsole.run("stats --json")</code> — the foundation for future AI assistance.</li>
 </ul>
 <h3>License</h3>
 <p>RPGAtlas is free and open source software under the <b>GNU GPLv3</b>. The content you create — maps, story, database, characters — is yours. Exported games bundle the engine runtime, which stays under the GPL (its readable source ships inside every export).</p>

@@ -20,7 +20,9 @@ import { optionsMenu } from "./menus.js";
 import { fadeTo } from "../message.js";
 import { render } from "../render-glue.js";
 
-export async function newGame(): Promise<void> {
+/** `start` overrides the System start position — the editor Console's
+ *  "playtest <map> <x> <y>" boots straight there (playtest-bridge.ts). */
+export async function newGame(start?: { mapId: number; x: number; y: number }): Promise<void> {
   ctx.commonParallels.clear();
   G.switches = {};
   G.vars = {};
@@ -38,9 +40,13 @@ export async function newGame(): Promise<void> {
   G.vehicles = {}; // fresh vehicle placements (lazily seeded from System)
   G.vehicle = null;
   ctx.cameraZoom = 1;
-  initPlayer(ctx.proj.system.startX, ctx.proj.system.startY, ctx.proj.system.startDir);
+  initPlayer(
+    start ? start.x : ctx.proj.system.startX,
+    start ? start.y : ctx.proj.system.startY,
+    ctx.proj.system.startDir,
+  );
   G.player.transparent = !!ctx.proj.system.startTransparent;
-  await loadMap(ctx.proj.system.startMapId);
+  await loadMap(start ? start.mapId : ctx.proj.system.startMapId);
   syncFollowers(true);
   ctx.scene = "map";
 }

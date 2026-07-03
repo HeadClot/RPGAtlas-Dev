@@ -14,6 +14,7 @@ import { registerCommand, refreshToolbar } from "../workspace";
 import { flashStatus } from "../map-editor/status";
 import { mountViewport, VIEWPORT_PANEL } from "../map-editor/hd-viewport";
 import { mountWorldView, WORLD_PANEL } from "../map-editor/world-view";
+import { mountConsole, CONSOLE_PANEL } from "../console/console-panel";
 import {
   registerDockPanel, initDock, setDockChangeHook,
   focusPanel, togglePanel, isPanelVisible, focusNextPanel,
@@ -29,6 +30,9 @@ export function initDockWorkspace() {
   registerDockPanel({ id: VIEWPORT_PANEL, title: "HD-2D", mount: mountViewport, closable: true });
   // The World View (Stage E) — the map-connection graph — also mounts lazily.
   registerDockPanel({ id: WORLD_PANEL, title: "World", mount: mountWorldView, closable: true });
+  // The Console (post-1.0) — first tab of the map region, lazy-mounted; the
+  // power-user command line over the same operations the menus drive.
+  registerDockPanel({ id: CONSOLE_PANEL, title: "Console", mount: mountConsole, closable: true });
 
   // Keep menu check-marks live after a panel is toggled/closed by drag.
   setDockChangeHook(refreshToolbar);
@@ -43,6 +47,10 @@ export function initDockWorkspace() {
   });
   registerCommand("panel-map", {
     label: "Focus Map", tip: "Focus the map view panel", run: () => focusPanel("map"),
+  });
+  registerCommand("panel-console", {
+    label: "Console Panel", tip: "Show or hide the Console — type commands to inspect, build, and playtest",
+    active: () => isPanelVisible(CONSOLE_PANEL), run: () => togglePanel(CONSOLE_PANEL),
   });
   registerCommand("focus-next-panel", {
     label: "Focus Next Panel", key: "F6", tip: "Move keyboard focus to the next panel", run: focusNextPanel,

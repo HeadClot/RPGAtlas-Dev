@@ -7,16 +7,17 @@ import { describe, expect, it } from "vitest";
 import {
   tabs, split, defaultLayout, collectPanels, hasPanel, findTabsWith, normalize,
   dockSplit, dockTab, floatPanel, dockFloatTab, showPanel, closePanel,
+  insertPanelBefore,
   validateLayout, summarize, type DockLayout, type SplitNode, type TabsNode,
 } from "../src/editor/dock/layout";
 
 const clone = (l: DockLayout): DockLayout => JSON.parse(JSON.stringify(l));
-const KNOWN = ["maps", "tiles", "map", "hd", "world"];
+const KNOWN = ["maps", "tiles", "map", "hd", "world", "console"];
 
 describe("defaultLayout", () => {
-  it("is the left-column-beside-map arrangement", () => {
-    expect(summarize(defaultLayout())).toBe("row[col[tabs(maps*)|tabs(tiles*)]|tabs(map*)]");
-    expect(collectPanels(defaultLayout()).sort()).toEqual(["map", "maps", "tiles"]);
+  it("is the left-column-beside-map arrangement, Console tab first, map active", () => {
+    expect(summarize(defaultLayout())).toBe("row[col[tabs(maps*)|tabs(tiles*)]|tabs(console,map*)]");
+    expect(collectPanels(defaultLayout()).sort()).toEqual(["console", "map", "maps", "tiles"]);
   });
 });
 
@@ -49,7 +50,7 @@ describe("dockSplit", () => {
     const l = defaultLayout();
     const mapTabs = findTabsWith(l.root, "map")!;
     dockSplit(l, mapTabs, "tiles", "S"); // move Tiles below Map
-    expect(summarize(l)).toBe("row[tabs(maps*)|col[tabs(map*)|tabs(tiles*)]]");
+    expect(summarize(l)).toBe("row[tabs(maps*)|col[tabs(console,map*)|tabs(tiles*)]]");
     // Tiles left its old home and the single-child column collapsed.
   });
   it("places the panel first when side is N or W (and same-dir nesting flattens)", () => {
@@ -57,7 +58,7 @@ describe("dockSplit", () => {
     dockSplit(l, findTabsWith(l.root, "map")!, "hd", "W");
     // A row-split dropped inside the outer row flattens: hd becomes a column
     // between the left stack and the map.
-    expect(summarize(l)).toBe("row[col[tabs(maps*)|tabs(tiles*)]|tabs(hd*)|tabs(map*)]");
+    expect(summarize(l)).toBe("row[col[tabs(maps*)|tabs(tiles*)]|tabs(hd*)|tabs(console,map*)]");
   });
 });
 
@@ -65,10 +66,11 @@ describe("dockTab", () => {
   it("adds the dragged panel as an active tab in the target", () => {
     const l = defaultLayout();
     dockTab(l, findTabsWith(l.root, "map")!, "tiles");
-    expect(summarize(l)).toBe("row[tabs(maps*)|tabs(map,tiles*)]");
+    expect(summarize(l)).toBe("row[tabs(maps*)|tabs(console,map,tiles*)]");
   });
   it("moving the last panel out of a region removes the empty region", () => {
     const l = defaultLayout();
+    closePanel(l, "console"); // leave map alone in its region
     dockTab(l, findTabsWith(l.root, "maps")!, "map"); // map joins maps' group; map's old group empties
     // The map's now-empty right region is pruned, so the outer row collapses to
     // just the left column.
@@ -80,9 +82,9 @@ describe("floats", () => {
   it("detaches a panel into a floating window and can re-tab into it", () => {
     const l = defaultLayout();
     floatPanel(l, "tiles", { x: 100, y: 120, w: 400, h: 300 }, "fl0");
-    expect(summarize(l)).toBe("row[tabs(maps*)|tabs(map*)]+float(tiles*)");
+    expect(summarize(l)).toBe("row[tabs(maps*)|tabs(console,map*)]+float(tiles*)");
     dockFloatTab(l, "fl0", "maps");
-    expect(summarize(l)).toBe("tabs(map*)+float(tiles,maps*)");
+    expect(summarize(l)).toBe("tabs(console,map*)+float(tiles,maps*)");
   });
   it("closing the last float panel drops the window", () => {
     const l = defaultLayout();
@@ -97,13 +99,27 @@ describe("showPanel", () => {
   it("adds a missing panel beside map and reports it added", () => {
     const l = defaultLayout();
     expect(showPanel(l, "hd")).toBe(true);
-    expect(summarize(l)).toBe("row[col[tabs(maps*)|tabs(tiles*)]|tabs(map,hd*)]");
+    expect(summarize(l)).toBe("row[col[tabs(maps*)|tabs(tiles*)]|tabs(console,map,hd*)]");
   });
   it("is a no-op-activate when the panel already exists", () => {
     const l = defaultLayout();
     dockTab(l, findTabsWith(l.root, "map")!, "tiles"); // map,tiles* ; active tiles
     expect(showPanel(l, "map")).toBe(false);
-    expect(summarize(l)).toBe("row[tabs(maps*)|tabs(map*,tiles)]"); // map re-activated
+    expect(summarize(l)).toBe("row[tabs(maps*)|tabs(console,map*,tiles)]"); // map re-activated
+  });
+});
+
+describe("insertPanelBefore", () => {
+  it("slots the panel before its anchor without activating it", () => {
+    const l = { root: split("row", [tabs(["maps"]), tabs(["map"], "map")]), floats: [] };
+    expect(insertPanelBefore(l, "console", "map")).toBe(true);
+    expect(summarize(l)).toBe("row[tabs(maps*)|tabs(console,map*)]");
+  });
+  it("is a no-op when already present or the anchor is missing", () => {
+    const l = defaultLayout();
+    expect(insertPanelBefore(l, "console", "map")).toBe(false);
+    expect(insertPanelBefore(l, "hd", "gone")).toBe(false);
+    expect(summarize(l)).toBe(summarize(defaultLayout()));
   });
 });
 

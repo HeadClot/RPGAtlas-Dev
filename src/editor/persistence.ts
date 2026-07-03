@@ -108,7 +108,8 @@ const projectRepo = new BrowserProjectRepository(
   };
   // Web / itch.io zip (Phase 7 Stage E): the standalone HTML at the zip root
   // (itch.io's HTML5 layout) wired up as an installable, offline-capable PWA.
-  async function exportWebZip() {
+  // Exported: the Console's `build web` drives the same pipeline as the dialog.
+  export async function exportWebZip() {
     const [game, template] = await Promise.all([
       buildStandaloneGame(S.proj, assetsWithAudio),
       loadStandaloneTemplate(),
@@ -121,6 +122,14 @@ const projectRepo = new BrowserProjectRepository(
     const entries = buildWebZipEntries(game.html, title, template, icon192, icon512);
     const zipBytes = buildZip(entries);
     downloadBlob(new Blob([zipBytes as any], { type: "application/zip" }), game.baseName + "-web.zip");
+  }
+  // Console `build exe` / `build html` entry points — same builders the
+  // Export Standalone Game dialog buttons call.
+  export function exportWindowsExeFile() {
+    return writeWindowsExecutable(S.proj, assetsWithAudio);
+  }
+  export function exportStandaloneHtmlFile() {
+    return writeStandaloneHtml(S.proj, assetsWithAudio);
   }
   export function openStandaloneExport() {
     const content = h("div", null,

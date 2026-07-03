@@ -36,12 +36,13 @@ export function split(dir: "row" | "col", children: DockNode[], sizes?: number[]
   return { type: "split", dir, children, sizes: sizes ?? children.map(() => 1) };
 }
 
-/** The stock layout: a left column (Maps over Tiles) beside the map view. */
+/** The stock layout: a left column (Maps over Tiles) beside the map view.
+ *  The Console rides first in the map region's tab strip (map stays active). */
 export function defaultLayout(): DockLayout {
   return {
     root: split("row", [
       split("col", [tabs(["maps"]), tabs(["tiles"])], [1, 1.5]),
-      tabs(["map"]),
+      tabs(["console", "map"], "map"),
     ], [0.26, 0.74]),
     floats: [],
   };
@@ -190,6 +191,16 @@ export function showPanel(layout: DockLayout, id: string): boolean {
 export function closePanel(layout: DockLayout, id: string) {
   removeEverywhere(layout, id);
   normalizeLayout(layout);
+}
+/** Insert `id` as a tab immediately before `beforeId` (same tabs group),
+ *  without activating it. No-op if already present or `beforeId` is missing.
+ *  Used once at boot to introduce the Console tab into persisted layouts. */
+export function insertPanelBefore(layout: DockLayout, id: string, beforeId: string): boolean {
+  if (hasPanel(layout, id)) return false;
+  const t = findTabsWith(layout.root, beforeId);
+  if (!t) return false;
+  t.panels.splice(t.panels.indexOf(beforeId), 0, id);
+  return true;
 }
 
 // ---- (de)serialization ----

@@ -5,6 +5,21 @@
 export const PATCH_NOTES = [
   {
     date: "July 3, 2026",
+    title: "The Console — a command line for power users",
+    summary:
+      "A new Console tab sits beside the Map view: type commands to inspect, search, build, and steer playtests. Completely optional — everything it does also lives in the menus — but much faster once you know it.",
+    items: [
+      "New Console tab, first in the map area's tab strip (close it freely; View ▸ Console Panel brings it back). Type help to see everything; Tab completes command names and ↑ recalls history.",
+      "validate checks the whole project for broken references (transfers to deleted maps, missing common events, troops, items, and assets) — problem lines are clickable and jump straight to the map.",
+      "find searches maps, events, dialogue text, and every database table at once, with clickable results; stats sizes up the project at a glance.",
+      "build web / build html / build exe export the game without touching a dialog.",
+      "Playtest superpowers: playtest 2 5 7 starts the game directly on map 2 at (5,7) — no title screen; while a playtest runs, give potion 3, switch 5 on, var 2 100, and goto 3 10 8 act on the live game.",
+      "data export/import moves database tables as JSON, assets import batch-loads images or audio into the library, i18n check audits the editor translations.",
+      "For toolmakers: window.AtlasConsole.run(\"stats --json\") drives every command programmatically with structured results — the groundwork for future AI assistance.",
+    ],
+  },
+  {
+    date: "July 3, 2026",
     title: "Sample maps — a dozen ready-made maps, one click away",
     summary:
       "The Maps panel gains a 🗺 button that opens a library of twelve hand-crafted starter maps — villages, caves, castles, beaches, and more — each added to your project with a single click.",
