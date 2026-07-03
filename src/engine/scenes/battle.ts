@@ -33,6 +33,21 @@ import {
 import { useItemOn, iconEntryHtml, bar } from "./menus.js";
 import { createBattleFx } from "./battle-fx.js";
 import { playAnimation } from "../../shared/anim-player.js";
+import { Interp } from "../interpreter/interp.js";
+import {
+  rowOf,
+  rowDealtScale,
+  rowTakenScale,
+  applyRowScale,
+  weightedTargetIndex,
+  validEnemyActions,
+  makeTroopPageRTs,
+  troopPageShouldFire,
+  atbRate,
+  ATB_FULL,
+  ctbCost,
+  ctbForecast,
+} from "./battle-logic.js";
 
 const TILE = Assets.TILE;
 
@@ -41,6 +56,12 @@ export const Battle: any = {
     const proj = ctx.proj;
     const troop = RA.byId(proj.troops, troopId);
     if (!troop) return "win";
+    // Battle mode (Phase 5 Stage B): "turn" runs the Phase 1 loop verbatim;
+    // "atb"/"ctb" run the timed scheduler over the same resolution core.
+    const battleSystem =
+      proj.system.battleSystem === "atb" || proj.system.battleSystem === "ctb"
+        ? proj.system.battleSystem
+        : "turn";
     const prevScene = ctx.scene,
       prevMusic = Music.current;
     ctx.scene = "battle";
@@ -172,6 +193,7 @@ export const Battle: any = {
             '<div class="brow' +
             (a.hp <= 0 ? " dead" : "") +
             '"><b>' +
+            (rowOf(a) === "back" ? "▽ " : "") +
             esc(a.name) +
             "</b> " +
             "HP " +
@@ -307,10 +329,20 @@ export const Battle: any = {
     }
 
     function enemyAction(en: any): any {
-      const acts =
+      const all =
         en.d.actions && en.d.actions.length
           ? en.d.actions
           : [{ skillId: 0, weight: 1 }];
+      // Phase 5: condition-weighted AI — rows whose cond fails drop out of
+      // the roll; rows without a cond are always valid (pre-Phase-5 data
+      // picks identically). Nothing valid ⇒ basic attack.
+      const valid = validEnemyActions(all, {
+        turn: turnNumber,
+        hpPct: (en.hp / Math.max(1, en.d.stats.mhp)) * 100,
+        states: statesOf(en).map((st: any) => Number(st.id) || 0),
+        rng: Math.random,
+      });
+      const acts = valid.length ? valid : [{ skillId: 0, weight: 1 }];
       const total = acts.reduce((s: any, a2: any) => s + (a2.weight || 1), 0);
       let roll = Math.random() * total;
       let chosen = acts[0];
@@ -521,67 +553,51 @@ export const Battle: any = {
       setTimeout(() => sprs[en.i].classList.remove("acting"), 380);
     }
 
-    let result = null;
-    try {
-      await say("Enemies appear!", 700);
-      battleLoop: while (true) {
-        refreshParty();
-        refreshEnemies();
-        // ---- collect party commands ----
-        const cmds = [];
-        for (const a of livingP()) {
-          refreshParty();
-          if (cannotAct(a)) {
-            cmds.push({ type: "stunned", actor: a });
-            continue;
-          }
-          const c = await actorCommand(a);
-          c.actor = a;
-          if (c.type === "escape") {
-            const pa =
-              livingP().reduce((s: any, x: any) => s + param(x, "agi"), 0) /
-              livingP().length;
-            const ea =
-              livingE().reduce((s: any, x: any) => s + x.d.stats.agi, 0) /
-              livingE().length;
-            const chance = clamp(0.55 + (pa - ea) * 0.03, 0.2, 0.95);
-            if (Math.random() < chance) {
-              sysSe("escape");
-              await say("Got away safely!", 800);
-              result = "escape";
-              break battleLoop;
-            } else {
-              await say("Couldn't escape!", 700);
-              cmds.length = 0;
-              break; // enemies still act
-            }
-          }
-          cmds.push(c);
+    // ---- battle v2 shared state (Phase 5 Stage B) ----
+    // guards: per-round set in turn mode (built from the collected commands,
+    // exactly as before); in ATB/CTB a guard lasts until the battler's next
+    // turn comes around (added on act, cleared when they act again).
+    let guards: any = new Set();
+    let turnNumber = 1;
+    // ---- troop battle events ----
+    const pageRTs = makeTroopPageRTs(troop.pages || []);
+    function troopPageView(): any {
+      return {
+        turn: turnNumber,
+        enemies: enemies.map((en: any) => ({
+          hpPct: (en.hp / Math.max(1, en.d.stats.mhp)) * 100,
+          alive: en.alive,
+        })),
+        actors: livingP().map((a: any) => ({
+          actorId: a.actorId,
+          hpPct: (a.hp / Math.max(1, param(a, "mhp"))) * 100,
+        })),
+        switches: G.switches,
+      };
+    }
+    async function checkTroopPages(): Promise<void> {
+      if (!pageRTs.length) return;
+      for (const rt of pageRTs) {
+        if (!livingE().length || !livingP().length) return;
+        if (troopPageShouldFire(rt, troopPageView())) {
+          await new Interp(null).runList(rt.page.commands || []);
+          refreshStates();
+          refreshEnemies();
         }
-        const guards = new Set(
-          cmds.filter((c: any) => c.type === "guard").map((c: any) => c.actor),
-        );
-        // ---- enemy commands ----
-        for (const en of livingE()) cmds.push(enemyAction(en));
-        // ---- sort by agility ----
-        cmds.sort((x: any, y: any) => {
-          const ax = x.actor ? param(x.actor, "agi") : x.enemy.d.stats.agi;
-          const ay = y.actor ? param(y.actor, "agi") : y.enemy.d.stats.agi;
-          return (
-            ay * (0.8 + Math.random() * 0.4) -
-            ax * (0.8 + Math.random() * 0.4)
-          );
-        });
-
-        for (const c of cmds) {
-          if (c.actor && c.actor.hp <= 0) continue;
-          if (c.enemy && !c.enemy.alive) continue;
+      }
+    }
+    // ---- one command's resolution, extracted VERBATIM from the Phase 1
+    // round loop (outer continue/break became return) so turn, ATB, and CTB
+    // modes share damage math, states, FX, and animations exactly ----
+    async function resolveAction(c: any): Promise<void> {
+          if (c.actor && c.actor.hp <= 0) return;
+          if (c.enemy && !c.enemy.alive) return;
           if (c.actor) {
             // ---------- party side ----------
             const a = c.actor;
             if (c.type === "stunned") {
               await say(a.name + " can't move!", 500);
-              continue;
+              return;
             }
             if (c.type === "guard") {
               burst(actorElement(a), "status", {
@@ -591,10 +607,10 @@ export const Battle: any = {
               });
               floatText(actorElement(a), "GUARD", "state");
               await say(a.name + " guards.", 450);
-              continue;
+              return;
             }
             if (c.type === "item") {
-              if (invCount("item", c.item.id) <= 0) continue;
+              if (invCount("item", c.item.id) <= 0) return;
               actorStep(a);
               useItemOn(c.item, c.target);
               burst(actorElement(c.target), "item", { count: 13 });
@@ -612,7 +628,7 @@ export const Battle: any = {
                   c.target.name +
                   "!",
               );
-              continue;
+              return;
             }
             if (
               c.type === "attack" ||
@@ -622,7 +638,7 @@ export const Battle: any = {
               const skill = c.type === "skill" ? c.skill : null;
               if (skill) {
                 const cost = skillMpCost(a, skill);
-                if (a.mp < cost) continue;
+                if (a.mp < cost) return;
                 a.mp -= cost;
               }
               const targets =
@@ -670,6 +686,8 @@ export const Battle: any = {
                     if (!anim) Sfx.play("magic");
                   }
                   if (critical) dmg = Math.max(1, Math.floor(dmg * 1.5));
+                  if (!skill || skill.type === "phys")
+                    dmg = applyRowScale(dmg, rowDealtScale(rowOf(a)));
                   if (!anim) await travel(actorElement(a), sprs[t.i], skill);
                   await dealToEnemy(
                     t,
@@ -691,12 +709,16 @@ export const Battle: any = {
                 }
                 await applySkillState(skill, t);
               }
+              if (skill && skill.commonEventId) {
+                await new Interp(null).callCommonEvent(Number(skill.commonEventId));
+                refreshStates();
+              }
             } else if (
               c.type === "skill" &&
               (c.skill.scope === "ally" || c.skill.scope === "allies")
             ) {
               const cost = skillMpCost(a, c.skill);
-              if (a.mp < cost) continue;
+              if (a.mp < cost) return;
               a.mp -= cost;
               const targets =
                 c.skill.scope === "allies" ? livingP() : [c.target];
@@ -735,17 +757,21 @@ export const Battle: any = {
                 await applySkillState(c.skill, t);
               }
               refreshParty();
+              if (c.skill.commonEventId) {
+                await new Interp(null).callCommonEvent(Number(c.skill.commonEventId));
+                refreshStates();
+              }
             }
           } else {
             // ---------- enemy side ----------
             const en = c.enemy;
             if (cannotAct(en)) {
               await say(en.d.name + " can't move!", 500);
-              continue;
+              return;
             }
             const pool = livingP();
-            if (!pool.length) break;
-            const t = pool[rnd(pool.length)];
+            if (!pool.length) return;
+            const t = pool[weightedTargetIndex(pool, Math.random())];
             const enemyAnim = c.skill ? animById(c.skill.animationId) : null;
             enemyStep(en);
             let dmg;
@@ -766,6 +792,8 @@ export const Battle: any = {
                     ),
                 ),
               );
+              if (c.skill.type === "phys")
+                dmg = applyRowScale(dmg, rowTakenScale(rowOf(t)));
               if (!enemyAnim) Sfx.play(c.skill.type === "phys" ? "hit" : "magic");
               if (enemyAnim) {
                 await playBattleAnim(enemyAnim, sprs[en.i], [actorElement(t)]);
@@ -792,6 +820,7 @@ export const Battle: any = {
                   dmg * actorIncomingRate(t, "physical", guards.has(t)),
                 ),
               );
+              dmg = applyRowScale(dmg, rowTakenScale(rowOf(t)));
               Sfx.play("hit");
               await say(
                 en.d.name + " attacks — " + t.name + " takes " + dmg + "!",
@@ -820,9 +849,206 @@ export const Battle: any = {
             if (t.hp <= 0) await say(t.name + " falls!", 500);
             if (c.skill) await applySkillState(c.skill, t);
           }
+    }
+    // ---- ATB / CTB (Phase 5 Stage B): timed scheduling over the core ----
+    function updateGauges(battlers: any[], aliveB2: any): void {
+      if (battleSystem !== "atb") return;
+      for (const b of battlers) {
+        const host = b.enemy
+          ? sprs[b.enemy.i]
+          : partyArea.children[G.party.indexOf(b.actor)];
+        if (!host) continue;
+        let gauge = host.querySelector(":scope > .atbbar");
+        if (!gauge) {
+          gauge = el("div", "atbbar");
+          gauge.appendChild(el("i", "atb-fill"));
+          host.appendChild(gauge);
+        }
+        const fill = gauge.firstChild as any;
+        const pct = aliveB2(b) ? Math.min(100, (b.gauge / ATB_FULL) * 100) : 0;
+        fill.style.width = pct + "%";
+        fill.classList.toggle("full", pct >= 100);
+      }
+    }
+    let ctbStrip: any = null;
+    function updateCtbOrder(battlers: any[], aliveB2: any): void {
+      if (battleSystem !== "ctb") return;
+      if (!ctbStrip) {
+        ctbStrip = el("div", "ctb-order");
+        win.insertBefore(ctbStrip, win.firstChild);
+      }
+      const alive = battlers.filter(aliveB2);
+      const order = ctbForecast(
+        alive.map((b: any) => ({ counter: b.counter, agi: b.agi() })),
+        8,
+      );
+      ctbStrip.innerHTML = "";
+      order.forEach((bi: number, n: number) => {
+        const b = alive[bi];
+        ctbStrip.appendChild(
+          el(
+            "span",
+            "ctb-chip" + (b.enemy ? " foe" : "") + (n === 0 ? " now" : ""),
+            esc(b.enemy ? b.enemy.d.name : b.actor.name),
+          ),
+        );
+      });
+    }
+    async function runTimedBattle(): Promise<any> {
+      const battlers: any[] = [
+        ...G.party.map((a: any) => ({ actor: a, agi: () => param(a, "agi") })),
+        ...enemies.map((en: any) => ({ enemy: en, agi: () => en.d.stats.agi })),
+      ];
+      for (const b of battlers) {
+        b.gauge = Math.random() * ATB_FULL * 0.35;
+        b.counter = Math.round(ctbCost(b.agi()) * (0.5 + Math.random() * 0.5));
+      }
+      const aliveB2 = (b: any) => (b.enemy ? b.enemy.alive : b.actor.hp > 0);
+      let acts = 0;
+      updateCtbOrder(battlers, aliveB2);
+      while (true) {
+        refreshParty();
+        refreshEnemies();
+        updateGauges(battlers, aliveB2);
+        if (!livingP().length) return "lose";
+        if (!livingE().length) return "win";
+        // pick the next battler to act
+        let next: any = null;
+        if (battleSystem === "atb") {
+          while (!next) {
+            for (const b of battlers) {
+              if (!aliveB2(b)) continue;
+              // ×8 per 30ms tick ≈ ¾s per refill at agi 30 — agility still
+              // scales linearly, the battle just isn't glacial
+              b.gauge += atbRate(b.agi()) * 8;
+              if (b.gauge >= ATB_FULL && (!next || b.gauge > next.gauge)) next = b;
+            }
+            updateGauges(battlers, aliveB2);
+            if (!next) await sleep(30);
+          }
+          next.gauge = 0;
+        } else {
+          const alive = battlers.filter(aliveB2);
+          const bi = ctbForecast(
+            alive.map((b: any) => ({ counter: b.counter, agi: b.agi() })),
+            1,
+          )[0];
+          next = alive[bi];
+          const step = next.counter;
+          for (const b of alive) b.counter -= step;
+          next.counter = ctbCost(next.agi());
+          updateCtbOrder(battlers, aliveB2);
+        }
+        // act (a guard lasts until the battler's next turn comes around)
+        if (next.actor) {
+          const a = next.actor;
+          guards.delete(a);
+          refreshParty();
+          updateGauges(battlers, aliveB2); // refreshParty rebuilt the rows
+          if (cannotAct(a)) {
+            await say(a.name + " can't move!", 500);
+          } else {
+            const c: any = await actorCommand(a);
+            c.actor = a;
+            if (c.type === "escape") {
+              const pa =
+                livingP().reduce((s: any, x: any) => s + param(x, "agi"), 0) /
+                livingP().length;
+              const ea =
+                livingE().reduce((s: any, x: any) => s + x.d.stats.agi, 0) /
+                livingE().length;
+              const chance = clamp(0.55 + (pa - ea) * 0.03, 0.2, 0.95);
+              if (Math.random() < chance) {
+                sysSe("escape");
+                await say("Got away safely!", 800);
+                return "escape";
+              }
+              await say("Couldn't escape!", 700);
+            } else {
+              if (c.type === "guard") guards.add(a);
+              await resolveAction(c);
+            }
+          }
+        } else {
+          const en = next.enemy;
+          if (cannotAct(en)) await say(en.d.name + " can't move!", 500);
+          else await resolveAction(enemyAction(en));
+        }
+        await checkTroopPages();
+        // a "turn" = one act per living battler; states tick at the boundary
+        acts++;
+        if (acts >= Math.max(1, livingP().length + livingE().length)) {
+          acts = 0;
+          turnNumber++;
+          if (livingE().length && livingP().length) await tickStates();
+          await checkTroopPages();
+        }
+      }
+    }
+
+    let result = null;
+    try {
+      await say("Enemies appear!", 700);
+      await checkTroopPages();
+      if (battleSystem !== "turn") {
+        result = await runTimedBattle();
+      } else battleLoop: while (true) {
+        refreshParty();
+        refreshEnemies();
+        // ---- collect party commands ----
+        const cmds = [];
+        for (const a of livingP()) {
+          refreshParty();
+          if (cannotAct(a)) {
+            cmds.push({ type: "stunned", actor: a });
+            continue;
+          }
+          const c = await actorCommand(a);
+          c.actor = a;
+          if (c.type === "escape") {
+            const pa =
+              livingP().reduce((s: any, x: any) => s + param(x, "agi"), 0) /
+              livingP().length;
+            const ea =
+              livingE().reduce((s: any, x: any) => s + x.d.stats.agi, 0) /
+              livingE().length;
+            const chance = clamp(0.55 + (pa - ea) * 0.03, 0.2, 0.95);
+            if (Math.random() < chance) {
+              sysSe("escape");
+              await say("Got away safely!", 800);
+              result = "escape";
+              break battleLoop;
+            } else {
+              await say("Couldn't escape!", 700);
+              cmds.length = 0;
+              break; // enemies still act
+            }
+          }
+          cmds.push(c);
+        }
+        guards = new Set(
+          cmds.filter((c: any) => c.type === "guard").map((c: any) => c.actor),
+        );
+        // ---- enemy commands ----
+        for (const en of livingE()) cmds.push(enemyAction(en));
+        // ---- sort by agility ----
+        cmds.sort((x: any, y: any) => {
+          const ax = x.actor ? param(x.actor, "agi") : x.enemy.d.stats.agi;
+          const ay = y.actor ? param(y.actor, "agi") : y.enemy.d.stats.agi;
+          return (
+            ay * (0.8 + Math.random() * 0.4) -
+            ax * (0.8 + Math.random() * 0.4)
+          );
+        });
+
+        for (const c of cmds) {
+          await resolveAction(c);
+          await checkTroopPages();
           if (!livingE().length || !livingP().length) break;
         }
         if (livingE().length && livingP().length) await tickStates();
+        turnNumber++;
+        await checkTroopPages();
         if (!livingP().length) {
           result = "lose";
           break;

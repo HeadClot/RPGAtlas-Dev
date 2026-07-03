@@ -103,6 +103,8 @@ export function makeActor(actorId: any): any {
     armorId: d.armorId || 0,
     hp: 1,
     mp: 1,
+    // battle row (Phase 5): "front" unless the actor is authored back-row
+    row: d.row === "back" ? "back" : "front",
   };
   sanitizeEquipment(a);
   a.hp = param(a, "mhp");

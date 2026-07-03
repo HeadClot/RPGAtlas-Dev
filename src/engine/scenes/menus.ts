@@ -126,6 +126,28 @@ async function menuJournal(): Promise<any> {
   return journalView.open();
 }
 
+// Formation (Phase 5): toggle each member's battle row. Back row deals and
+// takes 25% less physical damage and is targeted less often.
+async function menuFormation(): Promise<void> {
+  while (true) {
+    const i = await showList(
+      G.party.map((a: any) => ({
+        html:
+          (a.row === "back" ? "▽ " : "▲ ") +
+          esc(a.name) +
+          ' <span class="cnt">' +
+          (a.row === "back" ? "Back row" : "Front row") +
+          "</span>",
+      })),
+      { title: "Formation — Enter toggles row", className: "cmdwin" },
+    );
+    if (i < 0) return;
+    const a = G.party[i];
+    a.row = a.row === "back" ? "front" : "back";
+    sysSe("cursor");
+  }
+}
+
 export async function openMenu(): Promise<void> {
   if (ctx.menuOpen || ctx.blockingRun) return;
   ctx.menuOpen = true;
@@ -157,6 +179,7 @@ export async function openMenu(): Promise<void> {
                 "menu-icon",
               ) + "Status",
           },
+          { html: Assets.iconHtml(20, "menu-icon") + "Formation" },
           { html: Assets.iconHtml(16, "menu-icon") + "Journal" },
           { html: Assets.iconHtml(46, "menu-icon") + "Options" },
           { html: Assets.iconHtml(44, "menu-icon") + "Save" },
@@ -177,19 +200,22 @@ export async function openMenu(): Promise<void> {
       } else if (i === 3) {
         await menuStatus();
       } else if (i === 4) {
+        await menuFormation();
+        refreshPanel();
+      } else if (i === 5) {
         panel.style.display = "none";
         try {
           if (await menuJournal() === "close") return;
         } finally {
           panel.style.display = "";
         }
-      } else if (i === 5) {
-        await optionsMenu();
       } else if (i === 6) {
-        await saveLoadMenu("save");
+        await optionsMenu();
       } else if (i === 7) {
-        if (await saveLoadMenu("load")) break;
+        await saveLoadMenu("save");
       } else if (i === 8) {
+        if (await saveLoadMenu("load")) break;
+      } else if (i === 9) {
         const c = await showList(
           [{ label: "Return to title" }, { label: "Cancel" }],
           { className: "choicewin" },

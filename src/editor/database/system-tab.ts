@@ -37,6 +37,14 @@ export function systemTab() {
   box.appendChild(h("div", { class: "frow" }, partyRow));
   box.appendChild(row(field("Starting gold", nIn(s, "startGold", 0)), field("Currency name", tIn(s, "currency")),
     field("Battle view", sel(s, "battleView", [{ v: "side", l: "Side view (party sprites)" }, { v: "front", l: "Front view (classic)" }]))));
+  // Battle scheduling mode (Phase 5): classic rounds, ATB gauges, or CTB order
+  if (!s.battleSystem) s.battleSystem = "turn";
+  box.appendChild(row(field("Battle system", sel(s, "battleSystem", [
+    { v: "turn", l: "Turn-based (classic rounds)" },
+    { v: "atb", l: "ATB (active-time gauges)" },
+    { v: "ctb", l: "CTB (turn-order timeline)" },
+  ]))));
+  box.appendChild(h("div", { class: "dim" }, "ATB: gauges fill with agility; a battler acts when full (gauges pause during command input). CTB: one battler acts at a time in an agility-driven order shown at the top of the battle."));
 
   box.appendChild(h("div", { class: "subhead" }, "Screen"));
   box.appendChild(row(field("Game width (px)", nIn(s, "screenWidth", 384, 3840)),

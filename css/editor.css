@@ -868,3 +868,9 @@ button.danger:hover { background: #6a3636; }
   box-shadow: none !important; image-rendering: pixelated;
 }
 .anim-arena .fx-anim-flipbook canvas { display: block; image-rendering: pixelated; }
+
+/* ============ Database - Troops battle events + enemy AI conds (Phase 5 Stage B) ============ */
+.troop-pagebar { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0 8px; }
+.troop-pagebar .mini.sel { background: var(--accent-edge, #5a8ad8); color: #fff; }
+.cond-fields { display: inline-flex; gap: 4px; align-items: center; }
+.cond-fields input[type="number"] { width: 58px; }

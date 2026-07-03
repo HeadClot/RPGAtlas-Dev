@@ -103,6 +103,84 @@ test.describe("player start", () => {
   });
 });
 
+test.describe("battle v2 (phase 5)", () => {
+  // Drive a real battle in each timed mode via the plugin API
+  // (window.Atlas.atlas.startBattle) and the same keyboard the player uses.
+  async function startGame(page, battleSystem) {
+    await gotoWithAtlasQuest(page, "/play.html", {
+      transformProject(project) {
+        project.system.battleSystem = battleSystem;
+        return project;
+      },
+    });
+    await page.getByText("New Game", { exact: true }).click();
+    await expect(page.locator(".titlewin")).toHaveCount(0);
+    // wait until the map scene is live (fade-in finished)
+    await expect
+      .poll(() => page.evaluate(() => window.Atlas && window.Atlas.atlas.scene), { timeout: 10_000 })
+      .toBe("map");
+    await page.evaluate(() => {
+      window.__battleResult = null;
+      window.__battleError = null;
+      window.Atlas.atlas
+        .startBattle(1, true) // troop 1: Slime x2
+        .then((r) => { window.__battleResult = r; })
+        .catch((e) => { window.__battleError = String((e && e.stack) || e); });
+    });
+    await expect(page.locator(".battlewin")).toBeVisible();
+  }
+
+  async function attackUntilOver(page) {
+    // Whenever a command or target window is up, press Enter (Attack → pick
+    // first target — spamming is safe: showList ignores keys it doesn't
+    // handle, and both windows accept Enter).
+    await expect
+      .poll(
+        async () => {
+          const done = await page.evaluate(
+            () => window.__battleResult || window.__battleError,
+          );
+          if (done) return done;
+          if (await page.locator(".cmdwin, .targetwin").count()) {
+            await page.keyboard.press("Enter");
+          }
+          return null;
+        },
+        { timeout: 60_000, intervals: [250] },
+      )
+      .not.toBeNull();
+    const outcome = await page.evaluate(() => ({
+      result: window.__battleResult,
+      error: window.__battleError,
+    }));
+    expect(outcome.error).toBeNull();
+    expect(["win", "lose", "escape"]).toContain(outcome.result);
+    return outcome;
+  }
+
+  test("ATB: gauges render and a battle resolves through the shared core", async ({ page }) => {
+    test.setTimeout(90_000); // a real battle at player pacing (~25s) + boot
+    await startGame(page, "atb");
+    // gauges appear on party rows and enemy sprites once the scheduler runs
+    await expect(page.locator(".battle-party .atbbar").first()).toBeVisible();
+    await expect(page.locator(".enemy-spr .atbbar").first()).toBeVisible();
+    const outcome = await attackUntilOver(page);
+    expect(outcome.result).toBe("win"); // slimes can't out-damage the party
+    await expect(page.locator(".battlewin")).toHaveCount(0);
+  });
+
+  test("CTB: the turn-order strip renders and a battle resolves", async ({ page }) => {
+    test.setTimeout(90_000);
+    await startGame(page, "ctb");
+    await expect(page.locator(".ctb-order .ctb-chip").first()).toBeVisible();
+    // the strip forecasts up to 8 upcoming acts, highlighted current first
+    expect(await page.locator(".ctb-order .ctb-chip").count()).toBeGreaterThanOrEqual(4);
+    await expect(page.locator(".ctb-order .ctb-chip.now")).toHaveCount(1);
+    const outcome = await attackUntilOver(page);
+    expect(outcome.result).toBe("win");
+  });
+});
+
 test.describe("save/load round-trip", () => {
   test("saving in slot 1 and loading it back restores the game", async ({ page }) => {
     await gotoWithAtlasQuest(page, "/play.html");

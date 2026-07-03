@@ -1,7 +1,7 @@
 # Battles & States
 
-RPGAtlas ships a complete turn-based battle system. This page explains how fights are built, the two
-battle views, status effects, and how to keep combat fun and fair.
+RPGAtlas ships a complete battle system with three scheduling modes. This page explains how fights
+are built, the battle views and systems, status effects, and how to keep combat fun and fair.
 
 ---
 
@@ -32,12 +32,43 @@ Both use the same data; it's purely how combat is presented.
 
 ---
 
+## The three battle systems
+
+Set this in **Database ▸ System ▸ Battle system** — all three share the exact same damage math,
+states, and animations; only the *scheduling* differs:
+
+- **Turn-based** (default) — classic rounds: everyone picks a command, then all actions resolve in
+  agility order.
+- **ATB** — every battler has an **active-time gauge** that fills with agility; they act the moment
+  it's full. Gauges are shown on the party rows and under enemies, and pause while you're choosing a
+  command.
+- **CTB** — one battler acts at a time in an agility-driven order, previewed as a **turn-order
+  strip** across the top of the battle (the highlighted chip acts now).
+
+---
+
 ## In-battle actions
 
 Players choose from: **Attack**, **Skills**, **Items**, **Guard**, and **Escape**. Turn order follows
 **agility**. Skills and items can hit one target, all enemies, one ally, or the whole party depending
 on their **scope**. Combat is enriched with pooled particle effects for hits, magic, healing,
-guarding, states, and defeats.
+guarding, states, and defeats — and skills/weapons can play authored
+[battle animations](The-Database#animations).
+
+**Formation:** the pause menu's **Formation** entry toggles each member between **front** and
+**back row**. Back row deals and takes 25% less *physical* damage and is targeted less often —
+put your mage there. Back-row members show a ▽ marker in battle.
+
+---
+
+## Troop battle events
+
+Each troop (Database ▸ Troops) can carry **battle-event pages**: ordinary event commands that run
+mid-battle when their condition hits — boss dialogue, phase-change switches, reinforcement flags,
+scripted heals. Conditions: a **turn** pattern (`a + b·x`), an **enemy's HP** dropping to a
+threshold, an **actor's HP** dropping to a threshold, or a **switch** being ON (set several — all
+must hold). The **span** controls refiring: *once per battle*, *once per turn*, or *each time it
+becomes true*.
 
 ---
 
@@ -48,7 +79,10 @@ Each enemy (Database ▸ Enemies) defines:
 - **Stats** — HP, MP, attack, defense, agility, etc.
 - **Rewards** — EXP and gold granted on defeat.
 - **A weighted action list** — what the enemy tends to do each turn (attack, cast, etc.), with some
-  actions more likely than others.
+  actions more likely than others. Each row can also carry a **condition** — a turn pattern, own HP
+  above/below a percentage, a random chance, or a state on itself — and rows whose condition fails
+  drop out of that turn's pick. A dragon that breathes fire every third turn and heals under 30% HP
+  is three rows.
 - **A procedural sprite and color tint** — drawn from one of **twelve monster families**, each with a
   distinct silhouette, idle motion, and combat role. Re-tint and re-stat them to create many distinct
   foes from the same family.
