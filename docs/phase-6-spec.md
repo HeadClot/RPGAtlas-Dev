@@ -3,6 +3,32 @@
 **Status:** IN PROGRESS (branch `phase-6-assets`, off `main` after the Phase 5
 merge). Stage log will be prepended here, newest first, as stages land.
 
+Stage B COMPLETE (2026-07-02): the Asset Browser. **Tools ▸ Asset Browser**
+(`src/editor/tools/asset-browser.ts`, command `assetbrowser`, Tools menu +
+command palette): left type rail with live counts (All/Characters/Facesets/
+Enemies/Tiles/Audio), toolbar (search, **Unused only** toggle, **Images as**
+type selector, **Import Files…** + full-modal drag-drop with `.ab-drop`
+outline), tag chip row (toggle filters, reserved `pack:` tags documented),
+thumbnail grid (pixelated `<img>` from the library's object URLs; audio
+cards show ♪ + kind badge + duration), per-card **used/unused badge** from
+`usedAssetKeys` + footer audit summary (counts + bytes). Actions per card:
+audio ▶ preview (single shared element, stopped on modal close), **Rename**
+(promptBox → `renameAsset` reference rewrite + live re-bind + rebuildAll +
+touch), **Tags** editor, **Export** (blob download w/ mime-mapped
+extension), **Delete** (confirmBox; "USED by this project" warning). Imports
+route images by the selector, audio automatically; new images live-bind via
+`Assets.registerExternalAssets` so pickers/palette update without reload.
+Graceful no-store message when IndexedDB is unavailable. New e2e (35th
+spec): IDB-clean boot → cmd-palette open → synthetic PNG import → card +
+badge + thumb → **reload persistence** → tag edit + chip filter → delete.
+Verified live on the dev server (import PNG+WAV: cards, kind BGS guessed,
+charset bound into Assets.charsets immediately, "in project" badge after
+assigning the charset to an actor, reload persistence, zero console
+errors; screenshot). Patch note (covers A+B), wiki page
+(The-Asset-Browser + sidebar), `editor.css?v=48`, `patch-notes.js?v=17`
+(+shim +help.ts). Full gate green: tsc, eslint, node --test (16), vitest
+(167), Playwright **35/35** (goldens byte-stable).
+
 Stage A COMPLETE (2026-07-02): the asset store foundation. **Contracts**
 (`services.ts`): `AssetMeta` (key/type/name/tags/bytes/sha-256 hash/mime/
 kind/dims/dur/importer meta) + async `AssetStore`

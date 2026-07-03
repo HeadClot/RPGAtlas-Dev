@@ -5,6 +5,19 @@
 export const PATCH_NOTES = [
   {
     date: "July 2, 2026",
+    title: "Asset library & Asset Browser — import your own art and audio",
+    summary:
+      "RPGAtlas gains a real asset pipeline: drop PNG and OGG/MP3/WAV files into the new Asset Browser and they join the same pickers as the built-in procedural sets, stored in a per-device library that escapes the browser storage ceiling.",
+    items: [
+      "Tools ▸ Asset Browser: drag-drop or pick files to import; browse by type with search, tags, and thumbnails; rename (project references update automatically), retag, export, and delete with in-use warnings.",
+      "Used/unused audit: every asset shows whether the current project references it, with an “Unused only” filter and a size summary.",
+      "Per-device asset library: imports persist in IndexedDB in the browser and in the app-data folder on the desktop app — no more project-size ceiling for art.",
+      "Project files carry their assets: saving/exporting a .json embeds the imported assets it uses, and opening it on another machine imports them into that machine's library automatically.",
+      "Imported character sheets, facesets, battlers, and tiles appear everywhere the img/ folder assets do; audio imports land in the library ready for the upcoming audio update.",
+    ],
+  },
+  {
+    date: "July 2, 2026",
     title: "Player HUD & day/night — minimap, quest tracker, fullscreen, time gates",
     summary:
       "Games get a player-facing polish pass: a corner minimap with a live quest tracker, a fullscreen toggle in Options, and day/night gameplay — event pages and encounter pools that change with the in-game clock.",

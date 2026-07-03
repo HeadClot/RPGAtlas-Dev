@@ -537,3 +537,70 @@ test.describe("atlas graph (phase 4)", () => {
     expect(after.commands).toEqual(before.commands);
   });
 });
+
+test.describe("asset browser (phase 6)", () => {
+  test("imports a PNG that persists across reload, tags filter it, delete removes it", async ({ page }) => {
+    await page.goto("/index.html");
+    const saveIndicator = page.locator("#save-ind");
+    await expect(saveIndicator).toBeVisible();
+
+    // A clean library per run: this spec owns the rpgatlas_library IDB.
+    await page.evaluate(() => new Promise((done) => {
+      const req = indexedDB.deleteDatabase("rpgatlas_library");
+      req.onsuccess = req.onerror = req.onblocked = () => done(null);
+    }));
+    await page.reload();
+    await expect(saveIndicator).toBeVisible();
+
+    const openBrowser = async () => {
+      await page.keyboard.press("Control+p");
+      await page.locator(".cmdpal-input").fill("Asset Browser");
+      await page.keyboard.press("Enter");
+      await expect(page.locator(".assetbrowser")).toBeVisible();
+    };
+    await openBrowser();
+    await expect(page.locator(".ab-grid .ab-card")).toHaveCount(0);
+
+    // Feed a synthetic 48x48 PNG straight into the hidden import input.
+    await page.evaluate(async () => {
+      const c = document.createElement("canvas");
+      c.width = 48; c.height = 48;
+      const g = c.getContext("2d");
+      g.fillStyle = "#c04070"; g.fillRect(0, 0, 48, 48);
+      g.fillStyle = "#ffffff"; g.fillRect(12, 12, 24, 24);
+      const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+      const file = new File([blob], "Test Sprite.png", { type: "image/png" });
+      const input = document.getElementById("assetbrowser-file");
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const card = page.locator(".ab-grid .ab-card");
+    await expect(card).toHaveCount(1);
+    await expect(card.locator(".ab-name")).toHaveText("test-sprite");
+    await expect(card.locator(".ab-badge")).toHaveText("unused");
+    await expect(card.locator(".ab-thumb img")).toBeVisible();
+
+    // Persists across a full reload (IndexedDB, not localStorage).
+    await page.reload();
+    await expect(saveIndicator).toBeVisible();
+    await openBrowser();
+    await expect(card).toHaveCount(1);
+
+    // Tagging: edit tags, then the tag chip filters the grid.
+    await card.locator("button", { hasText: "Tags" }).click();
+    const prompt = page.locator(".overlay").last();
+    await prompt.locator("input[type=text]").fill("hero, town");
+    await prompt.locator("button", { hasText: "OK" }).click();
+    await expect(page.locator(".ab-tag")).toHaveCount(2);
+    await page.locator(".ab-tag", { hasText: "hero" }).click();
+    await expect(card).toHaveCount(1);
+
+    // Delete (unused -> plain confirm) empties the library again.
+    await card.locator("button", { hasText: "Delete" }).click();
+    await page.locator(".overlay").last().locator("button", { hasText: "OK" }).click();
+    await expect(page.locator(".ab-grid .ab-card")).toHaveCount(0);
+  });
+});
