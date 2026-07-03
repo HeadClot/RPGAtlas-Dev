@@ -213,7 +213,7 @@ function localXY(e: MouseEvent): [number, number] {
 }
 
 function bindCameraControls() {
-  let pan: { cam0: ViewCam; anchor: { wx: number; wz: number } } | null = null;
+  let pan: { cam0: ViewCam; anchor: { wx: number; wz: number }; camX0: number; camY0: number } | null = null;
   let tiltDrag: { y: number; tilt0: number } | null = null;
 
   canvas!.addEventListener("mousedown", (e: MouseEvent) => {
@@ -227,7 +227,7 @@ function bindCameraControls() {
     } else if (e.button === 0) {
       const cam0 = camAt();
       const anchor = screenToPlane(cam0, sx, sy);
-      if (anchor) { pan = { cam0, anchor }; canvas!.style.cursor = "grabbing"; }
+      if (anchor) { pan = { cam0, anchor, camX0: camX, camY0: camY }; canvas!.style.cursor = "grabbing"; }
       if (selLight >= 0) { selLight = -1; updateHud(); }
     }
     e.preventDefault();
@@ -238,8 +238,13 @@ function bindCameraControls() {
       updateHud();
     } else if (pan) {
       const [sx, sy] = localXY(e);
+      // Unproject against the drag-start camera and assign absolutely: the
+      // ground point grabbed at mousedown stays under the cursor, 1:1.
       const here = screenToPlane(pan.cam0, sx, sy);
-      if (here) { camX += pan.anchor.wx - here.wx; camY += pan.anchor.wz - here.wz; }
+      if (here) {
+        camX = pan.camX0 + (pan.anchor.wx - here.wx);
+        camY = pan.camY0 + (pan.anchor.wz - here.wz);
+      }
     }
   });
   window.addEventListener("mouseup", () => {
