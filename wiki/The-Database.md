@@ -24,7 +24,8 @@ at each level. Two actors can share a class or each have their own.
 ### Skills
 Actions used in battle (and sometimes the field). A skill has an **icon**, a type
 (**physical / magical / heal**), a **power**, an **MP cost**, and a **scope** (one enemy, all enemies,
-one ally, the whole party…). Skills can also **inflict or cure [states](Battles-and-States#states)**.
+one ally, the whole party…). Skills can also **inflict or cure [states](Battles-and-States#states)**,
+play a custom **[battle animation](#animations)**, and strike multiple times (**Hits**).
 
 ### Items
 Consumables and key items. Like skills, they have effects, a scope, an icon, and a **price** (for
@@ -45,6 +46,16 @@ monster families ship with the engine. See [Battles & States](Battles-and-States
 ### Troops
 **Groups of enemies** that appear together in one battle. A fixed encounter or a random encounter
 always references a *troop*, not a single enemy. A troop can be one slime or a whole pack.
+
+### Animations
+**Battle animations** (Phase 5): keyframed effect timelines built from timed items —
+**particle bursts** (with ring / rain / spiral emitter shapes), **flashes** (over a battler or the
+whole screen), **screen shake**, **sounds**, **source→target projectiles**, and **flipbooks**
+(icon-strip or image-sheet frame playback). Item start times are in ticks (60 per second); drag the
+chips on the timeline strip to retime them, and use the **preview arena** to play the animation with
+the exact runtime the game uses. Assign animations to **skills** and **weapons** (the *Battle
+animation* picker), or show one on the map with the **Play Animation** event command. A skill
+without an animation keeps the engine's classic built-in effects.
 
 ### Common Events
 Reusable event-command sequences that can be called from map events or scripts. They can also run

@@ -152,6 +152,7 @@ the button to edit or delete it.
 | **Open Shop** | Open a buy/sell shop stocked with chosen goods. |
 | **Play Sound** | Play a procedural sound effect. |
 | **Change Music** | Switch the background music theme. |
+| **Play Animation** | Play a [battle animation](The-Database#animations) over the player, this event, or the screen center. |
 
 ### Scene control
 | Command | What it does |

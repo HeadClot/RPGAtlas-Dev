@@ -32,6 +32,7 @@ import {
 } from "../state/game-state.js";
 import { useItemOn, iconEntryHtml, bar } from "./menus.js";
 import { createBattleFx } from "./battle-fx.js";
+import { playAnimation } from "../../shared/anim-player.js";
 
 const TILE = Assets.TILE;
 
@@ -124,7 +125,39 @@ export const Battle: any = {
     // Battle effects (particle pool, bursts, float text, projectiles) live in
     // ./battle-fx.ts — the factory closes over the same win/fxLayer nodes the
     // monolith's inner functions closed over.
-    const { burst, floatText, skillKind, travel, castFx } = createBattleFx(win, fxLayer);
+    const fx = createBattleFx(win, fxLayer);
+    const { burst, floatText, skillKind, travel, castFx } = fx;
+    // ---- authored battle animations (Phase 5) ----
+    // A skill/weapon with animationId plays its timeline INSTEAD of the legacy
+    // castFx/travel/burst-Sfx effects; absent = the legacy path, verbatim.
+    const animById = (id: any) => RA.byId(proj.animations || [], Number(id) || 0);
+    function attackAnim(a: any) {
+      const weapon = RA.byId(proj.weapons || [], Number(a.weaponId) || 0);
+      return weapon ? animById(weapon.animationId) : null;
+    }
+    function battleShake() {
+      win.classList.remove("shake");
+      void win.offsetWidth;
+      win.classList.add("shake");
+    }
+    function playBattleAnim(anim: any, sourceEl: any, targetEls: any[]) {
+      return playAnimation(anim, {
+        fx,
+        source: sourceEl,
+        targets: targetEls,
+        onSound: (se: any) => Sfx.play(se),
+        onShake: () => battleShake(),
+        drawIcon(index: any) {
+          // copy the cached icon frame — the cache canvas must stay off-DOM
+          const src = Assets.iconCanvas(index);
+          const c2 = document.createElement("canvas");
+          c2.width = src.width;
+          c2.height = src.height;
+          c2.getContext("2d")!.drawImage(src, 0, 0);
+          return c2;
+        },
+      });
+    }
     function actorElement(a: any) {
       const i = G.party.indexOf(a);
       return actorSprs[i] || partyArea.children[i] || partyArea;
@@ -598,53 +631,64 @@ export const Battle: any = {
                   : [
                       c.target && c.target.alive ? c.target : livingE()[0],
                     ].filter(Boolean);
+              const anim = skill ? animById(skill.animationId) : attackAnim(a);
               actorStep(a);
-              if (skill) castFx(actorElement(a), skill, targets.length);
+              if (skill && !anim) castFx(actorElement(a), skill, targets.length);
+              if (anim)
+                await playBattleAnim(
+                  anim,
+                  actorElement(a),
+                  targets.map((t: any) => sprs[t.i]),
+                );
+              const hits = Math.max(1, Math.floor(Number(skill && skill.hits) || 1));
               for (const t of targets) {
-                let dmg;
-                const critical =
-                  (!skill || skill.type === "phys") &&
-                  rnd(100) <
-                    RA.traitSum(actorClass(a), "special", "critChance", 0);
-                if (!skill) {
-                  dmg = variance(param(a, "atk") * 2 - t.d.stats.def * 1.2);
-                  Sfx.play(critical ? "crit" : "hit");
-                } else if (skill.type === "phys") {
-                  dmg = variance(
-                    (skill.power +
-                      param(a, "atk") * 2 -
-                      t.d.stats.def * 1.2) *
-                      skillPowerRate(a, skill),
+                for (let hit = 0; hit < hits; hit++) {
+                  if (!t.alive) break;
+                  let dmg;
+                  const critical =
+                    (!skill || skill.type === "phys") &&
+                    rnd(100) <
+                      RA.traitSum(actorClass(a), "special", "critChance", 0);
+                  if (!skill) {
+                    dmg = variance(param(a, "atk") * 2 - t.d.stats.def * 1.2);
+                    if (!anim) Sfx.play(critical ? "crit" : "hit");
+                  } else if (skill.type === "phys") {
+                    dmg = variance(
+                      (skill.power +
+                        param(a, "atk") * 2 -
+                        t.d.stats.def * 1.2) *
+                        skillPowerRate(a, skill),
+                    );
+                    if (!anim) Sfx.play("crit");
+                  } else {
+                    dmg = variance(
+                      (skill.power +
+                        param(a, "mat") * 2 -
+                        t.d.stats.mdf * 1.5) *
+                        skillPowerRate(a, skill),
+                    );
+                    if (!anim) Sfx.play("magic");
+                  }
+                  if (critical) dmg = Math.max(1, Math.floor(dmg * 1.5));
+                  if (!anim) await travel(actorElement(a), sprs[t.i], skill);
+                  await dealToEnemy(
+                    t,
+                    dmg,
+                    t.i,
+                    critical ? "crit" : skillKind(skill),
                   );
-                  Sfx.play("crit");
-                } else {
-                  dmg = variance(
-                    (skill.power +
-                      param(a, "mat") * 2 -
-                      t.d.stats.mdf * 1.5) *
-                      skillPowerRate(a, skill),
+                  await say(
+                    a.name +
+                      (skill ? " casts " + skill.name : " attacks") +
+                      " — " +
+                      t.d.name +
+                      " takes " +
+                      dmg +
+                      "!",
+                    550,
                   );
-                  Sfx.play("magic");
+                  if (!t.alive) await say(t.d.name + " is defeated!", 450);
                 }
-                if (critical) dmg = Math.max(1, Math.floor(dmg * 1.5));
-                await travel(actorElement(a), sprs[t.i], skill);
-                await dealToEnemy(
-                  t,
-                  dmg,
-                  t.i,
-                  critical ? "crit" : skillKind(skill),
-                );
-                await say(
-                  a.name +
-                    (skill ? " casts " + skill.name : " attacks") +
-                    " — " +
-                    t.d.name +
-                    " takes " +
-                    dmg +
-                    "!",
-                  550,
-                );
-                if (!t.alive) await say(t.d.name + " is defeated!", 450);
                 await applySkillState(skill, t);
               }
             } else if (
@@ -656,9 +700,16 @@ export const Battle: any = {
               a.mp -= cost;
               const targets =
                 c.skill.scope === "allies" ? livingP() : [c.target];
-              Sfx.play("heal");
+              const healAnim = animById(c.skill.animationId);
+              if (!healAnim) Sfx.play("heal");
               actorStep(a);
-              castFx(actorElement(a), c.skill, targets.length);
+              if (!healAnim) castFx(actorElement(a), c.skill, targets.length);
+              if (healAnim)
+                await playBattleAnim(
+                  healAnim,
+                  actorElement(a),
+                  targets.map((t: any) => actorElement(t)),
+                );
               for (const t of targets) {
                 const amount = variance(
                   (c.skill.power + param(a, "mat") * 1.2) *
@@ -695,6 +746,7 @@ export const Battle: any = {
             const pool = livingP();
             if (!pool.length) break;
             const t = pool[rnd(pool.length)];
+            const enemyAnim = c.skill ? animById(c.skill.animationId) : null;
             enemyStep(en);
             let dmg;
             if (c.skill && c.skill.type !== "heal") {
@@ -714,9 +766,13 @@ export const Battle: any = {
                     ),
                 ),
               );
-              Sfx.play(c.skill.type === "phys" ? "hit" : "magic");
-              castFx(sprs[en.i], c.skill, 1);
-              await travel(sprs[en.i], actorElement(t), c.skill);
+              if (!enemyAnim) Sfx.play(c.skill.type === "phys" ? "hit" : "magic");
+              if (enemyAnim) {
+                await playBattleAnim(enemyAnim, sprs[en.i], [actorElement(t)]);
+              } else {
+                castFx(sprs[en.i], c.skill, 1);
+                await travel(sprs[en.i], actorElement(t), c.skill);
+              }
               await say(
                 en.d.name +
                   " uses " +
@@ -744,9 +800,10 @@ export const Battle: any = {
             }
             t.hp = Math.max(0, t.hp - dmg);
             actorFlash(t);
-            burst(actorElement(t), skillKind(c.skill), {
-              color: c.skill && c.skill.color,
-            });
+            if (!enemyAnim)
+              burst(actorElement(t), skillKind(c.skill), {
+                color: c.skill && c.skill.color,
+              });
             floatText(
               actorElement(t),
               "-" + dmg,

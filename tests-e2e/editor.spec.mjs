@@ -403,6 +403,59 @@ test.describe("autotiles", () => {
   });
 });
 
+test.describe("battle animations (phase 5)", () => {
+  test("Animations tab lists the samples, previews, and edits persist", async ({ page }) => {
+    await page.goto("/index.html");
+    const saveIndicator = page.locator("#save-ind");
+    await expect(saveIndicator).toBeVisible();
+    await expect(saveIndicator).toHaveText(/^✓ /);
+
+    const readProject = () =>
+      page.evaluate(() => JSON.parse(localStorage.getItem("rpgatlas_project")));
+    const before = await readProject();
+    expect(Array.isArray(before.animations)).toBe(true);
+    const sampleCount = before.animations.length; // sample ships 3
+
+    await page.locator("#menus .menu-label", { hasText: "Tools" }).dispatchEvent("mousedown");
+    await page.locator(".menu-drop .menu-item", { hasText: "Database" }).click();
+    await expect(page.locator(".db-modal")).toBeVisible();
+    await page.locator(".dbtabs-vert button", { hasText: "Animations" }).click();
+
+    // The sample animations are listed; selecting one draws its timeline chips.
+    const rows = page.locator(".dblist li:not(.db-empty)");
+    await expect(rows).toHaveCount(sampleCount);
+    await page.locator(".dblist li", { hasText: "Fire Burst" }).click();
+    const fireBurst = before.animations.find((a) => a.name === "Fire Burst");
+    await expect(page.locator(".anim-chip")).toHaveCount(fireBurst.items.length);
+
+    // Preview runs the REAL anim-player to completion: the Play button
+    // disables while playing and re-enables when the promise resolves.
+    const play = page.locator(".anim-preview button", { hasText: "Play" });
+    await play.click();
+    await expect(play).toBeDisabled();
+    await expect(play).toBeEnabled({ timeout: 10_000 });
+
+    // New animation + an extra Sound item via the add row.
+    await page.locator(".dbbtns button", { hasText: "+ New" }).click();
+    await expect(page.locator(".anim-chip")).toHaveCount(1); // blank has one item
+    await page.locator(".anim-add-row button", { hasText: "Sound" }).click();
+    await expect(page.locator(".anim-chip")).toHaveCount(2);
+
+    // The Skills tab exposes the animation picker with the sample wiring.
+    await page.locator(".dbtabs-vert button", { hasText: "Skills" }).click();
+    await page.locator(".dblist li", { hasText: "Fireball" }).click();
+    const animSel = page.locator(".dbform .fld", { hasText: "Battle animation" }).locator("select");
+    await expect(animSel).toHaveValue("2");
+
+    // Close: the new animation and its items persist through autosave.
+    await page.locator(".db-modal .modal-btns button", { hasText: "Close" }).click();
+    await expect(saveIndicator).toHaveText(/^✓ /, { timeout: 5000 });
+    const after = await readProject();
+    expect(after.animations.length).toBe(sampleCount + 1);
+    expect(after.animations[after.animations.length - 1].items.length).toBe(2);
+  });
+});
+
 test.describe("atlas graph (phase 4)", () => {
   test("converting a page to a graph is lossless and persists on OK", async ({ page }) => {
     await page.goto("/index.html");

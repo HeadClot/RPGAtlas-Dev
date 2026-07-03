@@ -801,3 +801,70 @@ button.danger:hover { background: #6a3636; }
 .graph-mm-node.mm-comment { background: rgba(255,216,106,.4); }
 .graph-mm-view { position: absolute; border: 1px solid var(--gold); background: rgba(255,216,106,.08); }
 .graph-hint { position: absolute; left: 8px; bottom: 8px; z-index: 3; font-size: var(--fs-tiny); color: var(--text-dim); pointer-events: none; }
+
+/* ============ Database - Animations tab (Phase 5 Stage A) ============ */
+.anim-strip {
+  position: relative; height: 110px; margin: 4px 0 10px;
+  background: rgba(10,12,20,.6); border: 1px solid var(--line-2); border-radius: 6px;
+  overflow: hidden;
+}
+.anim-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.06); }
+.anim-tick.sec { background: rgba(255,255,255,.16); }
+.anim-tick-lbl { position: absolute; left: 3px; top: 1px; font-size: 10px; color: var(--text-dim); }
+.anim-chip {
+  position: absolute; z-index: 2; padding: 1px 7px; border-radius: 9px;
+  font-size: 11px; font-weight: 700; color: #14161f; cursor: ew-resize;
+  white-space: nowrap; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,.5);
+}
+.anim-chip.sel { outline: 2px solid #fff; }
+.anim-editor { display: grid; grid-template-columns: minmax(230px, 300px) 1fr; gap: 12px; align-items: start; }
+.anim-items { border: 1px solid var(--line-2); border-radius: 6px; overflow: hidden; }
+.anim-item-row {
+  display: flex; align-items: center; gap: 7px; padding: 4px 8px; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,.05); font-size: var(--fs-small, 12px);
+}
+.anim-item-row:hover { background: rgba(255,255,255,.05); }
+.anim-item-row.sel { background: rgba(90,138,216,.22); }
+.anim-item-row span:nth-child(3) { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.anim-item-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.anim-item-at { color: var(--text-dim); font-variant-numeric: tabular-nums; flex: none; }
+.anim-add-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 8px; }
+.anim-params { min-height: 120px; }
+.anim-preview { display: flex; gap: 10px; align-items: flex-end; }
+.anim-arena {
+  position: relative; width: 420px; max-width: 100%; height: 170px; overflow: hidden;
+  background: linear-gradient(#1a2033, #10141f); border: 1px solid var(--line-2); border-radius: 8px;
+}
+.anim-arena-fx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; }
+.anim-battler {
+  position: absolute; top: 50%; width: 74px; height: 86px; transform: translateY(-50%);
+  border: 1px dashed rgba(255,255,255,.3); border-radius: 8px;
+  display: flex; align-items: flex-end; justify-content: center;
+  font-size: 10px; letter-spacing: 1px; color: var(--text-dim); padding-bottom: 5px;
+}
+.anim-battler.src { left: 34px; }
+.anim-battler.tgt { right: 44px; border-color: rgba(255,150,150,.4); }
+.anim-arena.shake { animation: anim-arena-shake .3s; }
+@keyframes anim-arena-shake {
+  20% { transform: translateX(-6px); } 40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); } 80% { transform: translateX(2px); }
+}
+/* battle-fx particle base for the preview arena (mirror of play.css) */
+.anim-arena .fx-particle {
+  position: absolute; display: block; opacity: 0; pointer-events: none;
+  border-radius: 50%; color: #fff; will-change: transform, opacity;
+}
+.anim-arena .fx-hit, .anim-arena .fx-crit { border-radius: 1px; }
+.anim-arena .fx-fire { border-radius: 55% 45% 60% 40%; }
+.anim-arena .fx-ice { border-radius: 0; clip-path: polygon(50% 0, 100% 72%, 58% 100%, 0 68%); }
+.anim-arena .fx-projectile {
+  width: 18px !important; height: 18px !important;
+  border: 2px solid rgba(255,255,255,.82); box-shadow: 0 0 18px currentColor, 0 0 7px #fff !important;
+}
+.anim-arena .fx-anim-bolt { width: auto; height: auto; }
+.anim-arena .fx-anim-flash { box-shadow: none; }
+.anim-arena .fx-anim-flipbook {
+  opacity: 1; border-radius: 0; background: transparent !important;
+  box-shadow: none !important; image-rendering: pixelated;
+}
+.anim-arena .fx-anim-flipbook canvas { display: block; image-rendering: pixelated; }

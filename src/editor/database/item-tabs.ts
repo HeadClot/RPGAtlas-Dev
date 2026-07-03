@@ -35,6 +35,9 @@ export const weaponsTab = () => listFormTab({
     const pr = h("div", { class: "frow" });
     for (const k of PARAM_KEYS) { if (e.params[k] == null) e.params[k] = 0; pr.appendChild(field(k.toUpperCase() + " +", nIn(e.params, k, -999, 999))); }
     box.appendChild(pr);
+    // Normal-attack battle animation (Phase 5). "(default FX)" = legacy hit FX.
+    if (e.animationId == null) e.animationId = 0;
+    box.appendChild(field("Attack animation", sel(e, "animationId", dbOpts(S.proj.animations || [], "(default FX)"))));
   },
 });
 

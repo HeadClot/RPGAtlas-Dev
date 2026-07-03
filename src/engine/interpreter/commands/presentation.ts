@@ -50,6 +50,14 @@ export function registerPresentationCommands(): void {
     }
   });
 
+  // Play a battle animation on the map (Phase 5). Target "this" needs an
+  // event runtime; common events and "player" both anchor on the player.
+  registerCommand("playAnim", async (c: any, { interp, services }: InterpContext) => {
+    const entity = c.target === "this" ? interp.evRT : null;
+    const done = services.playMapAnimation(c.animationId, entity, c.target === "screen");
+    if (c.wait !== false) await done;
+  });
+
   registerCommand("flash", async (c: any, { services }: InterpContext) => {
     const ctx = services.ctx;
     ctx.flashColor = c.color || "#ffffff";

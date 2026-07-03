@@ -5,6 +5,19 @@
 export const PATCH_NOTES = [
   {
     date: "July 2, 2026",
+    title: "Battle animations — keyframed skill FX with a timeline editor",
+    summary:
+      "A new animation engine: author keyframed particle/flash/shake/projectile/flipbook animations on a timeline in Database ▸ Animations, assign them to skills and weapons, and play them on the map with the new Play Animation event command.",
+    items: [
+      "Database ▸ Animations: build animations from timed items — particle bursts (plus ring/rain/spiral emitters), target or screen flashes, screen shake, sounds, source→target projectiles, and icon/sheet flipbooks — with a draggable timeline strip and a live preview arena that runs the real player.",
+      "Skills and weapons gain a Battle animation picker; a skill with an animation plays it in battle instead of the default effects (skills without one look exactly as before). Skills can also strike multiple times via the new Hits field.",
+      "New event command: Play Animation — show any battle animation over the player, this event, or the screen center on the map (works in graphs too).",
+      "Sample project: Fireball, Heal, and Power Strike now ship with showcase animations (Fire Burst, Healing Light, Slash).",
+      "Multi-target skills fan the animation out over every target; enemy skills with animations use them as well.",
+    ],
+  },
+  {
+    date: "July 2, 2026",
     title: "Atlas Graph — node-based visual scripting",
     summary:
       "Event pages can now be authored as node graphs: a full visual-scripting canvas that compiles into the exact same event commands your game already runs, so graphs work everywhere — playtest, saves, plugins, and exported games — with zero runtime cost.",
