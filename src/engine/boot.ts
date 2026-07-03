@@ -46,6 +46,7 @@ import { Shop } from "./scenes/shop.js";
 import { Battle } from "./scenes/battle.js";
 import { toTitle, showTitle } from "./scenes/title.js";
 import { gameOver } from "./scenes/gameover.js";
+import { playMapAnimation } from "./anim-glue.js";
 
 const TILE = Assets.TILE;
 // defaults (overridden at boot from system.screenWidth/Height)
@@ -90,6 +91,8 @@ const EngineServices: any = {
   setRoute, transferPlayer, saveLoadMenu, gameOver, toTitle,
   // battle / shop
   Battle, Shop,
+  // battle animations on the map (Phase 5)
+  playMapAnimation,
 };
 initInterpServices(EngineServices);
 registerBuiltinCommands();

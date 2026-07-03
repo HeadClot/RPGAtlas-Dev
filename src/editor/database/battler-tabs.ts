@@ -207,6 +207,13 @@ export const skillsTab = () => listFormTab({
     box.appendChild(field("Scope", sel(e, "scope", [
       { v: "enemy", l: "One enemy" }, { v: "enemies", l: "All enemies" },
       { v: "ally", l: "One ally" }, { v: "allies", l: "All allies" }])));
+    // Battle animation + multi-hit (Phase 5). Animation "(default FX)" keeps
+    // the legacy castFx/travel/burst effects.
+    if (e.animationId == null) e.animationId = 0;
+    if (e.hits == null) e.hits = 1;
+    box.appendChild(row(
+      field("Battle animation", sel(e, "animationId", dbOpts(S.proj.animations || [], "(default FX)"))),
+      field("Hits", nIn(e, "hits", 1, 8))));
     if (e.stateId == null) e.stateId = 0;
     if (!e.stateOp) e.stateOp = "add";
     if (e.stateChance == null) e.stateChance = 100;

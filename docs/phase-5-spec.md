@@ -1,6 +1,40 @@
 # Phase 5 Spec — Gameplay Systems
 
-**Status:** IN PROGRESS. Stage log will accumulate here, phase-2/3/4-spec style.
+**Status:** IN PROGRESS. Stage log accumulates here, phase-2/3/4-spec style.
+
+Stage A COMPLETE (2026-07-02): the animation engine + timeline editor.
+Schema: `AnimItem`/`BattleAnimation`, `Project.animations`, `Skill.animationId/
+hits`, `Weapon.animationId`, `CmdPlayAnim` in the union; **FORMAT_VERSION 2**
+(`RA._migrateV1toV2`: all Phase 5 backfills land at once — animations,
+battleSystem/atbWait, followers, minimap, vehicles, per-map `regions`,
+per-troop `pages` — idempotent, inert defaults; `newProject`/`newMap` mirror
+them, and the sample ships 3 showcase animations wired to Fireball/Heal/
+Power Strike). Runtime: `src/shared/battle-fx.ts` (moved verbatim from the
+engine + two additive extensions: `fxPoint` accepts plain `{x,y}` points and
+the pool is exposed via `spawn`/`release`; the engine path re-exports),
+`src/shared/anim-player.ts` (flat-timeline player, injectable clock/scheduler
+→ node-testable; ring/rain/spiral emitters, target/screen flashes,
+projectiles, icon/sheet flipbooks over the shared pool; multi-target
+fan-out), `src/engine/anim-glue.ts` (map fx layer under the uiLayer +
+render-glue camera math at fire time; stage-local points so CSS scale never
+enters), `playAnim` handler in presentation.ts (services.playMapAnimation;
+no-op off-map). Battle wiring: skill/weapon `animationId` plays the timeline
+INSTEAD of castFx/travel/burst+Sfx (absent = legacy verbatim — turn-based
+behavior frozen); `skill.hits` multi-hit loop; enemy skill animations too.
+Editor: Database ▸ Animations tab (list scaffold + timeline strip with
+draggable chips + item table + per-type forms + preview arena running the
+REAL player), Battle-animation pickers on Skills/Weapons, Play Animation
+CMD_DEF (auto-appears in list + graph pickers). Tests: 16-test vitest suite
+(durations, anchors, fire order, fan-out, pool emitters, flipbook stepping,
+completion timing) + editor e2e (samples listed, preview plays to completion,
+new animation + item persists, skill picker wired). Verified live in a real
+battle (dev server: startBattle → Fireball round: fx-anim-bolt projectile,
+screen flash, shake, burst all sampled live; damage applied; win; zero
+console errors) and in the editor preview arena. `editor.css?v=46`,
+`data.js?v=26`, `patch-notes.js?v=13` (+shim), patch-note entry,
+wiki (The-Database ▸ Animations, Events command table). Full gate green:
+tsc, eslint, node --test (16), vitest (120), Playwright **30/30** (all 11
+renderer goldens byte-stable).
 
 **Branch:** `phase-5-gameplay` (off `main` after the Phase 4 merge)
 **Architect & implementation:** Claude Fable 5 (roadmap assignment: "animation data

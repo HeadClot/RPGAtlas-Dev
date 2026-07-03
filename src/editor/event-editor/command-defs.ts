@@ -65,6 +65,7 @@ import { openLocationPicker } from "./location-picker";
       case "move": return "Move " + (c.target === "player" ? "Player" : "This Event") + ": " + c.steps.join(", ").slice(0, 40) + (c.wait ? " (wait)" : "");
       case "cameraZoom": return "Camera Zoom: " + Math.round((c.zoom || 1) * 100) + "% over " + (c.frames || 0) + " frames";
       case "transparency": return "Player Transparency: " + (c.val ? "hidden" : "visible");
+      case "playAnim": return "Play Animation: " + dbName(S.proj.animations || [], c.animationId) + (c.target === "this" ? " (this event)" : c.target === "screen" ? " (screen)" : " (player)");
       case "erase": return "Erase This Event";
       case "save": return "Open Save Screen";
       case "gameover": return "Game Over";
@@ -480,6 +481,24 @@ import { openLocationPicker } from "./location-picker";
           c.color = w.color;
           c.opacity = Number(w.opacity);
           c.duration = Number(w.duration);
+          c.wait = w.wait;
+        };
+      } },
+    { t: "playAnim", label: "Play Animation", make: () => ({ t: "playAnim", animationId: 1, target: "player", wait: true }),
+      form(c: any, box: any) {
+        const w = { animationId: c.animationId || 1, target: c.target || "player", wait: c.wait !== false };
+        box.appendChild(row(
+          field("Animation", sel(w, "animationId", dbOpts(S.proj.animations || [], "(none)"))),
+          field("Show over", sel(w, "target", [
+            { v: "player", l: "Player" },
+            { v: "this", l: "This Event" },
+            { v: "screen", l: "Screen center" },
+          ])),
+          field("Wait for completion", chk(w, "wait"))
+        ));
+        return () => {
+          c.animationId = Number(w.animationId);
+          c.target = w.target;
           c.wait = w.wait;
         };
       } },

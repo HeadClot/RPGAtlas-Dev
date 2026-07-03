@@ -19,6 +19,7 @@ import { systemTab, controlsTab } from "./system-tab";
 import { actorsTab, classesTab, skillsTab, enemiesTab, statesTab } from "./battler-tabs";
 import { itemsTab, weaponsTab, armorsTab, troopsTab, commonEventsTab } from "./item-tabs";
 import { questsTab } from "./quests-tab";
+import { animationsTab } from "./animations-tab";
 import { tilesetTab } from "./tilesets-tab";
 import { typesTab, nameListTab } from "./types-tab";
 
@@ -34,6 +35,7 @@ function dbTabs() {
     { label: "Armors", build: armorsTab },
     { label: "Enemies", build: enemiesTab },
     { label: "Troops", build: troopsTab },
+    { label: "Animations", build: animationsTab },
     { label: "Common Events", build: commonEventsTab },
     { label: "Quests", build: questsTab },
     { label: "States", build: statesTab },

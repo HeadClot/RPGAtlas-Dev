@@ -178,6 +178,11 @@ export interface Skill {
   stateId?: number;
   stateChance?: number;
   stateOp?: "add" | "remove" | string;
+  /** Battle animation played on use (Phase 5). Absent = the legacy
+   *  castFx/travel/burst effects, byte-identical to Phase 4. */
+  animationId?: number;
+  /** Number of damage applications per use (Phase 5). Absent = 1. */
+  hits?: number;
 }
 
 export interface StateDef {
@@ -209,6 +214,8 @@ export interface Weapon {
   price?: number;
   wtypeId?: number;
   params?: Params;
+  /** Battle animation played on normal attacks (Phase 5). Absent = legacy FX. */
+  animationId?: number;
 }
 
 export interface Armor {
@@ -242,6 +249,65 @@ export interface Troop {
   name: string;
   /** enemy ids composing the troop. */
   enemies: number[];
+}
+
+// ============================================================================
+// Battle animations (Phase 5 Stage A)
+// ============================================================================
+
+/** One timed effect on a battle animation's timeline. `at` is in engine ticks
+ *  (1/60 s). Effect durations follow the unit conventions of what they drive:
+ *  particle/flash/projectile/flipbook durations are in MILLISECONDS (the
+ *  battle-fx Web-Animations convention), shake power/speed/duration match the
+ *  `shake` event command (1–9 / 1–9 / frames). */
+export interface AnimItem {
+  /** Start tick (60/s) on the timeline. */
+  at: number;
+  type: "particles" | "flash" | "shake" | "sound" | "projectile" | "flipbook";
+  /** particles/flash/projectile anchor override; absent = the animation's. */
+  anchor?: "target" | "source" | "screen";
+  // -- particles --
+  /** battle-fx palette key (hit/crit/fire/ice/thunder/heal/poison/status/
+   *  death/item/dust); empty + `color` = single-color burst. */
+  kind?: string;
+  color?: string;
+  count?: number;
+  radius?: number;
+  size?: number;
+  /** milliseconds (particles/flash/projectile/flipbook). */
+  duration?: number;
+  /** Emitter pattern. Default "burst" (the classic battle-fx radial). */
+  shape?: "burst" | "ring" | "rain" | "spiral";
+  // -- flash --
+  opacity?: number; // 0..1
+  // -- shake (same units as the `shake` command) --
+  power?: number;
+  speed?: number;
+  // -- sound --
+  se?: string;
+  // -- projectile --
+  /** Glow trail (default true). */
+  trail?: boolean;
+  // -- flipbook --
+  /** "icons" (built-in icon strip) or an image URL/data URL sheet. */
+  sheet?: string;
+  cols?: number;
+  rows?: number;
+  from?: number;
+  to?: number;
+  fps?: number;
+  scale?: number;
+}
+
+/** A keyframed battle animation (Database ▸ Animations). Played over the
+ *  battle window by skills/weapons (`animationId`) and on the map by the
+ *  `playAnim` event command. */
+export interface BattleAnimation {
+  id: number;
+  name: string;
+  /** Default anchor for items without their own `anchor`. */
+  target: "target" | "source" | "screen";
+  items: AnimItem[];
 }
 
 // ============================================================================
@@ -524,6 +590,15 @@ export interface CmdLoop {
 export interface CmdBreakLoop {
   t: "breakLoop";
 }
+/** Plays a battle animation on the map (Phase 5): over the player, this
+ *  event, or the screen center. A no-op outside the map scene or when the
+ *  animation id doesn't resolve. */
+export interface CmdPlayAnim {
+  t: "playAnim";
+  animationId: number;
+  target: "player" | "this" | "screen";
+  wait?: boolean;
+}
 
 /** Every built-in event command, discriminated on `t`. Plugin commands add
  *  further `t` values at runtime via the interpreter registry; those aren't in
@@ -564,7 +639,8 @@ export type AnyCommand =
   | CmdToTitle
   | CmdScript
   | CmdLoop
-  | CmdBreakLoop;
+  | CmdBreakLoop
+  | CmdPlayAnim;
 
 /** The `t` discriminant of any built-in command. */
 export type CommandType = AnyCommand["t"];
@@ -831,6 +907,8 @@ export interface Project {
   /** 47-blob autotile groups (Phase 3 Stage D). Optional; absent = none. */
   autotiles?: Autotile[];
   assets: ProjectAssets;
+  /** Battle animations (Phase 5). Always present after the v2 migration. */
+  animations: BattleAnimation[];
   actors: Actor[];
   classes: ClassDef[];
   skills: Skill[];
@@ -898,6 +976,7 @@ export function validateProject(value: unknown, where = "load"): Project {
     "customChars",
     "commandPresets",
     "commonEvents",
+    "animations",
     "actors",
     "classes",
     "skills",

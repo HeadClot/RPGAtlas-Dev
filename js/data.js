@@ -380,7 +380,7 @@ const RA = {
   // an older one), migrateProject() runs NO steps and does NOT touch the
   // stamped formatVersion (never downgrade it) — the project is returned as-is
   // so an older build doesn't silently mangle a newer save format.
-  FORMAT_VERSION: 1,
+  FORMAT_VERSION: 2,
   migrations: [
     {
       // v0 -> v1: the pre-existing ad-hoc migration (decor2 layer, shadows,
@@ -390,6 +390,15 @@ const RA = {
       // (unversioned) migrateProject().
       version: 1,
       migrate(p) { RA._migrateV0toV1(p); },
+    },
+    {
+      // v1 -> v2 (Phase 5, Gameplay Systems): purely additive backfills —
+      // the animations collection, battle-mode system fields, follower/
+      // minimap/vehicle settings, the per-map region layer, and per-troop
+      // battle-event pages. A v1 project gains only empty/default fields;
+      // behavior is unchanged until an author uses them.
+      version: 2,
+      migrate(p) { RA._migrateV1toV2(p); },
     },
   ],
   // upgrade older projects in place (adds the decor2 layer, shadows,
@@ -595,6 +604,25 @@ const RA = {
       p.meta.builtinsSeeded = true;
     }
   },
+  // v1 -> v2 (Phase 5): gameplay-systems backfills. Idempotent; every field
+  // is additive and inert at its default, so a migrated project plays
+  // identically until an author opts in.
+  _migrateV1toV2(p) {
+    if (!Array.isArray(p.animations)) p.animations = [];
+    const sys = p.system || (p.system = {});
+    if (sys.battleSystem !== "atb" && sys.battleSystem !== "ctb") sys.battleSystem = "turn";
+    if (sys.atbWait == null) sys.atbWait = true;
+    if (sys.followers == null) sys.followers = false;
+    if (sys.minimap == null) sys.minimap = false;
+    if (!sys.vehicles || typeof sys.vehicles !== "object") sys.vehicles = {};
+    for (const m of p.maps || []) {
+      const n = m.width * m.height;
+      if (!Array.isArray(m.regions) || m.regions.length !== n) m.regions = new Array(n).fill(0);
+    }
+    for (const tr of p.troops || []) {
+      if (!Array.isArray(tr.pages)) tr.pages = [];
+    }
+  },
   // Run every registered migration step whose version is greater than the
   // project's current meta.formatVersion (missing == 0), in ascending order,
   // then stamp meta.formatVersion to RA.FORMAT_VERSION. See the comment above
@@ -630,6 +658,7 @@ const DataDefaults = (() => {
       shadows: new Array(n).fill(0),   // 4-bit quadrant mask per tile: 1=TL 2=TR 4=BL 8=BR
       passOv: new Array(n).fill(0),    // passability override: 0=auto 1=force pass 2=force block
       heights: new Array(n).fill(0),   // HD-2D elevation in tile units (visual only; 0 = flat)
+      regions: new Array(n).fill(0),   // region tag per tile: 0 = none, 1-63 (Phase 5)
       events: [],
     };
   }
@@ -1082,7 +1111,31 @@ const DataDefaults = (() => {
         music: RA.defaultMusic(),
         types: RA.defaultTypes(),
         input: RA.defaultInput(),
+        battleSystem: "turn", atbWait: true,       // Phase 5 battle mode
+        followers: false, minimap: false,          // Phase 5 map systems
+        vehicles: {},                              // Phase 5 vehicles (boat/ship/airship)
       },
+      // Battle animations (Phase 5): keyframed timelines over the battle-fx
+      // primitives. `at` is in ticks (60/s); effect durations in ms.
+      animations: [
+        { id: 1, name: "Slash", target: "target", items: [
+          { at: 0, type: "sound", se: "hit" },
+          { at: 0, type: "particles", kind: "hit", shape: "burst", count: 12, radius: 44, size: 7, duration: 420 },
+          { at: 4, type: "flash", anchor: "target", color: "#ffffff", opacity: 0.85, duration: 200 },
+        ] },
+        { id: 2, name: "Fire Burst", target: "target", items: [
+          { at: 0, type: "sound", se: "magic" },
+          { at: 0, type: "projectile", color: "#ff9d36", size: 10, duration: 330 },
+          { at: 20, type: "particles", kind: "fire", shape: "burst", count: 18, radius: 54, size: 8, duration: 520 },
+          { at: 22, type: "flash", anchor: "screen", color: "#ff8830", opacity: 0.25, duration: 260 },
+          { at: 22, type: "shake", power: 4, speed: 6, duration: 18 },
+        ] },
+        { id: 3, name: "Healing Light", target: "target", items: [
+          { at: 0, type: "sound", se: "heal" },
+          { at: 0, type: "particles", kind: "heal", shape: "spiral", count: 16, radius: 42, size: 7, duration: 720 },
+          { at: 30, type: "particles", kind: "heal", shape: "ring", count: 14, radius: 48, size: 6, duration: 480 },
+        ] },
+      ],
       actors: [
         { id: 1, name: "Ardan", classId: 1, level: 1, charset: "hero",    weaponId: 1, armorId: 1 },
         { id: 2, name: "Mira",  classId: 2, level: 1, charset: "heroine", weaponId: 3, armorId: 3 },
@@ -1108,10 +1161,10 @@ const DataDefaults = (() => {
           learnings: [{ level: 3, skillId: 4 }] },
       ],
       skills: [
-        { id: 1, name: "Fireball",     icon: 8,  type: "magic", power: 26, mp: 5,  scope: "enemy",   color: "#f07030" },
-        { id: 2, name: "Heal",         icon: 11, type: "heal",  power: 40, mp: 4,  scope: "ally",    color: "#70e090" },
+        { id: 1, name: "Fireball",     icon: 8,  type: "magic", power: 26, mp: 5,  scope: "enemy",   color: "#f07030", animationId: 2 },
+        { id: 2, name: "Heal",         icon: 11, type: "heal",  power: 40, mp: 4,  scope: "ally",    color: "#70e090", animationId: 3 },
         { id: 3, name: "Ice Shard",    icon: 9,  type: "magic", power: 38, mp: 8,  scope: "enemy",   color: "#80c8f0" },
-        { id: 4, name: "Power Strike", icon: 18, type: "phys",  power: 24, mp: 3,  scope: "enemy",   color: "#f0d060" },
+        { id: 4, name: "Power Strike", icon: 18, type: "phys",  power: 24, mp: 3,  scope: "enemy",   color: "#f0d060", animationId: 1 },
         { id: 5, name: "Thunder",      icon: 10, type: "magic", power: 34, mp: 12, scope: "enemies", color: "#e8e870" },
         { id: 6, name: "Group Heal",   icon: 15, type: "heal",  power: 30, mp: 10, scope: "allies",  color: "#70e090" },
         { id: 7, name: "Venom Sting",  icon: 12, type: "phys",  power: 8,  mp: 0,  scope: "enemy",   color: "#a050d8", stateId: 1, stateChance: 65 },

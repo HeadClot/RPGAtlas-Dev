@@ -24,6 +24,8 @@ body { font: 15px/1.5 "Segoe UI", system-ui, sans-serif; color: #f0f2f8; }
 }
 #glcanvas { position: absolute; inset: 0; z-index: 0; image-rendering: pixelated; }
 #gamecanvas { position: absolute; inset: 0; z-index: 1; image-rendering: pixelated; }
+/* map-side battle-animation layer (Phase 5 playAnim): over the canvas, under the UI */
+.map-fx { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
 .uilayer { position: absolute; inset: 0; pointer-events: none; }
 .uilayer > * { pointer-events: auto; }
 .fader {
@@ -506,6 +508,16 @@ body { font: 15px/1.5 "Segoe UI", system-ui, sans-serif; color: #f0f2f8; }
 .fx-number-heal { color: #8ff2ad; }
 .fx-number-state { color: #d8b6ff; font-size: 15px; }
 .fx-number-death { color: #d8deef; font-size: 16px; letter-spacing: 2px; }
+
+/* animation-player extras (Phase 5): flashes keep their inline shape; a
+   flipbook is a visible frame holder (it never runs a Web Animation, so it
+   must not inherit the pool's opacity:0 idle state) */
+.fx-anim-flash { box-shadow: none; }
+.fx-anim-flipbook {
+  opacity: 1; border-radius: 0; background: transparent !important;
+  box-shadow: none !important; image-rendering: pixelated;
+}
+.fx-anim-flipbook canvas { display: block; image-rendering: pixelated; }
 
 @media (prefers-reduced-motion: reduce) {
   .enemy-spr canvas, .actor-spr canvas { animation: none; }
