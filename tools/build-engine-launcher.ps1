@@ -1,9 +1,10 @@
 $ErrorActionPreference = "Stop"
 
-# Builds RPGAtlas.exe into the repo root. Double-clicking it boots the Vite
-# dev server on http://localhost:8080/ and opens the editor. Requires Node.js
-# and an installed node_modules (the editor entry is TypeScript that only
-# Vite can serve).
+# Builds RPGAtlas.exe into the repo root. Double-clicking it opens the editor
+# on http://localhost:8080/ — via the Vite dev server when node_modules is
+# installed (the source editor entry is TypeScript only Vite can serve), or
+# by statically serving the pre-built dist\ folder when it isn't, so a
+# distributed copy needs no Node.js at all.
 
 $root = Split-Path -Parent $PSScriptRoot
 $compiler = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"

@@ -16,9 +16,10 @@
 **RPGAtlas 1.0** is a complete, original, **free and open source** RPG making engine in the spirit of
 classic 2D RPG makers — with a modern **HD-2D renderer** (tilted perspective, dynamic lights and
 shadows, animated water, day/night, weather, full post-processing) layered on top. No copyrighted
-assets, nothing to install for creators or players — everything (code, tiles, sprites, monsters,
+assets, nothing for players to install — everything (code, tiles, sprites, monsters,
 sound effects, even the music) is generated procedurally, imports are welcome when you want them,
-and exported games are single self-contained files.
+and exported games are single self-contained files. Creators need only free
+[Node.js](https://nodejs.org/) to run the editor.
 
 📖 **Documentation:** the [project wiki](wiki/Home.md) — also available as a static
 [docs site](docs-site/index.html) (`docs-site/`, GitHub Pages-ready), including the
@@ -28,26 +29,36 @@ and exported games are single self-contained files.
 
 ## Quick start
 
-**Windows — just double-click `RPGAtlas.exe`.** It starts a tiny local server, opens the editor in your
-browser, and needs no Python, Node, install, or admin rights. Keep the little black window open while you
-work; close it to stop. (Windows may show an "unknown publisher" warning the first time — the launcher is
-unsigned; choose *More info → Run anyway*.)
+**Windows:**
+
+1. Install [Node.js](https://nodejs.org/) 18 or newer (one-time).
+2. Open a terminal in the RPGAtlas folder and run `npm install` (one-time).
+3. **Double-click `RPGAtlas.exe`.** It starts the local dev server and opens the editor in your browser.
+
+Keep the little black window open while you work; close it to stop. (Windows may show an "unknown
+publisher" warning the first time — the launcher is unsigned; choose *More info → Run anyway*.)
+
+The launcher picks the first free port in the **8080–8099** range. Pass `--no-browser` if you don't
+want it to open a browser tab automatically.
 
 Want it on your Desktop? Double-click **`Create Desktop Shortcut.cmd`** once and an RPGAtlas icon appears
 on your Desktop — launch from there any time.
 
-Why a launcher at all? Browsers block `localStorage`/file access on `file://` pages, so the engine has to be
-served over `http://`. The `.exe` does exactly that for you.
+Why a launcher at all? The editor is written in TypeScript, which browsers can't run straight off the
+disk — a dev server (Vite) transpiles and serves it over `http://localhost`. The `.exe` starts that
+server for you.
 
-**Other platforms (or no `.exe`)** — serve the folder yourself and open it:
+**Other platforms (or no `.exe`)** — run the dev server yourself:
 
 ```
 cd RPGAtlas
-python -m http.server 8080
+npm install   # one-time
+npm run dev
 ```
 
-Then open **http://localhost:8080/** — that's the editor. Either way, hit **▶ Playtest** to play your game
-(or open `play.html` directly to play the bundled sample, *Atlas Quest*).
+Then open the **http://localhost:…** address it prints — that's the editor. Either way, hit
+**▶ Playtest** to play your game (or open `play.html` on the same address to play the bundled sample,
+*Atlas Quest*).
 
 > Building the launcher from source: run `tools/build-engine-launcher.ps1` (uses the .NET Framework C#
 > compiler already present on Windows). This produces `RPGAtlas.exe` in the project root.
@@ -97,8 +108,8 @@ database picker or map palette. Custom tile filenames control passability:
 - `bridge.pass.png` is passable.
 - `meadow.terrain.png` is passable and selected as terrain by Auto Layer.
 
-See [`img/README.md`](img/README.md) for formats. The normal `python -m http.server` workflow discovers
-the folders automatically. For hosts without directory listings, run `tools/update-assets.ps1`.
+See [`img/README.md`](img/README.md) for formats. If new files don't show up after a reload, run
+`tools/update-assets.ps1` to write the `img/assets.json` manifest the editor scans.
 Projects save references rather than image copies, and standalone exports embed only referenced files.
 
 Classes, skills, items, weapons, and armors each have a selectable icon. Replace

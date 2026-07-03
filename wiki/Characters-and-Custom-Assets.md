@@ -77,10 +77,8 @@ icons). To reskin all 64 at once, replace `img/system/icon_set.png` with your ow
 
 ## If custom art doesn't show up
 
-The editor discovers your files by scanning the `img` folders. The built-in `RPGAtlas.exe` launcher
-and the normal `python -m http.server` workflow both support that scan automatically. If you're
-hosting the engine somewhere that doesn't provide directory listings and your assets aren't appearing,
-run `tools/update-assets.ps1` to write a manifest the editor can read. More in
-[Troubleshooting & FAQ](Troubleshooting-and-FAQ).
+The editor discovers your files by scanning the `img` folders. If your assets aren't appearing after
+a reload, run `tools/update-assets.ps1` to write a manifest (`img/assets.json`) the editor can read.
+More in [Troubleshooting & FAQ](Troubleshooting-and-FAQ).
 
 **Next:** [Audio →](Audio)

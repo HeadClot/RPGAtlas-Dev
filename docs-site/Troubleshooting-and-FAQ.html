@@ -28,12 +28,18 @@
 <h2 id="starting-up">Starting up</h2>
 <h3 id="nothing-happens-the-editor-wont-load-when-i-double-click-rpgatlasexe">Nothing happens / the editor won't load when I double-click <code>RPGAtlas.exe</code></h3>
 <ul><li>Make sure <code>RPGAtlas.exe</code> is <strong>inside the RPGAtlas folder</strong>, next to <code>index.html</code>. It serves the folder it lives in; moved on its own, it can't find the engine.</li><li>Look at the little black window — it prints the address (usually <code>http://localhost:8080/</code>) and any error. Open that address in your browser manually if a tab didn't pop up.</li></ul>
+<h3 id="rpgatlas-needs-its-one-time-setup-first">"RPGAtlas needs its one-time setup first"</h3>
+<p>The launcher needs the editor's tooling downloaded once. Open a terminal in the RPGAtlas folder (in File Explorer, click the address bar, type <code>cmd</code>, press Enter) and run <code>npm install</code>. When it finishes, double-click <code>RPGAtlas.exe</code> again. See <a href="Installation-and-Setup.html#windows-the-easy-way-recommended">Installation & Setup</a>.</p>
+<h3 id="rpgatlas-could-not-start-nodejs-is-it-installed">"RPGAtlas could not start Node.js (is it installed?)"</h3>
+<p>The launcher needs <a href="https://nodejs.org/">Node.js</a> <strong>18 or newer</strong> on your computer. Install the LTS version from nodejs.org (one-time), then run <code>RPGAtlas.exe</code> again.</p>
 <h3 id="windows-protected-your-pc-unknown-publisher">"Windows protected your PC" / unknown publisher</h3>
 <p>Expected — the launcher is <strong>unsigned</strong>. Click <strong>More info ▸ Run anyway</strong>. It only starts a local server and opens your browser. See <a href="Installation-and-Setup.html#windows-protected-your-pc--unknown-publisher">Installation & Setup</a>.</p>
-<h3 id="could-not-open-a-local-port">"Could not open a local port"</h3>
-<p>Another copy of RPGAtlas (or another program) is using the port. Close other RPGAtlas windows and try again — the launcher tries ports 8080–8099 automatically.</p>
+<h3 id="could-not-find-a-free-local-port-8080-8099">"Could not find a free local port (8080-8099)"</h3>
+<p>Other programs are using all of those ports — usually other copies of RPGAtlas. Close other RPGAtlas windows and try again; the launcher picks the first free port in the 8080–8099 range automatically.</p>
 <h3 id="i-opened-indexhtml-directly-and-its-broken">I opened <code>index.html</code> directly and it's broken</h3>
-<p>Browsers block <code>localStorage</code> and asset scanning on <code>file://</code> pages. You <strong>must</strong> serve the folder — use <code>RPGAtlas.exe</code> (Windows) or <code>python -m http.server 8080</code>. See <a href="Installation-and-Setup.html">Installation & Setup</a>.</p>
+<p>The editor's TypeScript code has to be served by the dev server, and browsers also block <code>localStorage</code> on <code>file://</code> pages. You <strong>must</strong> start RPGAtlas properly — use <code>RPGAtlas.exe</code> (Windows) or <code>npm run dev</code> (any platform). See <a href="Installation-and-Setup.html">Installation & Setup</a>.</p>
+<h3 id="the-browser-opens-on-its-own-and-i-dont-want-it-to">The browser opens on its own and I don't want it to</h3>
+<p>Start the launcher with the <code>--no-browser</code> flag (<code>RPGAtlas.exe --no-browser</code>), then open the printed address yourself.</p>
 <hr>
 <h2 id="my-work">My work</h2>
 <h3 id="where-is-my-project-saved-will-i-lose-it">Where is my project saved? Will I lose it?</h3>
@@ -45,7 +51,7 @@
 <hr>
 <h2 id="maps-assets">Maps & assets</h2>
 <h3 id="my-custom-art-doesnt-appear-in-the-editor">My custom art doesn't appear in the editor</h3>
-<ul><li>Confirm files are in the <strong>correct <code>img</code> subfolder</strong> (<code>characters</code>, <code>facesets</code>, <code>enemies</code>, <code>tilesets</code>, <code>system</code>) and are valid PNG/WebP/JPG. See <a href="Characters-and-Custom-Assets.html">Characters & Custom Assets</a>.</li><li><strong>Reload the editor</strong> after adding files.</li><li>If you're hosting the engine somewhere <strong>without directory listings</strong>, the scan can't see the files — run <code>tools/update-assets.ps1</code> to write a manifest, then reload. (The bundled <code>RPGAtlas.exe</code> and <code>python -m http.server</code> both provide listings, so this is only for unusual hosts.)</li></ul>
+<ul><li>Confirm files are in the <strong>correct <code>img</code> subfolder</strong> (<code>characters</code>, <code>facesets</code>, <code>enemies</code>, <code>tilesets</code>, <code>system</code>) and are valid PNG/WebP/JPG. See <a href="Characters-and-Custom-Assets.html">Characters & Custom Assets</a>.</li><li><strong>Reload the editor</strong> after adding files.</li><li>If the scan still can't see the files, run <code>tools/update-assets.ps1</code> to write a manifest (<code>img/assets.json</code>), then reload. The dev server started by <code>RPGAtlas.exe</code> / <code>npm run dev</code> doesn't provide directory listings, so the manifest is how the editor finds custom art.</li></ul>
 <h3 id="the-player-can-walk-through-a-wall-or-cant-cross-a-bridge">The player can walk through a wall (or can't cross a bridge)</h3>
 <p>Passability comes from the topmost tile, but you can fix any cell directly: switch to <strong>Passability mode</strong> and click the tile to cycle auto → block → pass. For custom tiles, filename suffixes like <code>.pass</code> and <code>.terrain</code> set defaults. See <a href="Maps-and-Tiles.html#passability--where-the-player-can-walk">Maps & Tiles</a>.</p>
 <h3 id="my-hd-2d-map-looks-flat-like-normal-2d">My HD-2D map looks flat / like normal 2D</h3>
