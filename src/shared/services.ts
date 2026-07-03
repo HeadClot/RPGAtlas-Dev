@@ -26,6 +26,51 @@ export interface StorageDriver {
   removeItem(key: string): void;
 }
 
+/** One library asset's metadata (Phase 6). The `key` is THE stable reference
+ *  stored in project documents: "asset:<type>/<name>" — the same convention
+ *  js/assets.js has used for img/-folder externals since Phase 0, so shipped,
+ *  library, and project-embedded sources resolve through one namespace. */
+export interface AssetMeta {
+  /** "asset:<type>/<name>" — stable id, unique across the library. */
+  key: string;
+  type: "characters" | "facesets" | "enemies" | "tilesets" | "audio";
+  /** Slug ([a-z0-9._-]), unique within `type`; suffix conventions
+   *  (".pass"/".terrain" tiles) keep working. */
+  name: string;
+  /** Free-form labels + the reserved "pack:<id>" install tag. */
+  tags: string[];
+  bytes: number;
+  /** SHA-256 hex of the blob — import dedupe + pack idempotency. */
+  hash: string;
+  /** Epoch ms at import. */
+  addedAt: number;
+  /** Blob MIME type (survives stores that strip it, e.g. base64 IPC). */
+  mime?: string;
+  /** Audio role: "bgm" | "bgs" | "me" | "se". */
+  kind?: string;
+  /** Image dimensions. */
+  w?: number;
+  h?: number;
+  /** Audio duration, seconds. */
+  dur?: number;
+  /** Importer payloads (frame tags, source grid, …). */
+  meta?: Record<string, any>;
+}
+
+/** The per-device binary asset library (Phase 6): IndexedDB in the browser
+ *  (src/platform/browser/idb-asset-store.ts), app-data files under the Tauri
+ *  desktop wrapper (src/platform/tauri/fs-asset-store.ts). Async by nature —
+ *  consumers go through src/shared/asset-library.ts, never the store
+ *  directly (mirroring the StorageDriver/repository split above). */
+export interface AssetStore {
+  list(): Promise<AssetMeta[]>;
+  get(key: string): Promise<Blob | null>;
+  put(meta: AssetMeta, blob: Blob): Promise<void>;
+  remove(key: string): Promise<void>;
+  /** Update metadata (tags/kind/meta) without touching the blob. */
+  setMeta(meta: AssetMeta): Promise<void>;
+}
+
 /** The editor's project-document store (today js/editor/project-io.js over
  *  localStorage key "rpgatlas_project" with the legacy "driftwood_project"
  *  read-fallback and formatVersion migration on load). */

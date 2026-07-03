@@ -13,6 +13,11 @@ import {
 import * as host from "../../js/editor/host.js";
 import { isProjectLike, validateProject } from "../shared/schema";
 import { BrowserProjectRepository } from "../platform/browser/project-repository";
+import {
+  consumeEmbeddedAssets,
+  embedUsedAssets,
+  libraryImageEntries,
+} from "../shared/asset-library";
 import { Assets, RA, t, editorState as S, editorHooks } from "./editor-state";
 import { $, h } from "./dom";
 import { modal } from "./modals";
@@ -56,12 +61,15 @@ const projectRepo = new BrowserProjectRepository(
   export async function desktopSave(saveAs?: any) {
     saveNow(); // keep the local autosave as a crash-recovery copy
     try {
+      // Saved FILES carry the used library assets embedded (Phase 6), so a
+      // .json opens complete on another device; autosaves stay blob-free.
+      const bundled = await embedUsedAssets(S.proj);
       if (saveAs || !currentProjectPath) {
-        const path = await host.saveProjectToFile(S.proj); // native Save dialog
+        const path = await host.saveProjectToFile(bundled); // native Save dialog
         if (!path) { flashStatus("Saved locally — file save cancelled"); return; }
         currentProjectPath = path;
       } else {
-        await host.saveProjectToPath(currentProjectPath, S.proj); // silent overwrite
+        await host.saveProjectToPath(currentProjectPath, bundled); // silent overwrite
       }
       flashStatus("Project saved to " + baseName(currentProjectPath));
     } catch (e: any) {
@@ -71,7 +79,7 @@ const projectRepo = new BrowserProjectRepository(
   export async function exportProject() {
     if (host.isTauri) { desktopSave(true); return; } // Export = Save As on desktop
     try {
-      const result = await exportProjectFile(S.proj);
+      const result = await exportProjectFile(await embedUsedAssets(S.proj));
       if (result && result.cancelled) {
         flashStatus("Project export cancelled");
       } else if (result && result.method === "picker") {
@@ -122,8 +130,14 @@ const projectRepo = new BrowserProjectRepository(
         const p = JSON.parse(r.result);
         if (!isProjectLike(p)) throw new Error("Not an RPGAtlas project file.");
         S.proj = validateProject(RA.migrateProject(p), "import");
+        // Embedded assets (Phase 6): intake into this device's library
+        // (hash-deduped), strip from the document, then live-register the
+        // image entries so pickers/tiles see them without a reload.
+        await consumeEmbeddedAssets(S.proj);
         Assets.registerCustomChars(S.proj.customChars);
-        await Assets.loadExternalAssets(S.proj);
+        // registerExternalAssets discovers-if-needed, binds the shipped
+        // catalog AND any just-consumed library entries in one pass.
+        await Assets.registerExternalAssets(libraryImageEntries(), S.proj);
         S.curMapId = S.proj.maps[0].id;
         S.selectedEvent = null;
         S.undoStack.length = 0; S.redoStack.length = 0;
