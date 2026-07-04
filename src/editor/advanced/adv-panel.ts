@@ -34,6 +34,7 @@ import { captureStamp } from "./adv-stamps";
 import { flipBrushH, flipBrushV, rotateBrush } from "./adv-transform";
 import { attachZoneDrawing, cancelZoneDraft } from "./adv-zone-draw";
 import { renderObjectsPanel } from "./adv-objects";
+import { renderAutomapDrawer } from "./adv-automap";
 
 export const ADV_PANEL = "adv";
 
@@ -48,6 +49,7 @@ let railEl: HTMLElement | null = null;
 let objectsEl: HTMLElement | null = null;   // Objects palette body (Stage D)
 let railTabsEl: HTMLElement | null = null;   // Layers / Objects tab strip
 let canvas: HTMLCanvasElement | null = null;
+let automapEl: HTMLElement | null = null;   // Automap drawer body (Stage F)
 let zoomLabel: HTMLElement | null = null;
 let xfmLabel: HTMLElement | null = null;
 let toolBtns: Record<string, HTMLElement> = {};
@@ -71,9 +73,13 @@ function rebuild() {
   rebuildTree();
   rebuildLayers();
   rebuildObjects();
+  rebuildAutomap();
   syncRail();
   rebuildRail();
   renderAdvCanvas();
+}
+function rebuildAutomap() {
+  if (automapEl) renderAutomapDrawer(automapEl);
 }
 function rebuildLayers() {
   if (layersEl) renderLayersList(layersEl);
@@ -128,6 +134,9 @@ function selectMap(id: number) {
   if (S.curMapId !== id) {
     S.curMapId = id;
     S.selectedEvent = null;
+    // A pending automap preview / selected zone belong to the old map.
+    advState.automapPreview = null;
+    advState.selectedZoneId = null;
     rebuildMapList();
     renderMap();
     setStatus();
@@ -274,6 +283,10 @@ function advView(): MapView {
           draft: advState.zoneDraft,
         }
       : undefined,
+    // Automap drawer (Stage F): the pending Preview diff, drawn on top.
+    automapPreview: advState.automapPreview
+      ? advState.automapPreview.map((e) => ({ x: e.x, y: e.y, role: e.role, layerId: e.layerId, tile: e.tile, region: e.region }))
+      : undefined,
   };
 }
 function renderAdvCanvas() {
@@ -303,6 +316,7 @@ export function mountAdvanced(): HTMLElement {
   propsEl = h("div", { class: "adv-layer-props" }) as HTMLElement;
   railEl = h("div", { class: "adv-rail-right" }) as HTMLElement;
   objectsEl = h("div", { class: "adv-objects" }) as HTMLElement;
+  automapEl = h("div", { class: "adv-automap" }) as HTMLElement;
   zoomLabel = h("span", { class: "adv-zoom-label" }, "50%") as HTMLElement;
   xfmLabel = h("span", { class: "adv-xfm-label", title: t("Brush transform (X flip / Y flip / R rotate)") }, "—") as HTMLElement;
   const treeHead = h("div", { class: "adv-section-head" },
@@ -379,6 +393,8 @@ export function mountAdvanced(): HTMLElement {
     h("div", { class: "adv-center" },
       toolStrip,
       h("div", { class: "adv-canvas-wrap" }, canvas),
+      // Automap Rules — a collapsible bottom drawer (Stage F, mockup 3).
+      automapEl,
     ),
     railEl,
   ) as HTMLElement;
@@ -399,6 +415,7 @@ export function mountAdvanced(): HTMLElement {
   // the panel is showing (no-op while hidden or when nothing animates).
   registerAnimRedraw(() => { if (isShowing()) renderAdvCanvas(); });
   advHooks.rebuildRail = rebuildRail;
+  advHooks.rebuildAutomap = rebuildAutomap;
 
   // Catch "shown while dirty" (the dock displays the tab after edits landed
   // while it was hidden) — same job worldDirty's debounce does when visible.

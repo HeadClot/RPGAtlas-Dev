@@ -1178,3 +1178,38 @@ a.console-link:hover { text-decoration: underline; color: var(--text-bright); }
 .adv-prop-kv { display: flex; align-items: center; gap: 4px; }
 .adv-prop-key { flex: 0 0 70px; font-size: var(--fs-small); color: var(--text-mid);
   overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- Automap Rules drawer (Phase 8 Stage F) ---- */
+.adv-automap { flex: 0 0 auto; border-top: 1px solid var(--line-2); background: var(--panel);
+  display: flex; flex-direction: column; min-height: 0; }
+.adv-automap.open { max-height: 45%; }
+.adv-automap-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+  background: var(--bar-1); border-bottom: 1px solid var(--line-2); flex: 0 0 auto; }
+.adv-am-toggle { background: none; border: none; color: var(--text-hi); cursor: pointer;
+  font-weight: 600; font-size: var(--fs-small); padding: 2px 4px; }
+.adv-am-toggle:hover { color: var(--accent); }
+.adv-am-spacer { flex: 1; }
+.adv-am-preview-note { font-size: var(--fs-tiny); color: #7be29a; padding: 0 4px; }
+.adv-am-applybtn { padding: 3px 10px; cursor: pointer; border: 1px solid var(--accent);
+  border-radius: 5px; background: var(--accent); color: #fff; font-weight: 600; font-size: var(--fs-small); }
+.adv-am-applybtn:hover { filter: brightness(1.12); }
+.adv-automap-body { overflow: auto; padding: 6px 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.adv-am-hint { font-size: var(--fs-small); line-height: 1.35; margin: 0; }
+.adv-am-addrule, .adv-am-add { align-self: flex-start; cursor: pointer; font-size: var(--fs-small);
+  padding: 2px 8px; border: 1px dashed var(--line-2); border-radius: 5px; background: var(--bar-2); color: var(--text-hi); }
+.adv-am-addrule:hover, .adv-am-add:hover { border-color: var(--accent); color: var(--accent); }
+.adv-am-rule { border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 6px; background: var(--bar-1); }
+.adv-am-rule.disabled { opacity: 0.55; }
+.adv-am-rulehead { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+.adv-am-rulename { flex: 1; min-width: 60px; }
+.adv-am-rulebody { display: flex; flex-direction: column; gap: 3px; }
+.adv-am-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.adv-am-conj { flex: 0 0 34px; font-size: var(--fs-tiny); font-weight: 700; color: var(--text-mid);
+  text-align: right; letter-spacing: 0.04em; }
+.adv-am-kind { flex: 0 0 auto; }
+.adv-am-lbl { font-size: var(--fs-tiny); color: var(--text-mid); }
+.adv-am-radius, .adv-am-region, .adv-am-prob { width: 48px; }
+.adv-am-tilefield { display: inline-flex; align-items: center; gap: 3px; }
+.adv-am-tileval { font-size: var(--fs-tiny); color: var(--text-hi); max-width: 96px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adv-am-terrsel { max-width: 120px; }

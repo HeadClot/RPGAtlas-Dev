@@ -5,6 +5,19 @@
 export const PATCH_NOTES = [
   {
     date: "July 4, 2026",
+    title: "Advanced Map Editor — automap rules",
+    summary:
+      "The Advanced tab gets a bottom Automap drawer: write simple IF/THEN rules that reshape your map with one click, no scripting. Say “IF this tile is grass AND it's next to water, THEN scatter reeds 35% of the time” and the editor fills in the detail for you. Press Preview to see exactly what will change (highlighted right on the map), then Apply — and it all undoes in a single step. Rules are an editor tool only; they're saved with the map but never run in the finished game, so exports are byte-for-byte the same.",
+    items: [
+      "Build a rule from plain conditions — terrain is / tile is / near / not near / region is / passable — all ANDed together, and actions that place a tile, drop a saved stamp, or set a region.",
+      "Pick terrains and tiles straight from the palette (🎯) or from your terrain brushes; choose the layer, radius, and a percentage chance for scatter.",
+      "Preview paints the pending changes as a green (tiles) / magenta (regions) overlay so you see the result before committing; Apply writes them as one undoable step.",
+      "Every rule has an on/off switch and a 🎲 to reshuffle its random scatter; the same seed always previews and applies identically.",
+      "Reach it from the Advanced panel's Automap drawer or the command palette (Automap Rules, Preview, Apply).",
+    ],
+  },
+  {
+    date: "July 4, 2026",
     title: "Terrain & Autotile Studio",
     summary:
       "Turn any tile sheet into a smart terrain brush with a five-step wizard (open it from the Advanced tab or the command palette). Pick your sheet, let the Studio guess how it's laid out, name the terrain, and paint — the tiles automatically pick the right edge, corner, and inside pieces for you. Water and lava can animate, and you can add extra sheets so the ground looks less repetitive. Old projects that don't use it are saved exactly as before.",
