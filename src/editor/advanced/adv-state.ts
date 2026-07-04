@@ -16,13 +16,19 @@
    editorHooks). Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { AdvLayer, Stamp } from "../../shared/schema";
+import type { AdvLayer, Stamp, ZoneShape } from "../../shared/schema";
 import { classicStack, repairLayersAdv, nextLayerId, type CoreRole } from "../../shared/layer-view";
 import type { TileFlags } from "../../shared/tile-flags";
 
 export type AdvTool = "pen" | "erase" | "fill" | "rect";
 /** Which right-rail tab the Advanced panel shows. */
 export type AdvRailTab = "tiles" | "stamps";
+/** Left/mode rail: paint the tile stack, or place/edit gameplay zones. */
+export type AdvRail = "layers" | "objects";
+/** Zone drawing tools (Objects mode, Phase 8 Stage D). "select" edits the
+ *  selected zone (drag vertices / move); the shape tools draw a new zone. */
+export type ZoneTool = "select" | "rect" | "ellipse" | "poly" | "point";
+export type ZoneKind = import("../../shared/schema").MapZone["kind"];
 
 export const advState = {
   zoom: 0.5,
@@ -44,6 +50,18 @@ export const advState = {
   stampRandom: false,
   /** Bumped each scatter click so repeated clicks fill different cells. */
   scatterSalt: 0,
+  // ---- Objects mode (Phase 8 Stage D) ----
+  rail: "layers" as AdvRail,
+  zoneTool: "rect" as ZoneTool,
+  /** the kind a freshly drawn zone gets. */
+  activeKind: "encounter" as ZoneKind,
+  selectedZoneId: null as number | null,
+  /** in-progress shape while drawing (rect drag, poly points). */
+  zoneDraft: null as ZoneShape | null,
+  /** poly-in-progress vertex list (committed on double-click / Enter). */
+  polyPts: null as { x: number; y: number }[] | null,
+  /** vertex being dragged in select mode: index into the zone's vertices. */
+  vertexDrag: null as { zoneId: number; index: number } | null,
 };
 
 /** Panel refresh callbacks, bound on mount so the Layers/paint modules can
@@ -51,6 +69,7 @@ export const advState = {
 export const advHooks = {
   render: () => {},        // redraw only the canvas (live paint feedback)
   rebuildLayers: () => {}, // rebuild the Layers list
+  rebuildObjects: () => {}, // rebuild the Objects palette / inspector
   rebuild: () => {},       // full panel rebuild (tree + layers + canvas)
   rebuildRail: (() => {}) as () => void, // rebuild the right rail (tiles / stamps)
 };

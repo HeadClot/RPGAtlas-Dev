@@ -58,6 +58,13 @@ const CURATED_KEYS = [
   "Capture Selection", "Place Stamp", "Scatter %",
   "No stamps yet — select an area in the Map editor, then Capture Selection.",
   "Brush transform (X flip / Y flip / R rotate)",
+  // Advanced Map Editor — Objects & gameplay zones (Phase 8 Stage D, adv-objects.ts)
+  "New zone kind", "Zones", "Zone name", "Kind", "Delete Zone",
+  "Encounter", "Transfer", "Sound", "Weather", "Spawn Point", "Navigation", "Custom",
+  "Select / Edit", "Rectangle Zone", "Ellipse Zone", "Polygon Zone", "Point Zone",
+  "Encounter rate", "Troops", "Test Encounter in This Area", "Destination", "Facing",
+  "Pick Destination", "Keep facing", "Down", "Left", "Right", "Up",
+  "Audio key", "Volume", "Falloff", "None", "Linear (by distance)", "Power",
 ];
 
 /** Command labels that are dynamic composites or deliberately English-only
