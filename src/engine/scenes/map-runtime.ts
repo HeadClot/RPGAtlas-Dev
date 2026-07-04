@@ -16,6 +16,7 @@
 import { Assets, Music, RA } from "../../shared/deps.js";
 import { Renderer } from "../../renderer/index.js";
 import { drawLayerCell } from "../../shared/autotile-draw.js";
+import { composeAdvBuffers } from "../../shared/layer-composite.js";
 import { syncAutotileRegistry } from "../../shared/autotile-load.js";
 import { clamp, rnd, compareVariable, sysSe } from "../util.js";
 import { ctx, fns } from "../state/engine-context.js";
@@ -156,14 +157,22 @@ async function prerenderMap(): Promise<void> {
     ug = ctx.upperBuf.getContext("2d");
   lg.fillStyle = "#101018";
   lg.fillRect(0, 0, ctx.lowerBuf.width, ctx.lowerBuf.height);
-  const m = ctx.map, gr = m.layers.ground, dc = m.layers.decor, d2 = m.layers.decor2, ov = m.layers.over;
-  for (let y = 0; y < m.height; y++) {
-    for (let x = 0; x < m.width; x++) {
-      drawLayerCell(lg, gr, m.width, m.height, x, y, x * TILE, y * TILE, TILE, Assets.drawTile);
-      drawLayerCell(lg, dc, m.width, m.height, x, y, x * TILE, y * TILE, TILE, Assets.drawTile);
-      drawLayerCell(lg, d2, m.width, m.height, x, y, x * TILE, y * TILE, TILE, Assets.drawTile);
-      drawLayerCell(ug, ov, m.width, m.height, x, y, x * TILE, y * TILE, TILE, Assets.drawTile);
+  const m = ctx.map;
+  // Classic maps (no layersAdv) run the verbatim four-array composite the
+  // renderer goldens protect. A generalized stack folds into the same two
+  // buffers via the shared composite (below → lower, above → upper).
+  if (!m.layersAdv) {
+    const gr = m.layers.ground, dc = m.layers.decor, d2 = m.layers.decor2, ov = m.layers.over;
+    for (let y = 0; y < m.height; y++) {
+      for (let x = 0; x < m.width; x++) {
+        drawLayerCell(lg, gr, m.width, m.height, x, y, x * TILE, y * TILE, TILE, Assets.drawTile);
+        drawLayerCell(lg, dc, m.width, m.height, x, y, x * TILE, y * TILE, TILE, Assets.drawTile);
+        drawLayerCell(lg, d2, m.width, m.height, x, y, x * TILE, y * TILE, TILE, Assets.drawTile);
+        drawLayerCell(ug, ov, m.width, m.height, x, y, x * TILE, y * TILE, TILE, Assets.drawTile);
+      }
     }
+  } else {
+    composeAdvBuffers(lg, ug, m, Assets.drawTile, TILE);
   }
   // quadrant shadows (drawn into the lower buffer, under characters)
   if (ctx.map.shadows) {

@@ -1,47 +1,45 @@
 /* RPGAtlas — src/editor/advanced/adv-panel.ts
-   The Advanced Map Editor dock panel (Phase 8 Stage A: the shell).
+   The Advanced Map Editor dock panel (Phase 8).
 
    A second, Tiled-class view over the SAME map document as the classic Map
    panel: everything painted in either view is visible in the other, and every
-   mutation goes through the same seams (touch(), pushUndo, edit-scope). This
-   stage ships the skeleton — left rail with the Map Tree (proj.mapFolders
-   folders, drag a map onto a folder to file it) and the Layers list rendering
-   the pure layer-view model read-only (plus the Events / Collision pseudo-
-   layers, which are mode switches, not stored layers) — and a center canvas
-   driven by the shared render core (renderMapView) under the panel's own
-   view-state (advState: zoom only, for now). Stage B makes the layer stack
-   editable; Stages C–F add the Studio, zones, stamps, and automapping.
+   mutation goes through the same seams (touch(), pushUndo). Stage A shipped the
+   shell (Map Tree, a read-only Layers list, a zoom-only canvas). Stage B makes
+   the layer stack fully editable — add/rename/reorder/group tile layers, toggle
+   visibility/lock, set opacity/blend/tint — and paints the ACTIVE layer on the
+   panel's own canvas (pen / erase / fill / rect, routed to any core or tile
+   layer). Stages C–F add the Studio, zones, stamps, and automapping.
 
-   Rebuild discipline mirrors the World View: advDirty() is wired into
-   touch(), debounced, and skipped while the panel is hidden; a ResizeObserver
-   catches the "shown while dirty" case.
+   Rebuild discipline mirrors the World View: advDirty() is wired into touch(),
+   debounced, and skipped while the panel is hidden; a ResizeObserver catches
+   the "shown while dirty" case.
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { editorState as S, curMap, t, LAYER_LABELS } from "../editor-state";
+import { editorState as S, curMap, t } from "../editor-state";
 import { h } from "../dom";
 import { modal } from "../modals";
 import { touch } from "../persistence";
 import { renderMap, renderMapView, type MapView } from "../map-editor/map-render";
 import { rebuildMapList } from "../map-editor/map-list";
 import { setStatus } from "../map-editor/status";
-import { layerView, type LayerViewEntry } from "../../shared/layer-view";
 import type { MapFolder } from "../../shared/schema";
+import { advState, advHooks, type AdvTool } from "./adv-state";
+import { attachAdvPainting } from "./adv-paint";
+import { buildLayersToolbar, renderLayersList, renderLayerProps } from "./adv-layers";
 
 export const ADV_PANEL = "adv";
 
-// ---- the panel's own view-state (NOT shared with S's map view) ----
-const advState = {
-  zoom: 0.5,
-};
 const ADV_ZOOMS = [0.25, 1 / 3, 0.5, 2 / 3, 0.75, 1, 1.5, 2];
 
 // ---- panel DOM ----
 let root: HTMLElement | null = null;
 let treeEl: HTMLElement | null = null;
 let layersEl: HTMLElement | null = null;
+let propsEl: HTMLElement | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let zoomLabel: HTMLElement | null = null;
+let toolBtns: Record<string, HTMLElement> = {};
 const openFolders = new Set<number>();
 
 // ============================ dirty / rebuild ============================
@@ -62,6 +60,10 @@ function rebuild() {
   rebuildTree();
   rebuildLayers();
   renderAdvCanvas();
+}
+function rebuildLayers() {
+  if (layersEl) renderLayersList(layersEl);
+  if (propsEl) renderLayerProps(propsEl);
 }
 
 // ============================ map tree ============================
@@ -201,47 +203,15 @@ function rebuildTree() {
   }
 }
 
-// ============================ layers list ============================
-function layerRow(e: LayerViewEntry): HTMLElement {
-  const label = e.role ? t(LAYER_LABELS[e.role]) : e.name;
-  const badges: HTMLElement[] = [];
-  if (e.opacity < 1) badges.push(h("span", { class: "adv-layer-badge" }, Math.round(e.opacity * 100) + "%") as HTMLElement);
-  if (e.blend !== "normal") badges.push(h("span", { class: "adv-layer-badge" }, e.blend) as HTMLElement);
-  return h("div", {
-    class: "adv-layer-row" + (e.visible ? "" : " adv-layer-hidden"),
-    style: "padding-left:" + (8 + e.path.length * 14) + "px",
-  },
-    h("span", { class: "adv-layer-eye" }, e.visible ? "👁" : "—"),
-    h("span", { class: "adv-layer-name" }, label),
-    ...badges,
-    e.locked ? h("span", { class: "adv-layer-badge" }, "🔒") : null,
-  ) as HTMLElement;
-}
-function pseudoRow(label: string, icon: string): HTMLElement {
-  return h("div", { class: "adv-layer-row adv-layer-pseudo" },
-    h("span", { class: "adv-layer-eye" }, icon),
-    h("span", { class: "adv-layer-name" }, label),
-  ) as HTMLElement;
-}
-function rebuildLayers() {
-  if (!layersEl) return;
-  layersEl.innerHTML = "";
-  const m = curMap();
-  if (!m) return;
-  // pseudo-layers on top: mode switches, not stored layers (spec, mockup 1)
-  layersEl.appendChild(pseudoRow(t("Events"), "◆"));
-  layersEl.appendChild(pseudoRow(t("Collision"), "⛨"));
-  // stack rendered top-most first
-  for (const e of [...layerView(m)].reverse()) layersEl.appendChild(layerRow(e));
-}
-
 // ============================ canvas ============================
 function advView(): MapView {
   return {
-    zoom: advState.zoom, mode: "map", layer: "auto", tool: "pen",
-    selection: null, hoverCell: null, hoverQuad: 0, rectStart: null,
-    painting: false, pasteMode: null, clipTiles: null, selectedEvent: null,
+    zoom: advState.zoom, mode: "map", layer: "auto", tool: advState.tool,
+    selection: null, hoverCell: advState.hoverCell, hoverQuad: 0,
+    rectStart: advState.rectStart, painting: advState.painting,
+    pasteMode: null, clipTiles: null, selectedEvent: null,
     system: S.proj.system,
+    activeLayerId: advState.activeLayerId ?? undefined,
   };
 }
 function renderAdvCanvas() {
@@ -258,12 +228,17 @@ function stepZoom(dir: number) {
   advState.zoom = ADV_ZOOMS[ni];
   renderAdvCanvas();
 }
+function setTool(tool: AdvTool) {
+  advState.tool = tool;
+  for (const [k, b] of Object.entries(toolBtns)) b.classList.toggle("sel", k === tool);
+}
 
 // ============================ mount ============================
 export function mountAdvanced(): HTMLElement {
   canvas = h("canvas", { class: "adv-canvas" }) as HTMLCanvasElement;
   treeEl = h("div", { class: "adv-tree" }) as HTMLElement;
   layersEl = h("div", { class: "adv-layers" }) as HTMLElement;
+  propsEl = h("div", { class: "adv-layer-props" }) as HTMLElement;
   zoomLabel = h("span", { class: "adv-zoom-label" }, "50%") as HTMLElement;
   const treeHead = h("div", { class: "adv-section-head" },
     h("span", null, t("Map Tree")),
@@ -279,22 +254,50 @@ export function mountAdvanced(): HTMLElement {
     } }, "＋"),
   ) as HTMLElement;
   dropTarget(treeHead, undefined); // drop on the header = move to root
+
+  const tools: [AdvTool, string, string][] = [
+    ["pen", "✏", t("Pen")], ["erase", "⌫", t("Eraser")],
+    ["fill", "🪣", t("Fill")], ["rect", "▭", t("Rectangle")],
+  ];
+  toolBtns = {};
+  const toolStrip = h("div", { class: "adv-toolstrip" },
+    ...tools.map(([id, icon, title]) => {
+      const b = h("button", {
+        class: "adv-mini-btn" + (advState.tool === id ? " sel" : ""),
+        title, onclick: () => setTool(id),
+      }, icon) as HTMLElement;
+      toolBtns[id] = b;
+      return b;
+    }),
+    h("span", { class: "adv-tool-sep" }),
+    h("button", { class: "adv-mini-btn", title: t("Zoom Out"), onclick: () => stepZoom(-1) }, "−"),
+    zoomLabel,
+    h("button", { class: "adv-mini-btn", title: t("Zoom In"), onclick: () => stepZoom(1) }, "＋"),
+  ) as HTMLElement;
+
   root = h("div", { class: "adv-root dock-panel-content" },
     h("div", { class: "adv-rail" },
       treeHead,
       treeEl,
-      h("div", { class: "adv-section-head" }, h("span", null, t("Layers"))),
+      h("div", { class: "adv-section-head" },
+        h("span", null, t("Layers")),
+      ),
+      buildLayersToolbar(),
       layersEl,
+      propsEl,
     ),
     h("div", { class: "adv-center" },
-      h("div", { class: "adv-toolstrip" },
-        h("button", { class: "adv-mini-btn", title: t("Zoom Out"), onclick: () => stepZoom(-1) }, "−"),
-        zoomLabel,
-        h("button", { class: "adv-mini-btn", title: t("Zoom In"), onclick: () => stepZoom(1) }, "＋"),
-      ),
+      toolStrip,
       h("div", { class: "adv-canvas-wrap" }, canvas),
     ),
   ) as HTMLElement;
+
+  attachAdvPainting(canvas);
+  // Bind the refresh hooks the Layers / paint modules call (cycle-safe).
+  advHooks.render = renderAdvCanvas;
+  advHooks.rebuildLayers = rebuildLayers;
+  advHooks.rebuild = rebuild;
+
   // Catch "shown while dirty" (the dock displays the tab after edits landed
   // while it was hidden) — same job worldDirty's debounce does when visible.
   new ResizeObserver(() => { if (dirty && isShowing()) rebuild(); }).observe(root);

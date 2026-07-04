@@ -146,6 +146,27 @@ export function repairLayersAdv(layers: AdvLayer[] | undefined | null): {
 
 const BLENDS: BlendMode[] = ["normal", "add", "multiply", "screen"];
 
+/** Blend mode → Canvas2D globalCompositeOperation. The composite buffers the
+ *  HD-2D renderer consumes are built in 2D, so this one table drives blend in
+ *  the editor canvas, the live HD-2D viewport, and the engine's prerenderMap. */
+export const BLEND_COMPOSITE: Record<BlendMode, string> = {
+  normal: "source-over",
+  add: "lighter",
+  multiply: "multiply",
+  screen: "screen",
+};
+
+/** The flat tile-id array a flattened entry draws from: the referenced role
+ *  array for cores, the layer's own `data` for tile layers, null otherwise. */
+export function entryArray(
+  m: { layers: Record<CoreRole, number[]> },
+  e: LayerViewEntry,
+): number[] | null {
+  if (e.role) return m.layers[e.role];
+  if (e.data) return e.data;
+  return null;
+}
+
 /** Flatten a (repaired) stack into render-ready entries, resolving group
  *  inheritance. Pure; does not read tile data. */
 export function flattenLayers(layers: AdvLayer[]): LayerViewEntry[] {

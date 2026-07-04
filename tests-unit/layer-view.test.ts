@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import type { AdvLayer } from "../src/shared/schema";
 import {
   CORE_ROLES, classicStack, repairLayersAdv, flattenLayers, layerView,
-  shadowIndex, nextLayerId, type CoreRole,
+  shadowIndex, nextLayerId, entryArray, BLEND_COMPOSITE, type CoreRole,
 } from "../src/shared/layer-view";
 
 const core = (role: CoreRole, id = 0) =>
@@ -125,6 +125,34 @@ describe("shadowIndex", () => {
   it("with no above layers shadows draw last", () => {
     const flat = flattenLayers([core("ground", 1)]);
     expect(shadowIndex(flat)).toBe(1);
+  });
+});
+
+describe("entryArray", () => {
+  it("resolves cores to their role array and tile layers to their own data", () => {
+    const m = {
+      layers: { ground: [1], decor: [2], decor2: [3], over: [4] },
+      layersAdv: [
+        { id: 1, name: "ground", type: "core", role: "ground" },
+        { id: 5, name: "Mist", type: "tile", data: [9] },
+        { id: 2, name: "decor", type: "core", role: "decor" },
+        { id: 3, name: "decor2", type: "core", role: "decor2" },
+        { id: 4, name: "over", type: "core", role: "over" },
+      ] as AdvLayer[],
+    };
+    const view = layerView(m);
+    const ground = view.find((e) => e.role === "ground")!;
+    const mist = view.find((e) => e.id === 5)!;
+    expect(entryArray(m, ground)).toBe(m.layers.ground);
+    expect(entryArray(m, mist)).toEqual([9]);
+  });
+});
+
+describe("BLEND_COMPOSITE", () => {
+  it("maps every blend mode to a Canvas2D composite op", () => {
+    expect(BLEND_COMPOSITE).toEqual({
+      normal: "source-over", add: "lighter", multiply: "multiply", screen: "screen",
+    });
   });
 });
 

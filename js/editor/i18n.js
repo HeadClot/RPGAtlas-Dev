@@ -57,6 +57,7 @@ const SHARED = {
       "Advanced": "Avanzado", "Advanced Map Editor": "Editor de mapas avanzado",
       "Map Tree": "Árbol de mapas", "Layers": "Capas", "Events": "Eventos", "Collision": "Colisión",
       "New Folder…": "Nueva carpeta…", "Rename…": "Renombrar…", "Folder name": "Nombre de la carpeta",
+      "Add Layer": "Añadir capa", "Add Group": "Añadir grupo", "Group Layer": "Agrupar capa", "Ungroup": "Desagrupar", "Move Up": "Subir", "Move Down": "Bajar", "Delete Layer": "Eliminar capa", "Layer name": "Nombre de la capa", "Group": "Grupo", "Toggle Visibility": "Alternar visibilidad", "Toggle Lock": "Alternar bloqueo", "Opacity": "Opacidad", "Blend": "Fusión", "Tint": "Tinte", "Clear Tint": "Quitar tinte", "Draw slot": "Franja de dibujo", "Below characters": "Debajo de los personajes", "Above (overhead)": "Encima (superior)",
       "Focus Next Panel": "Enfocar siguiente panel", "Reset Panel Layout": "Restablecer disposición",
       "Save Layout As…": "Guardar disposición como…", "Saved Layouts…": "Disposiciones guardadas…",
       // Tools menu
@@ -132,6 +133,7 @@ const SHARED = {
       "Advanced": "Avancé", "Advanced Map Editor": "Éditeur de cartes avancé",
       "Map Tree": "Arborescence des cartes", "Layers": "Calques", "Events": "Événements", "Collision": "Collision",
       "New Folder…": "Nouveau dossier…", "Rename…": "Renommer…", "Folder name": "Nom du dossier",
+      "Add Layer": "Ajouter un calque", "Add Group": "Ajouter un groupe", "Group Layer": "Grouper le calque", "Ungroup": "Dégrouper", "Move Up": "Monter", "Move Down": "Descendre", "Delete Layer": "Supprimer le calque", "Layer name": "Nom du calque", "Group": "Groupe", "Toggle Visibility": "Basculer la visibilité", "Toggle Lock": "Basculer le verrouillage", "Opacity": "Opacité", "Blend": "Fusion", "Tint": "Teinte", "Clear Tint": "Effacer la teinte", "Draw slot": "Position de dessin", "Below characters": "Sous les personnages", "Above (overhead)": "Au-dessus (surface)",
       "Focus Next Panel": "Panneau suivant", "Reset Panel Layout": "Réinitialiser la disposition",
       "Save Layout As…": "Enregistrer la disposition sous…", "Saved Layouts…": "Dispositions enregistrées…",
       // Tools menu
@@ -207,6 +209,7 @@ const SHARED = {
       "Advanced": "Erweitert", "Advanced Map Editor": "Erweiterter Karteneditor",
       "Map Tree": "Kartenbaum", "Layers": "Ebenen", "Events": "Ereignisse", "Collision": "Kollision",
       "New Folder…": "Neuer Ordner…", "Rename…": "Umbenennen…", "Folder name": "Ordnername",
+      "Add Layer": "Ebene hinzufügen", "Add Group": "Gruppe hinzufügen", "Group Layer": "Ebene gruppieren", "Ungroup": "Gruppierung aufheben", "Move Up": "Nach oben", "Move Down": "Nach unten", "Delete Layer": "Ebene löschen", "Layer name": "Ebenenname", "Group": "Gruppe", "Toggle Visibility": "Sichtbarkeit umschalten", "Toggle Lock": "Sperre umschalten", "Opacity": "Deckkraft", "Blend": "Mischmodus", "Tint": "Farbton", "Clear Tint": "Farbton entfernen", "Draw slot": "Zeichenebene", "Below characters": "Unter Figuren", "Above (overhead)": "Darüber (Overhead)",
       "Focus Next Panel": "Nächstes Panel fokussieren", "Reset Panel Layout": "Panel-Layout zurücksetzen",
       "Save Layout As…": "Layout speichern unter…", "Saved Layouts…": "Gespeicherte Layouts…",
       // Tools menu
@@ -282,6 +285,7 @@ const SHARED = {
       "Advanced": "高度", "Advanced Map Editor": "高度なマップエディター",
       "Map Tree": "マップツリー", "Layers": "レイヤー", "Events": "イベント", "Collision": "コリジョン",
       "New Folder…": "新しいフォルダー…", "Rename…": "名前を変更…", "Folder name": "フォルダー名",
+      "Add Layer": "レイヤーを追加", "Add Group": "グループを追加", "Group Layer": "レイヤーをグループ化", "Ungroup": "グループ解除", "Move Up": "上へ", "Move Down": "下へ", "Delete Layer": "レイヤーを削除", "Layer name": "レイヤー名", "Group": "グループ", "Toggle Visibility": "表示を切り替え", "Toggle Lock": "ロックを切り替え", "Opacity": "不透明度", "Blend": "合成モード", "Tint": "色合い", "Clear Tint": "色合いをクリア", "Draw slot": "描画スロット", "Below characters": "キャラクターの下", "Above (overhead)": "上（オーバーヘッド）",
       "Focus Next Panel": "次のパネルにフォーカス", "Reset Panel Layout": "パネル配置をリセット",
       "Save Layout As…": "配置に名前を付けて保存…", "Saved Layouts…": "保存した配置…",
       // Tools menu
@@ -357,6 +361,7 @@ const SHARED = {
       "Advanced": "進階", "Advanced Map Editor": "進階地圖編輯器",
       "Map Tree": "地圖樹", "Layers": "圖層", "Events": "事件", "Collision": "碰撞",
       "New Folder…": "新增資料夾…", "Rename…": "重新命名…", "Folder name": "資料夾名稱",
+      "Add Layer": "新增圖層", "Add Group": "新增群組", "Group Layer": "群組化圖層", "Ungroup": "取消群組", "Move Up": "上移", "Move Down": "下移", "Delete Layer": "刪除圖層", "Layer name": "圖層名稱", "Group": "群組", "Toggle Visibility": "切換可見性", "Toggle Lock": "切換鎖定", "Opacity": "不透明度", "Blend": "混合模式", "Tint": "色調", "Clear Tint": "清除色調", "Draw slot": "繪製層級", "Below characters": "角色下方", "Above (overhead)": "上方（頂層）",
       "Focus Next Panel": "聚焦下一個面板", "Reset Panel Layout": "重設面板配置",
       "Save Layout As…": "另存配置…", "Saved Layouts…": "已儲存的配置…",
       // Tools menu
@@ -432,6 +437,7 @@ const SHARED = {
       "Advanced": "高级", "Advanced Map Editor": "高级地图编辑器",
       "Map Tree": "地图树", "Layers": "图层", "Events": "事件", "Collision": "碰撞",
       "New Folder…": "新建文件夹…", "Rename…": "重命名…", "Folder name": "文件夹名称",
+      "Add Layer": "新增图层", "Add Group": "新增分组", "Group Layer": "分组图层", "Ungroup": "取消分组", "Move Up": "上移", "Move Down": "下移", "Delete Layer": "删除图层", "Layer name": "图层名称", "Group": "分组", "Toggle Visibility": "切换可见性", "Toggle Lock": "切换锁定", "Opacity": "不透明度", "Blend": "混合模式", "Tint": "色调", "Clear Tint": "清除色调", "Draw slot": "绘制层级", "Below characters": "角色下方", "Above (overhead)": "上方（顶层）",
       "Focus Next Panel": "聚焦下一个面板", "Reset Panel Layout": "重置面板布局",
       "Save Layout As…": "布局另存为…", "Saved Layouts…": "已保存的布局…",
       // Tools menu
@@ -507,6 +513,7 @@ const SHARED = {
       "Advanced": "Avançado", "Advanced Map Editor": "Editor de mapas avançado",
       "Map Tree": "Árvore de mapas", "Layers": "Camadas", "Events": "Eventos", "Collision": "Colisão",
       "New Folder…": "Nova pasta…", "Rename…": "Renomear…", "Folder name": "Nome da pasta",
+      "Add Layer": "Adicionar camada", "Add Group": "Adicionar grupo", "Group Layer": "Agrupar camada", "Ungroup": "Desagrupar", "Move Up": "Mover para cima", "Move Down": "Mover para baixo", "Delete Layer": "Excluir camada", "Layer name": "Nome da camada", "Group": "Grupo", "Toggle Visibility": "Alternar visibilidade", "Toggle Lock": "Alternar bloqueio", "Opacity": "Opacidade", "Blend": "Mesclagem", "Tint": "Tonalidade", "Clear Tint": "Limpar tonalidade", "Draw slot": "Faixa de desenho", "Below characters": "Abaixo dos personagens", "Above (overhead)": "Acima (superior)",
       "Focus Next Panel": "Focar no próximo painel", "Reset Panel Layout": "Redefinir disposição dos painéis",
       "Save Layout As…": "Salvar disposição como…", "Saved Layouts…": "Disposições salvas…",
       // Tools menu
@@ -582,6 +589,7 @@ const SHARED = {
       "Advanced": "고급", "Advanced Map Editor": "고급 맵 에디터",
       "Map Tree": "맵 트리", "Layers": "레이어", "Events": "이벤트", "Collision": "충돌",
       "New Folder…": "새 폴더…", "Rename…": "이름 바꾸기…", "Folder name": "폴더 이름",
+      "Add Layer": "레이어 추가", "Add Group": "그룹 추가", "Group Layer": "레이어 그룹화", "Ungroup": "그룹 해제", "Move Up": "위로", "Move Down": "아래로", "Delete Layer": "레이어 삭제", "Layer name": "레이어 이름", "Group": "그룹", "Toggle Visibility": "표시 전환", "Toggle Lock": "잠금 전환", "Opacity": "불투명도", "Blend": "블렌드", "Tint": "색조", "Clear Tint": "색조 지우기", "Draw slot": "그리기 슬롯", "Below characters": "캐릭터 아래", "Above (overhead)": "위 (오버헤드)",
       "Focus Next Panel": "다음 패널로 포커스", "Reset Panel Layout": "패널 배치 초기화",
       "Save Layout As…": "배치를 다른 이름으로 저장…", "Saved Layouts…": "저장된 배치…",
       // Tools menu
@@ -657,6 +665,7 @@ const SHARED = {
       "Advanced": "Avanzato", "Advanced Map Editor": "Editor mappe avanzato",
       "Map Tree": "Albero delle mappe", "Layers": "Livelli", "Events": "Eventi", "Collision": "Collisione",
       "New Folder…": "Nuova cartella…", "Rename…": "Rinomina…", "Folder name": "Nome della cartella",
+      "Add Layer": "Aggiungi livello", "Add Group": "Aggiungi gruppo", "Group Layer": "Raggruppa livello", "Ungroup": "Separa", "Move Up": "Sposta su", "Move Down": "Sposta giù", "Delete Layer": "Elimina livello", "Layer name": "Nome del livello", "Group": "Gruppo", "Toggle Visibility": "Attiva/disattiva visibilità", "Toggle Lock": "Attiva/disattiva blocco", "Opacity": "Opacità", "Blend": "Fusione", "Tint": "Tinta", "Clear Tint": "Rimuovi tinta", "Draw slot": "Fascia di disegno", "Below characters": "Sotto i personaggi", "Above (overhead)": "Sopra (in primo piano)",
       "Focus Next Panel": "Focus sul pannello successivo", "Reset Panel Layout": "Ripristina disposizione pannelli",
       "Save Layout As…": "Salva disposizione come…", "Saved Layouts…": "Disposizioni salvate…",
       // Tools menu
@@ -732,6 +741,7 @@ const SHARED = {
       "Advanced": "Расширенный", "Advanced Map Editor": "Расширенный редактор карт",
       "Map Tree": "Дерево карт", "Layers": "Слои", "Events": "События", "Collision": "Коллизия",
       "New Folder…": "Новая папка…", "Rename…": "Переименовать…", "Folder name": "Имя папки",
+      "Add Layer": "Добавить слой", "Add Group": "Добавить группу", "Group Layer": "Сгруппировать слой", "Ungroup": "Разгруппировать", "Move Up": "Вверх", "Move Down": "Вниз", "Delete Layer": "Удалить слой", "Layer name": "Имя слоя", "Group": "Группа", "Toggle Visibility": "Переключить видимость", "Toggle Lock": "Переключить блокировку", "Opacity": "Непрозрачность", "Blend": "Смешивание", "Tint": "Оттенок", "Clear Tint": "Очистить оттенок", "Draw slot": "Слой отрисовки", "Below characters": "Под персонажами", "Above (overhead)": "Над (сверху)",
       "Focus Next Panel": "Фокус на следующую панель", "Reset Panel Layout": "Сбросить расположение панелей",
       "Save Layout As…": "Сохранить расположение как…", "Saved Layouts…": "Сохранённые расположения…",
       // Tools menu

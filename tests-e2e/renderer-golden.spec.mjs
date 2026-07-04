@@ -195,3 +195,96 @@ test.describe("renderer golden images", () => {
     await expect(page.locator("#stage")).toHaveScreenshot("classic2d-meridian-village.png");
   });
 });
+
+// Phase 8 Stage B: the generalized layer stack (map.layersAdv). The engine and
+// HD-2D buffer composition branch on layersAdv; these guard both sides of that
+// branch. Rather than commit new baseline PNGs (fragile — the classic 2D
+// baseline itself drifts on some GPUs), these compare renders captured IN THE
+// SAME RUN: a defaults-only core stack must composite to the exact same pixels
+// as the classic four-array loop (machine-independent), and a stack with user
+// layers must both change the frame and stay deterministic.
+test.describe("generalized layers (map.layersAdv)", () => {
+  const CLASSIC_CORES = [
+    { id: 1, name: "ground", type: "core", role: "ground" },
+    { id: 2, name: "decor", type: "core", role: "decor" },
+    { id: 3, name: "decor2", type: "core", role: "decor2" },
+    { id: 4, name: "over", type: "core", role: "over" },
+  ];
+  // New Game loads the project's start map, not maps[0] — target that one so
+  // the fixtures actually exercise the composite path the engine renders.
+  const startMap = (project) =>
+    project.maps.find((m) => m.id === project.system.startMapId) || project.maps[0];
+  const classicEquivalent = (project) => {
+    startMap(project).layersAdv = CLASSIC_CORES.map((l) => ({ ...l }));
+    return project;
+  };
+  const withUserLayers = (project) => {
+    const m = startMap(project);
+    m.layersAdv = [
+      ...CLASSIC_CORES.map((l) => ({ ...l })),
+      { id: 5, name: "Glow", type: "tile", slot: "below", blend: "add", data: m.layers.ground.slice() },
+      { id: 6, name: "Haze", type: "tile", slot: "above", opacity: 0.4, data: m.layers.over.slice() },
+    ];
+    return project;
+  };
+
+  /** Boot to a stable frame and return the #stage screenshot buffer. */
+  async function frame(page, hd, transform) {
+    await bootToStableMap(page, hd, transform);
+    return page.locator("#stage").screenshot();
+  }
+  /** Count RGBA byte differences between two PNG buffers, decoded in-page. */
+  async function pixelDiff(page, a, b) {
+    return page.evaluate(async ([aB64, bB64]) => {
+      const load = (b64) => new Promise((res) => {
+        const img = new Image();
+        img.onload = () => res(img);
+        img.src = "data:image/png;base64," + b64;
+      });
+      const [ia, ib] = await Promise.all([load(aB64), load(bB64)]);
+      if (ia.width !== ib.width || ia.height !== ib.height) return -1;
+      const data = (img) => {
+        const c = document.createElement("canvas");
+        c.width = img.width; c.height = img.height;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        return g.getImageData(0, 0, c.width, c.height).data;
+      };
+      const da = data(ia), db = data(ib);
+      let diff = 0;
+      for (let i = 0; i < da.length; i++) if (da[i] !== db[i]) diff++;
+      return diff;
+    }, [a.toString("base64"), b.toString("base64")]);
+  }
+
+  test("2D: a defaults-only core stack composites byte-identically to classic", async ({ page }) => {
+    const classic = await frame(page, 0, null);
+    const composite = await frame(page, 0, classicEquivalent);
+    // The 2D path is pure Canvas2D (deterministic) — exact byte equality proves
+    // composeAdvBuffers reproduces the four-array loop, buffer for buffer.
+    expect(await pixelDiff(page, classic, composite)).toBe(0);
+  });
+
+  test("2D: user blend/opacity layers change the frame and render deterministically", async ({ page }) => {
+    const classic = await frame(page, 0, null);
+    const layered1 = await frame(page, 0, withUserLayers);
+    const layered2 = await frame(page, 0, withUserLayers);
+    // The added "add"-blend ground copy + translucent overhead visibly alter the
+    // frame, and two identical boots must be pixel-stable.
+    expect(await pixelDiff(page, classic, layered1)).toBeGreaterThan(0);
+    expect(await pixelDiff(page, layered1, layered2)).toBe(0);
+  });
+
+  test("HD-2D: buffer folding adds no divergence beyond WebGL boot noise", async ({ page }) => {
+    // The WebGL path is not bit-stable across boots on every GPU, so the classic
+    // vs classic pair sets the noise floor; folding a defaults-only stack must
+    // not exceed it. (The 2D test above already proves the buffers are identical
+    // — HD-2D consumes exactly those buffers.)
+    const a = await frame(page, 1, null);
+    const b = await frame(page, 1, null);
+    const composite = await frame(page, 1, classicEquivalent);
+    const control = await pixelDiff(page, a, b);
+    const folded = await pixelDiff(page, a, composite);
+    expect(folded).toBeLessThanOrEqual(control * 2 + 5000);
+  });
+});

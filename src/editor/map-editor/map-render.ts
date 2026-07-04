@@ -11,6 +11,8 @@
 import { Assets, TILE, LAYER_ORDER, editorState as S, curMap } from "../editor-state";
 import { drawLayerCell } from "../../shared/autotile-draw";
 import { isAutotileId } from "../../shared/autotile-registry";
+import { layerView, shadowIndex, entryArray, BLEND_COMPOSITE } from "../../shared/layer-view";
+import { drawEntryTiles } from "../../shared/layer-composite";
 
   // ============================ map rendering ============================
   /** Everything renderMapView reads besides the map itself: the classic
@@ -31,6 +33,9 @@ import { isAutotileId } from "../../shared/autotile-registry";
     selectedEvent: any;
     /** start-marker source (S.proj.system in the classic editor). */
     system: { startMapId: number; startX: number; startY: number };
+    /** Advanced editor: id of the layer being edited (dims layers above it).
+     *  Absent in the classic editor, which dims by the `layer` role instead. */
+    activeLayerId?: number;
   }
   function viewFromS(): MapView {
     return {
@@ -46,6 +51,39 @@ import { isAutotileId } from "../../shared/autotile-registry";
     if (v.layer === "auto") return li === 3 ? 0.85 : 1;
     const a = LAYER_ORDER.indexOf(v.layer);
     return li > a ? 0.45 : 1;
+  }
+  // Composite a generalized (map.layersAdv) stack onto the 2D editor canvas,
+  // honoring per-layer visibility / opacity / blend / tint and interleaving
+  // shadows at their classic position (just under the first overhead layer).
+  // The active layer is dimmed-above like the classic editor: the Advanced
+  // editor passes v.activeLayerId; the Standard editor falls back to its
+  // role-based v.layer selection so a layersAdv map still dims sensibly there.
+  function drawAdvLayers(g: any, m: any, v: MapView) {
+    const entries = layerView(m);
+    const shIdx = shadowIndex(entries);
+    let activeIdx = -1;
+    if (v.activeLayerId != null) activeIdx = entries.findIndex((e) => e.id === v.activeLayerId);
+    else if (v.layer && v.layer !== "auto") activeIdx = entries.findIndex((e) => e.role === v.layer);
+    for (let li = 0; li < entries.length; li++) {
+      if (li === shIdx) { g.globalAlpha = 1; g.globalCompositeOperation = "source-over"; drawShadows(g, m); }
+      const e = entries[li];
+      if (!e.visible) continue;
+      const arr = entryArray(m, e);
+      if (!arr) continue;
+      let alpha = e.opacity;
+      if (v.mode === "map") {
+        if (activeIdx >= 0 && li > activeIdx) alpha *= 0.45;
+        else if (activeIdx < 0 && e.slot === "above") alpha *= 0.85; // auto: overhead dimmed
+      } else if (e.slot === "above") {
+        alpha *= 0.8; // non-map overlays keep the overhead readable
+      }
+      g.globalAlpha = alpha;
+      g.globalCompositeOperation = BLEND_COMPOSITE[e.blend];
+      drawEntryTiles(g, arr, m, Assets.drawTile, TILE, e.tint);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = "source-over";
+    }
+    if (shIdx >= entries.length) drawShadows(g, m);
   }
   function effectivePassOn(m: any, x: any, y: any) {
     const i = y * m.width + x;
@@ -151,21 +189,29 @@ import { isAutotileId } from "../../shared/autotile-registry";
     g.imageSmoothingEnabled = v.zoom >= 1;
     g.fillStyle = "#15151d";
     g.fillRect(0, 0, m.width * TILE, m.height * TILE);
-    // tile layers (layers above the active one are dimmed while drawing)
-    for (let li = 0; li < LAYER_ORDER.length; li++) {
-      const arr = m.layers[LAYER_ORDER[li]];
-      g.globalAlpha = layerAlpha(v, li);
-      for (let y = 0; y < m.height; y++) {
-        for (let x = 0; x < m.width; x++) {
-          drawLayerCell(g, arr, m.width, m.height, x, y, x * TILE, y * TILE, TILE, Assets.drawTile);
+    // tile layers (layers above the active one are dimmed while drawing).
+    // Classic maps (no layersAdv) run the verbatim four-array loop — this is
+    // the byte-identical path every existing golden protects. A map with a
+    // generalized stack composites the flattened layer-view instead.
+    if (!m.layersAdv) {
+      for (let li = 0; li < LAYER_ORDER.length; li++) {
+        const arr = m.layers[LAYER_ORDER[li]];
+        g.globalAlpha = layerAlpha(v, li);
+        for (let y = 0; y < m.height; y++) {
+          for (let x = 0; x < m.width; x++) {
+            drawLayerCell(g, arr, m.width, m.height, x, y, x * TILE, y * TILE, TILE, Assets.drawTile);
+          }
+        }
+        if (li === 2) { // shadows sit under the overhead layer, as in-game
+          g.globalAlpha = 1;
+          drawShadows(g, m);
         }
       }
-      if (li === 2) { // shadows sit under the overhead layer, as in-game
-        g.globalAlpha = 1;
-        drawShadows(g, m);
-      }
+    } else {
+      drawAdvLayers(g, m, v);
     }
     g.globalAlpha = 1;
+    g.globalCompositeOperation = "source-over";
     // grid
     g.strokeStyle = "rgba(255,255,255,0.09)";
     g.lineWidth = 1 / v.zoom;
