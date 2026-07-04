@@ -1,7 +1,9 @@
 # Phase 8 Spec — Advanced Map Editor (Tiled-class mapping)
 
-**Status:** IN PROGRESS — Stages A & B landed 2026-07-04. Stage log accumulates
-below, phase-3-spec style, as stages land. Next: C/D/E (parallel worktrees).
+**Status:** IN PROGRESS — Stages A–E landed 2026-07-04 (C/D/E built in parallel
+worktrees off B and integrated together). Stage log accumulates below, phase-3-spec
+style, as stages land. Next: F (needs C+E terrain/stamp predicates) then G (closes
+the phase).
 **Authored:** 2026-07-04 by Claude Fable 5 (grand designer / orchestrator)
 **Branch (when work starts):** `phase-8-advanced-map` (off `main`)
 **Sources:** Codex feasibility discussion (2026-07-03, recovered from
@@ -567,6 +569,375 @@ Stage B traps / decisions:
   (blend, tint, slot, visibility, lock) and structural ops all push one undo entry.
 - Dynamic `import()` in the preview returns a **fresh** module instance (proj null)
   — verify live editor state through the DOM + `localStorage`, not module imports.
+
+### Stage C — Terrain & Autotile Studio (landed 2026-07-04, Opus)
+
+Registry generalization + animated terrain across all three surfaces + the
+five-step Studio wizard. Additive throughout; a project with no `kind`/`anim`/
+`variants` renders byte-identically (the sample maps have no autotile groups at
+all, so the classic path is untouched; the pure Canvas2D "defaults-only stack ==
+classic" e2e still passes 0-diff).
+
+Shipped:
+
+- **Pure per-kind resolvers** (`src/shared/terrain-kinds.ts`, 24 unit tests):
+  `resolveTile(kind, same, frame)` maps a neighbourhood to a source rect (+ optional
+  corner minitiles). `blob47`/`a1`/`a4` route through the existing corner rule
+  (`a1` offsets the block right by `frame`); `edge16`/`corner16`/`a3` are whole-tile
+  wang layouts via `edgeMask`/`cornerMask`. Plus `pickVariant` (deterministic
+  cumulative-weight pick), `cellHash` (stable per-cell salt), `detectKind` (Layout
+  auto-detection from sheet dimensions), `requiredTileCount`/`frameTileGrid`
+  (completeness metadata). Every kind is proven in-bounds over all 256 masks.
+- **Generalized registry** (`autotile-registry.ts`): `registerAutotile(id, block,
+  meta?)` now carries `kind`/`anim`/weighted-`variants`; `resolveAutotileCell(id,
+  same, TILE, frame, x, y)` is the new generalized draw seam (per-kind resolve +
+  variant pick + frame). A group registered with no meta reproduces the Phase 3
+  blob47 output bit-for-bit (the blob path keys its cache on the raw 8-neighbour
+  mask, so no fold-collision can serve a wrong shape). `autotileAnim`/
+  `anyAutotileAnimated`/`autotileKind` expose metadata; the legacy `autotileCanvas`
+  (swatch/preview path) is kept, mask-keyed.
+- **Central decode seam** (`autotile-draw.ts`): `drawLayerCell` gained a trailing
+  optional `frame = 0` and now routes through `resolveAutotileCell`. Kept tightly
+  scoped — one new default param, no signature reshuffle — so Stage E's flip/rotate
+  flags drop into the same function without conflict.
+- **Animated-terrain runtime** (`src/shared/autotile-anim.ts`, 10 unit tests):
+  `scanAnimatedCells` records only the cells whose group animates (empty ⇒ the
+  surfaces never enter the loop); `redrawAnimatedCells(cells, frameFn, prev,
+  recompose)` re-composites just the cells whose frame changed, via a caller
+  `recompose(x,y,frame)` that redraws the whole below-stack column for that cell
+  (`recomposeLowerCell` in `layer-composite.ts`) so a bridge over animated water is
+  preserved; the engine also re-lays the cell's shadow quads. Frame derives from
+  `frameAtTick(globalT, fps, frames, 60)` in the engine (deterministic under the
+  golden frozen clock) and wall-clock `frameAt` in the editor previews.
+  - **Engine** (`map-runtime.ts`): records animated cells at prerender (capped at
+    2048 to bound worst-case redraw), `tickMapAnim(ctx.globalT)` called each map
+    update (before the menu early-return, so water flows under menus); re-textures
+    the HD lower buffer only when a frame changed.
+  - **Editor 2D** (`map-render.ts`): a self-starting rAF loop re-renders the map
+    (and any registered advanced canvas) at 4fps while any group animates; `MapView`
+    gained an optional `frame` threaded into every `drawLayerCell`/`drawEntryTiles`.
+  - **HD-2D viewport** (`hd-viewport.ts`): rebuilds its buffers when the shared
+    preview frame advances; `buildBuffers(m, frame)`.
+- **Terrain & Autotile Studio** (`src/editor/advanced/terrain-studio.ts` + CSS):
+  fullscreen modal, five-step rail (Source / Layout / Terrain Types / Rules /
+  Preview). Source: drop/pick a sheet, or the classic A2 importer as the "Quick
+  path". Layout: `detectKind` pre-selects the arrangement with a grid overlay; all
+  six kinds selectable. Terrain Types: name + terrain/pass + transform-completion
+  flags. Rules: animation (frames/fps) + weighted variant sheets. Preview: an 8×8
+  scratch field painted through the SAME `resolveAutotileCell` the engine uses
+  (animates live if `anim` is on) + completeness check-marks. **Save Draft**
+  (localStorage) and **Create Terrain Brush** (`createTerrainGroup` in
+  `autotile-store.ts`, which writes `proj.autotiles` + re-syncs the registry).
+  Launched from a rail button in the Advanced panel and the `terrain-studio`
+  command (palette-reachable).
+- **i18n**: 37 Studio chrome keys across all 10 locales + the parity gate's curated
+  list (help/body text falls back to English by design, per the Phase 7 scope rule).
+  **CSS**: `.studio-*` + `.adv-studio-btn` block; `?v=56 → 57`. Patch-notes "Terrain
+  & Autotile Studio"; `?v=37 → 38` (help.ts + shims.d.ts).
+
+Gate: tsc + eslint clean; `node --test` 16/16; vitest **358** (+34: terrain-kinds
+24, autotile-anim 10). Playwright (authored, not part of the parallel-worktree
+run): the two classic-2D Stage-C e2e specs pass live against the built bundle —
+`terrain-anim.spec.mjs` "animated water changes frame over time, deterministically"
+and "preset terrain paints and differs from ground"; the editor `Terrain & Autotile
+Studio` spec opens the wizard from the palette, renders all 5 steps + 6 kinds, and
+closes with zero page errors. The Stage-B pure-Canvas2D byte-identity spec ("2D:
+defaults-only core stack == classic") still passes **0-diff**, proving the new
+`drawLayerCell`/composite path leaves the classic render untouched. WebGL goldens +
+the animated-water/preset HD-2D specs were left for the integrator's single e2e run
+(three parallel worktrees must not thrash the GPU); the known pre-existing 8 golden
+failures are unchanged by this stage (classic path byte-identical).
+
+Stage C traps / decisions:
+- **Determinism trap (important):** the engine anim clock MUST derive from
+  `ctx.globalT` (the tick counter every other renderer animation keys off), NOT
+  `performance.now()`. An early `performance.now()` version failed the animated-water
+  e2e with a full-field diff at the *same* virtual time — Playwright's frozen clock
+  advances ticks deterministically but the wall-clock read raced. `frameAtTick` fixed
+  it; the editor previews (not under the frozen clock) keep the wall-clock `frameAt`.
+- **Cache-key trap:** the blob-family cache MUST key on the raw 8-neighbour mask
+  (0..255, unique per shape), not a folded corner-set hash — an early fold into 10
+  bits risked serving a wrong-but-cached shape, which would break goldens. Wang kinds
+  key on their whole-tile index.
+- **Recompose, don't blit:** an animated cell can sit under decor/a bridge, so the
+  redraw clears+re-composites the entire below-stack column for that one cell (clipped
+  to the cell rect) and re-lays its shadow — a naive single-tile blit would erase the
+  overlay. Only the lower buffer animates (terrains are ground-family); the overhead
+  buffer is never touched.
+- **Shared-file collisions (for the integrator):** Stage C touched `autotile-draw.ts`
+  (added a trailing `frame = 0` param to `drawLayerCell`) and `layer-composite.ts`
+  (threaded `frame` through `drawEntryTiles`/`composeAdvBuffers`, added
+  `recomposeLowerCell`). Stage E is separately adding flip/rotate bit-flags to
+  `drawLayerCell` — the change here is purely additive (one optional trailing param,
+  no reshuffle) to minimise the merge conflict; the flag decode still slots into the
+  same `isAutotileId`/`drawTile` fork.
+- **Preview registry id:** the Studio previews under a transient reserved id
+  (`AUTOTILE_BASE + 900_000`) so it never collides with real groups; it is
+  unregistered on modal close (`onClose`).
+- Vite dev/preview served stale `?v=55/56` from a concurrent chat's dev server
+  sharing this worktree's `.vite` cache — a live-preview artifact, not a code issue;
+  the built bundle + the fresh-build e2e are the ground truth (both correct).
+
+### Stage E — Stamps, tile transforms & palette upgrades (landed 2026-07-04, Opus)
+
+Built in an isolated worktree in parallel with Stages C (terrain studio) and D
+(zones); scope kept to the stamps / tile-transform / palette surface, and the
+`drawLayerCell` change kept **tightly additive** (decode raw→{id,flags} at the
+top, transform the drawImage, autotile-resolve logic untouched) so it composes
+with Stage C's separate registry/anim extension of the same seam.
+
+Shipped:
+
+- **`src/shared/tile-flags.ts`** (pure, 14 unit tests in
+  `tests-unit/tile-flags.test.ts`): `TILE_FLAG_H/V/R` at bits 28/29/30,
+  `TILE_ID_MASK = (1<<28)-1`, `tileId` / `tileFlags` / `hasFlags` / `withFlags`
+  / `setFlags`, the interactive `toggleH` / `toggleV` / `rotateCW` composers
+  (four CW rotations = identity for any start flip; H/V fold under a rotation
+  the Tiled way), and `flagTransform(flags, size)` → the per-cell affine
+  (identity / H mirror / V mirror / 90° CW verified by geometry tests). The
+  autotile-adjacent fixture proves id checks stay flag-safe.
+- **Central transform decode in `drawLayerCell`** (`src/shared/autotile-draw.ts`):
+  the stored value is split raw→`{id, flags}` once, at the top, so **all four
+  draw paths** (2D editor `renderMapView`, live HD-2D `buildBuffers`, paste
+  preview, engine `prerenderMap`) get flip/rotate together. Autotile groups
+  resolve their own shape and are never transformed (v1). A plain no-flag cell
+  takes the identical fast path as before — byte-identical (goldens gate it). A
+  flag-bearing plain tile draws under `g.transform(...)` (save/restore-scoped so
+  callers' globalAlpha/composite are untouched). `sameLayer` compares MASKED ids
+  so a flipped tile still autotiles with its unflipped neighbour.
+- **Brush flip/rotate UI** (`src/editor/advanced/adv-transform.ts`): X / Y / R
+  toggle `advState.brushFlags`; folded into the painted value for **plain tiles
+  only** via `adv-paint.brushValue` (autotile ids written flag-free). Registered
+  commands `adv-flip-h` / `adv-flip-v` / `adv-rotate` (palette/menu-reachable);
+  the X/Y/R **key bindings in boot.ts are gated on Advanced-panel focus**
+  (`advFocus.isFocused` = `getFocusedPanel() === "adv"`) so they keep their
+  Standard-editor meanings (cut chord / shadow / circle) everywhere else, and
+  are ordered before the Map-mode tool bindings. Toolbar buttons + a transform
+  indicator (↔↕⟳) sit in the Advanced tool strip.
+- **Stamps** (`src/shared/stamp-ops.ts` pure + `src/editor/advanced/adv-stamps.ts`
+  editor wrapper, 6 unit tests in `tests-unit/stamp-ops.test.ts`):
+  `captureStampData` reads a rect out of the four role arrays + shadows (same
+  shape as the tile clipboard, transform-flag bits preserved verbatim);
+  `writeStampData` places at an offset, clipped, **non-empty cells only** (holes
+  fall through to the terrain below). `proj.stamps` is created lazily (a project
+  that never captures keeps NO stamps key — byte-identical). Placement funnels
+  through `pushUndo`/`touch()`; undo already deep-clones `layers`/`shadows` from
+  Stage B, so a placed stamp undoes as one entry. **Random-scatter mode**
+  scatters the stamp across the brush footprint with a per-stamp probability
+  (`props.prob`, default 0.5, round-trips in the save), a per-cell LCG salted per
+  click so repeated clicks fill in gradually.
+- **Categorized & searchable palette** (`src/shared/tile-categories.ts` pure, 13
+  unit tests + `src/editor/advanced/adv-rail.ts`): the Advanced right rail's
+  Tiles tab derives categories from tile metadata (`key` + Assets-derived
+  `terrain`) into Terrain / Water / Floor / Walls / Nature / Objects / Other,
+  with a search box over name+key. The derivation module is pure and reusable by
+  the Standard palette. A Stamps tab lists `proj.stamps` with thumbnail, place
+  (📌), random (🎲), rename, delete, and a scatter-% slider. `adv-dialogs.ts`
+  extracts the shared single-field `nameDialog` (Layers rename + Stamp name).
+- **i18n**: 23 new keys × 10 locales (`js/editor/i18n.js`); command labels
+  (Flip/Rotate/Save-Selection/Random-Scatter) are auto-collected from
+  `panels.ts`, the rail/dialog strings added to `CURATED_KEYS`. **CSS**: `.adv-
+  rail-right` / `.adv-tile-grid` / `.adv-cat-chip` / `.adv-stamp-*` / `.adv-xfm-
+  label` block; `?v=56 → 57`. Patch-notes "Advanced Map Editor — stamps, flip &
+  rotate, searchable tiles"; `?v=37 → 38` (help.ts + shims.d.ts).
+
+**Flag-bit comparison-site audit** (the required Fable sign-off artifact — every
+`>= AUTOTILE_BASE` / id-equality / tile-def-lookup site that reads a stored tile
+id, and how each was made flag-safe). Since flags ride on bit 28+ and
+`AUTOTILE_BASE = 1,000,000 < 1<<28`, masking the low 28 bits (`tileId`) before
+any such check is correct and is a no-op on clean ids (classic path unchanged):
+
+| # | Site | File:fn | Fix |
+|---|---|---|---|
+| 1 | `isAutotileId` | `shared/autotile-registry.ts` | now masks internally (`(id & TILE_ID_MASK) >= AUTOTILE_BASE`) — makes **every** caller flag-safe by construction |
+| 2 | `groupIdOf` | `shared/autotile-registry.ts` | masks before subtracting AUTOTILE_BASE |
+| 3 | `sameLayer` neighbour equality | `shared/autotile-draw.ts` | compares `tileId(base)` vs `tileId(neighbour)` — a flipped tile still autotiles with its unflipped neighbour |
+| 4 | `drawLayerCell` id decode | `shared/autotile-draw.ts` | the central decode itself: `id = tileId(raw)`, transform applied only for plain flag-bearing tiles |
+| 5 | engine `tilePassable` (decor2/decor/ground → `Assets.tiles[t]`) | `engine/scenes/map-runtime.ts` | masks each layer read before the tile-def lookup — a flipped floor keeps its passability |
+| 6 | engine `groundKeyAt` (`Assets.tiles[...].key`) | `engine/scenes/map-runtime.ts` | masks before the def lookup (bush/terrain-key reads) |
+| 7 | renderer `stairsAt` (`Lyr.* === T.stairs`) | `renderer/three-renderer.ts` | `TID(...)` local mask before the ramp-geometry equality |
+| 8 | renderer `isWater` (`WATER_TILES.has(...)`) | `renderer/three-renderer.ts` | `TID(...)` before the water-surface set membership |
+| 9 | renderer material classes (`SPEC_TILES` / `EMIS_TILES` `.has(id)`) | `renderer/three-renderer.ts` | the `ids` array is `.map(TID)` before spec/emissive membership |
+| 10 | editor `effectivePassOn` (`Assets.tiles[t]`) | `editor/map-editor/map-render.ts` | masks each layer read before the def lookup (passability overlay) |
+| 11 | editor eyedropper (`S.selectedTile = getCell(...)`) | `editor/map-editor/painting.ts` | masks so the palette selection is always a clean id (the brush carries flags separately) |
+| 12 | editor status bar tile name (`Assets.tiles[t].name`) | `editor/map-editor/status.ts` | masks the hovered-cell read before the name lookup |
+
+Sites deliberately **not** masked (verified clean by construction, no flags can
+reach them): `renderPalette` highlight / `resolvePaintLayer` / `autotile-ui`
+selection checks all operate on `S.selectedTile`, which is guaranteed a clean id
+(the eyedropper masks at the source, site 11); `boot.ts` palette-click reads an
+id from grid coordinates, never from a map layer; Database `tilesets-tab.ts`
+reads palette/DB indices, not map cells.
+
+Gate: tsc clean, eslint clean; `node --test` 16/16; vitest **357** (+33 vs Stage
+B's 324: tile-flags 14, tile-categories 13, stamp-ops 6). Two new **editor-only**
+e2e specs (`tests-e2e/advanced-stampsE.spec.mjs`) run green against the built app
+(`RPGATLAS_E2E_PORT=4519`, workers=1): (a) flip+rotate the brush → paint on the
+Advanced canvas → a flag-bearing tile is persisted on the ground layer AND
+survives a full reload (proves flags round-trip through the save format); (b)
+capture a Map-view selection as a stamp → place it via the Stamps tab → stamp
+round-trips in `proj.stamps`. Per the parallel-worktree rule, the **renderer
+golden suite was NOT run** here (three worktrees would thrash GPU/ports; the
+integrator runs it once per branch at merge). The 2D no-flag path is byte-
+identical by construction (the decode fast-path is the pre-Stage-E code) and the
+flag path is only entered when a stored value carries flag bits — absent on
+every existing golden fixture.
+
+Stage E traps / decisions:
+- **`isAutotileId` masks internally now.** This is the single highest-leverage
+  audit fix — it makes all four of its call sites flag-safe without touching
+  them. If a future stage adds a NEW id space above bit 28 it must revisit this.
+- **Flags are v1-scoped to plain tiles.** Autotile groups resolve their own
+  shape; the brush drops flags when an autotile is selected (`adv-paint.brushValue`).
+  Terrain-set transform completion (`allowFlipH/V/Rot`) is Stage C's, not this.
+- **X/Y/R key gating is by dock focus, not `S.mode`.** The bindings sit above the
+  Map-mode KeyY(shadow)/KeyR(circle) bindings with a `when: advFocus.isFocused()`
+  guard; the global keydown handler already bails inside inputs, so renaming a
+  layer/stamp doesn't trigger them. `advFocus.isFocused` is bound in `panels.ts`
+  so boot's key table stays dock-import-free.
+- **Stamp scatter determinism:** a per-cell LCG seeded from `(x,y,stampId,salt)`;
+  `scatterSalt` bumps each click so repeated clicks fill different cells rather
+  than re-rolling the same set. Not pushed through undo mid-drag — one click =
+  one `pushUndo`.
+- **Shared-file collision risk with siblings** (integrator reconciles at merge):
+  `css/editor.css?v` (→57), `js/patch-notes.js?v` (→38 in help.ts + shims.d.ts),
+  the `js/editor/i18n.js` locale blocks, and `dock/panels.ts` (new command
+  registrations) will collide with Stages C/D's bumps/keys. The
+  `drawLayerCell`/`autotile-registry.ts` edits are additive and localized to
+  minimize the Stage C merge (which extends the same seam for terrain kinds).
+
+### Stage D — Objects & gameplay zones (landed 2026-07-04, Opus)
+
+`map.zones` (drawn in Stage A's schema) becomes live: authors draw gameplay
+zones in the Advanced editor's new Objects palette and the engine gives each
+kind behaviour, all behind a `map.zones` absence guard so a zone-free map is
+byte-identical (engine + export) and pays zero per-step cost.
+
+Shipped — pure shared cores (one impl for editor + engine, vitest-covered):
+
+- **`src/shared/zone-geom.ts`** (14 tests): `bboxOf`, `pointInShape`
+  (rect/ellipse/point/`poly` even-odd ray-cast), `pointInZoneTile` (tile sampled
+  at its CENTER so a 1×1 rect == exactly its tile), `distanceToZoneTile` (0
+  inside, nearest-edge outside — backs the sound falloff), and `zonesAtTile`
+  (every covering zone, author order). Bbox pre-filter before the real test.
+- **`src/shared/zone-raster.ts`** (7 tests): `rasterizeZones` bakes collision
+  (force-block=2) and nav (force-pass=1) zones into a passOv-compatible
+  `Int8Array` at load, iterating only each shape's clamped bbox. Returns **null**
+  when the map has no collision/nav zones (the engine then keeps its verbatim
+  passOv read). Force-block wins over force-pass (collision is the stronger rule).
+
+Shipped — engine runtime (`src/engine/scenes/zone-runtime.ts`, absence-guarded):
+
+- **collision / nav**: `resetZoneState(map)` (called at the end of `loadMap`,
+  after `Plugins.fire("mapLoad")` so the weather baseline is the map's intended
+  weather) bakes the overlay; `tilePassable` consults `zonePassAt` **only** when
+  `mapHasZones()` — the movement hot path stays a plain array read.
+- **encounter**: `onPlayerStep`'s roll now runs `zoneEncounterPool` as the top
+  tier of the `byRegion` precedence family (zone > region > time > default).
+- **transfer**: edge-triggered on tile-enter (`updateZonePresence` tracks an
+  `inside` id-set); `map.ts` fires it through the ordinary `transferPlayer`.
+- **sound**: `reconcileSound` merges covering sound zones onto the map's base
+  `ambience` and calls the Phase 6 `setAmbience` deck; the deck is touched only
+  while a sound zone is (or was) active.
+- **weather**: `reconcileWeather` applies a zone's weather on enter and restores
+  the captured baseline on exit, through the guarded `window.Atlas.weather`
+  surface (inert if the weather plugin isn't loaded).
+- **spawn**: no runtime code — resolved at edit time (documented in the inspector).
+- **custom**: inert; surfaced via **`atlas.zonesAt(x, y)`** added to both the
+  plugin `atlas` surface (`plugin-runtime.ts`) and the `script`-command `game`
+  surface (`script-api.ts`), both delegating to `zonesAtTile`.
+
+Shipped — editor (Objects palette + inspectors, mockup 3):
+
+- Advanced panel gains a right-rail tab strip (**Layers | Objects**); the paint
+  listeners and the zone listeners share the canvas and both gate on
+  `advState.rail`. `adv-zones.ts` (pure ops, 8 tests: promote-on-first-edit, id
+  alloc, per-kind default payloads, add/find/delete/patch/move). `adv-zone-draw.ts`
+  draws rect/ellipse/poly/point (snap to grid, double-click finishes a polygon,
+  Esc cancels) and edits the selected zone's vertices; `adv-objects.ts` renders
+  the kind picker, zone list, and per-kind inspectors (encounter troop checklist
+  + rate + **Test Encounter in This Area**, transfer destination via the shared
+  location picker, sound key/vol/falloff, weather kind/power, custom typed props).
+- **Zone overlay** in `renderMapView` (new optional `MapView.zoneOverlay`,
+  absent in every other view): translucent kind-coloured fills, dashed unselected
+  outlines, bright selected outline with vertex handles, and the live draft.
+- **Undo/round-trip**: `snapshotOf`/`applySnapshot` now clone/restore `map.zones`
+  (absent round-trips as an absent key), so zone draws/edits undo as one step and
+  survive save/load. e2e `tests-e2e/zones.spec.mjs` (authored, run by the
+  integrator) draws a polygon encounter zone and asserts it in the persisted JSON.
+- **Test Encounter in This Area**: writes `forceEncounter:true` into the playtest
+  handoff; `consumePlaytestStart` reads it and `boot` calls `armForcedEncounter()`
+  so the first step inside an encounter zone rolls immediately (one-shot).
+
+i18n: 36 new chrome keys added to all 10 locales + `CURATED_KEYS` (parity gate
+green). Long note/body strings use plain `t()` English fallback (not in dicts,
+per the file's scope rule) so they neither miss nor orphan. CSS: `.adv-rail-*` /
+`.adv-obj-*` / `.adv-zone-*` block appended; `editor.css?v=56 → 57`. Patch-notes
+"Advanced Map Editor — objects & gameplay zones"; `patch-notes.js ?v=37 → 38`
+(help.ts + shims.d.ts).
+
+Gate: tsc clean; eslint clean; `node --test` 16/16; vitest **356** (Stage B 324
++ zone-geom 14, zone-raster 7, adv-zones-ops 8, zone-perf 3, and the i18n-parity
+suite gained the Stage-D keys). The perf spec (`tests-unit/zone-perf.test.ts`)
+proves a 64×64 / 50-zone map's per-step `zonesAtTile` is sub-10µs (a rounding
+error on a 16ms tick) and that collision/nav rasterization is one-time — the "no
+measurable movement-loop regression" exit. Full Playwright NOT run here (three
+parallel worktrees; integrator runs it once at merge); the new zones e2e is
+authored but not executed.
+
+Stage D traps / decisions:
+- **Zone pass overlay precedes `passOv`** in `tilePassable` (a collision/nav zone
+  is an explicit author override, like passOv). It's checked ONLY under
+  `mapHasZones()`, so a zone-free map runs the byte-identical verbatim read.
+- **`resetZoneState` runs after `mapLoad`**, not before `prerenderMap` — the
+  weather plugin sets per-map weather on the `mapLoad` hook, so the restore
+  baseline must be captured afterwards or exiting a weather zone would restore
+  the wrong (previous-map) weather.
+- **Transfer is edge-triggered via a per-load `inside` id-set.** `transferPlayer`
+  resets zone state, and `onPlayerStep` fires only on movement, so arriving
+  *inside* a transfer zone does not immediately re-fire (matches transfer-event
+  semantics).
+- **`snapshotOf` did NOT capture `map.zones` before this stage** (Stage B added
+  `layersAdv` but not `zones`) — added here, or Advanced zone edits would not
+  undo. Any future map-level array needs the same treatment.
+- **Sound/weather reconciliation is level-triggered on tile-enter, bbox
+  pre-filtered.** Only `updateZonePresence` (once per step, guarded) touches the
+  audio deck / weather, and only when a sound/weather zone is or was active.
+- **`atlas.zonesAt` is added to BOTH surfaces** (plugin `atlas` and `script`
+  `game`); both are frozen-but-extendable, so this is additive. The `game`
+  addition means `script` event commands can read zones too.
+- Continuous sliders (sound volume, weather power) mutate + `touch()` live and
+  push one undo on `change` (release), same posture as Stage B's opacity slider.
+
+### Integration — C/D/E merge (2026-07-04, integrator)
+
+C, D and E built in parallel worktrees off Stage B (`a73fc3b`) and merged in the
+order C → E → D. All three passed their own gate in isolation; the fast gate on
+the merged tree is green (tsc, eslint, `node --test` 16/16, vitest **423**), and
+the Playwright suite shows **no new failures** — the 9 reds are the pre-existing
+GPU-drift renderer goldens + showcase spec identical to a clean Stage-B run.
+
+Conflict-resolution decisions worth recording:
+
+- **Tab-class collision (E ↔ D):** both the right rail (E: Tiles/Stamps) and the
+  new left/mode rail (D: Layers/Objects) used `.adv-rail-tab(s)`. Kept E's
+  `.adv-rail-tab` for the right rail and **renamed D's mode tabs to
+  `.adv-mode-tab(s)`** (button class + CSS + the `zones.spec` selector) so the two
+  tab strips don't cascade-clash.
+- **Latent panel-layout bug fixed:** `.adv-root` never set `flex-direction`, so
+  `.dock-panel-content`'s `column` won and the three rails stacked (the right rail
+  overlapped the canvas — benign until the panel had a third section). Added
+  `.adv-root { flex-direction: row }`; the panel is now the intended
+  rail | canvas | rail row.
+- **`drawLayerCell` seam (C ↔ E):** composed cleanly — E's raw→{id,flags} decode
+  at the top, C's per-kind `resolveAutotileCell(…, frame)` for the autotile
+  branch, E's plain-tile affine branch below. `neighborMask`/`autotileCanvas`
+  dropped from the seam (subsumed by the registry resolver).
+- **`zones.spec` round-trip** now polls the autosaved project (autosave is
+  debounced ~1s) instead of reading `localStorage` immediately.
+- Shared-chrome reconciled: `editor.css?v=57`, `patch-notes.js?v=38` (one entry
+  per stage), `i18n.js` locale blocks + `CURATED_KEYS` unioned with the duplicate
+  `Name`/`Terrain`/`Objects` keys de-duped so `no-dupe-keys` stays green.
 
 ## Open items to confirm before Stage A starts
 

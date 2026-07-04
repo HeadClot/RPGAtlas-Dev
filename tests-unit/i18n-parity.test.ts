@@ -37,6 +37,34 @@ const CURATED_KEYS = [
   "Delete Layer", "Layer name", "Group", "Toggle Visibility", "Toggle Lock",
   "Opacity", "Blend", "Tint", "Clear Tint", "Draw slot",
   "Below characters", "Above (overhead)",
+  // Terrain & Autotile Studio chrome (Phase 8 Stage C, terrain-studio.ts).
+  // Help/body text falls back to English by design; these are the labels,
+  // headings, step names, buttons and kind names the wizard exposes as chrome.
+  "Terrain", "Terrain & Autotile Studio…", "Open the Terrain & Autotile Studio",
+  "Studio: Source", "Studio: Layout", "Studio: Terrain Types", "Studio: Rules", "Studio: Preview",
+  "Source sheet", "Layout", "Rules", "Preview", "Arrangement", "Name",
+  "Choose Image…", "Quick A2 Import…", "Add Variation…",
+  "Save Draft", "Create Terrain Brush", "Back", "Next", "Use this", "Auto-detected",
+  "Animation", "Animate this terrain", "Frames", "FPS", "Variations", "Weight",
+  "Pattern completion",
+  "Terrain (A2 · 47-blob)", "Edge / Fence (16)", "Corner (16)",
+  "Animated (A1)", "Building (A3)", "Wall (A4)",
+  // Stamps, tile transforms & palette (Phase 8 Stage E, adv-rail/adv-stamps/
+  // adv-dialogs). Command labels (Flip/Rotate/Save Selection/Random Scatter)
+  // are collected from panels.ts; these are the rail/dialog strings used via t().
+  "Stamps", "Stamp",
+  "Search tiles…", "All Tiles", "Water", "Floor", "Walls",
+  "Nature", "Objects", "Other", "No tiles match your search.",
+  "Capture Selection", "Place Stamp", "Scatter %",
+  "No stamps yet — select an area in the Map editor, then Capture Selection.",
+  "Brush transform (X flip / Y flip / R rotate)",
+  // Advanced Map Editor — Objects & gameplay zones (Phase 8 Stage D, adv-objects.ts)
+  "New zone kind", "Zones", "Zone name", "Kind", "Delete Zone",
+  "Encounter", "Transfer", "Sound", "Weather", "Spawn Point", "Navigation", "Custom",
+  "Select / Edit", "Rectangle Zone", "Ellipse Zone", "Polygon Zone", "Point Zone",
+  "Encounter rate", "Troops", "Test Encounter in This Area", "Destination", "Facing",
+  "Pick Destination", "Keep facing", "Down", "Left", "Right", "Up",
+  "Audio key", "Volume", "Falloff", "None", "Linear (by distance)", "Power",
 ];
 
 /** Command labels that are dynamic composites or deliberately English-only

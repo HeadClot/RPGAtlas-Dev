@@ -5,6 +5,47 @@
 export const PATCH_NOTES = [
   {
     date: "July 4, 2026",
+    title: "Terrain & Autotile Studio",
+    summary:
+      "Turn any tile sheet into a smart terrain brush with a five-step wizard (open it from the Advanced tab or the command palette). Pick your sheet, let the Studio guess how it's laid out, name the terrain, and paint — the tiles automatically pick the right edge, corner, and inside pieces for you. Water and lava can animate, and you can add extra sheets so the ground looks less repetitive. Old projects that don't use it are saved exactly as before.",
+    items: [
+      "Five steps — Source, Layout, Terrain Types, Rules, Preview — with a live preview that paints exactly like the real map.",
+      "Auto-detection guesses the arrangement (A2 terrain, A1 animated, fences, corners, walls, roofs) from the sheet's size; change it any time.",
+      "Animate a terrain by setting frames + speed — water and lava now flow in the editor, the HD-2D viewport, and play-testing.",
+      "Add weighted variations: drop in alternate sheets and each cell randomly picks one, so large fields of grass stop tiling obviously.",
+      "Pattern-completion flags fill in shapes you didn't draw by mirroring or rotating the ones you did.",
+      "Save Draft keeps your work-in-progress; the classic one-click A2 import is still there as the Quick path.",
+    ],
+  },
+  {
+    date: "July 4, 2026",
+    title: "Advanced Map Editor — stamps, flip & rotate, searchable tiles",
+    summary:
+      "The Advanced tab gets three big painting upgrades. Flip or rotate the tile you're painting (X, Y, and R keys, or the toolbar buttons) so one tile can face any direction. Save any selection as a reusable Stamp and drop it anywhere — with a random-scatter mode for quickly sprinkling grass, rocks, or props. And the new right-hand tile palette is searchable and sorted into simple categories (Terrain, Water, Floor, Walls, Nature, Objects). A map that uses none of this saves exactly as before.",
+    items: [
+      "Press X to flip the brush left-right, Y to flip up-down, R to rotate 90° — the little indicator by the zoom shows the current brush transform. Flipped and rotated tiles look right in the editor, in play-testing, and in exported games.",
+      "Select an area in the Map view, then Save Selection as Stamp to add it to the Stamps tab; click 📌 and place it anywhere. Undo works on stamp placement like any other paint.",
+      "Turn on 🎲 random scatter to sprinkle a stamp across your brush with an adjustable chance per spot — great for foliage and rubble.",
+      "The Advanced editor's Tiles tab has a search box and category chips, so you can find the tile you want without scrolling the whole sheet.",
+      "Autotile terrain brushes keep resolving their own shape — flip/rotate applies to ordinary tiles.",
+    ],
+  },
+  {
+    date: "July 4, 2026",
+    title: "Advanced Map Editor — objects & gameplay zones",
+    summary:
+      "The Advanced tab gains an Objects palette: draw gameplay zones straight onto the map and give them behaviour. Fence off an area that spawns tougher monsters, a doorway that warps the player elsewhere, a grove that loops birdsong, a storm that only rains in one valley, or invisible walls and walkways — no scripting. Each zone kind has its own little inspector, and a map with no zones plays exactly as before.",
+    items: [
+      "Switch the right rail to Objects, pick a zone kind, and draw a Rectangle, Ellipse, Polygon, or Point on the canvas (double-click finishes a polygon). Select tool drags the corner handles to reshape a zone.",
+      "Encounter zones replace the map's random-battle pool while you stand inside — with a one-click “Test Encounter in This Area” that playtests right there and forces a battle.",
+      "Transfer zones warp the player on entry; Sound zones loop an ambience (with optional distance falloff); Weather zones apply weather while inside and restore it on exit.",
+      "Collision zones make tiles solid and Navigation zones make them walkable — baked in at load, so movement stays fast.",
+      "Custom zones do nothing on their own but are readable by plugins and Script through atlas.zonesAt(x, y) — build whatever you like on top.",
+      "Everything round-trips through save/load and Undo (Ctrl+Z), and a map you never give a zone is byte-for-byte identical to before.",
+    ],
+  },
+  {
+    date: "July 4, 2026",
     title: "Advanced Map Editor — paintable layers",
     summary:
       "The Advanced tab's layer list is now fully editable. Add your own tile layers on top of the classic four, paint straight onto whichever layer is selected, and give each one an opacity, a blend mode (add / multiply / screen), or a colour tint. Everything you build shows up identically in the regular editor, in play-testing, and in exported games — and a map you never touch here is saved exactly as before.",

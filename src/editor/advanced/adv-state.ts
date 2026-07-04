@@ -16,10 +16,19 @@
    editorHooks). Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { AdvLayer } from "../../shared/schema";
+import type { AdvLayer, Stamp, ZoneShape } from "../../shared/schema";
 import { classicStack, repairLayersAdv, nextLayerId, type CoreRole } from "../../shared/layer-view";
+import type { TileFlags } from "../../shared/tile-flags";
 
 export type AdvTool = "pen" | "erase" | "fill" | "rect";
+/** Which right-rail tab the Advanced panel shows. */
+export type AdvRailTab = "tiles" | "stamps";
+/** Left/mode rail: paint the tile stack, or place/edit gameplay zones. */
+export type AdvRail = "layers" | "objects";
+/** Zone drawing tools (Objects mode, Phase 8 Stage D). "select" edits the
+ *  selected zone (drag vertices / move); the shape tools draw a new zone. */
+export type ZoneTool = "select" | "rect" | "ellipse" | "poly" | "point";
+export type ZoneKind = import("../../shared/schema").MapZone["kind"];
 
 export const advState = {
   zoom: 0.5,
@@ -28,6 +37,31 @@ export const advState = {
   hoverCell: null as { x: number; y: number } | null,
   rectStart: null as { x: number; y: number } | null,
   painting: false,
+  /** Brush transform (Stage E): flip/rotate applied to plain tiles as painted.
+   *  Reused by both editors' Advanced-panel brush; autotile ids ignore it. */
+  brushFlags: { h: false, v: false, r: false } as TileFlags,
+  /** Right-rail tab + tile-palette search / category filter (Stage E). */
+  railTab: "tiles" as AdvRailTab,
+  paletteSearch: "",
+  paletteCategory: "all" as string,
+  /** Stamp placement (Stage E): the stamp being placed (paste-on-click), and
+   *  whether random-scatter mode is armed. null = normal painting. */
+  placingStamp: null as Stamp | null,
+  stampRandom: false,
+  /** Bumped each scatter click so repeated clicks fill different cells. */
+  scatterSalt: 0,
+  // ---- Objects mode (Phase 8 Stage D) ----
+  rail: "layers" as AdvRail,
+  zoneTool: "rect" as ZoneTool,
+  /** the kind a freshly drawn zone gets. */
+  activeKind: "encounter" as ZoneKind,
+  selectedZoneId: null as number | null,
+  /** in-progress shape while drawing (rect drag, poly points). */
+  zoneDraft: null as ZoneShape | null,
+  /** poly-in-progress vertex list (committed on double-click / Enter). */
+  polyPts: null as { x: number; y: number }[] | null,
+  /** vertex being dragged in select mode: index into the zone's vertices. */
+  vertexDrag: null as { zoneId: number; index: number } | null,
 };
 
 /** Panel refresh callbacks, bound on mount so the Layers/paint modules can
@@ -35,7 +69,9 @@ export const advState = {
 export const advHooks = {
   render: () => {},        // redraw only the canvas (live paint feedback)
   rebuildLayers: () => {}, // rebuild the Layers list
+  rebuildObjects: () => {}, // rebuild the Objects palette / inspector
   rebuild: () => {},       // full panel rebuild (tree + layers + canvas)
+  rebuildRail: (() => {}) as () => void, // rebuild the right rail (tiles / stamps)
 };
 
 /** Promote a classic map to a stored generalized stack the first time the

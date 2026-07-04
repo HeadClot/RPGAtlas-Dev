@@ -16,13 +16,17 @@
 import { Assets, Music, RA } from "../../shared/deps.js";
 import { Renderer } from "../../renderer/index.js";
 import { drawLayerCell } from "../../shared/autotile-draw.js";
-import { composeAdvBuffers } from "../../shared/layer-composite.js";
+import { composeAdvBuffers, recomposeLowerCell } from "../../shared/layer-composite.js";
+import { tileId } from "../../shared/tile-flags.js";
 import { syncAutotileRegistry } from "../../shared/autotile-load.js";
+import { scanAnimatedCells, redrawAnimatedCells, frameAtTick } from "../../shared/autotile-anim.js";
+import { anyAutotileAnimated } from "../../shared/autotile-registry.js";
 import { clamp, rnd, compareVariable, sysSe } from "../util.js";
 import { ctx, fns } from "../state/engine-context.js";
 import { G, Quests, objectiveDone, onEnemyKilled, param } from "../state/game-state.js";
 import { Plugins } from "../plugin-runtime.js";
 import { setAmbience } from "../../shared/audio-deck.js";
+import { resetZoneState, zonePassAt, mapHasZones } from "./zone-runtime.js";
 
 const TILE = Assets.TILE;
 
@@ -47,14 +51,25 @@ function tileAt(layer: any, x: any, y: any): any {
 }
 export function tilePassable(x: any, y: any): boolean {
   if (x < 0 || y < 0 || x >= ctx.map.width || y >= ctx.map.height) return false;
+  // Collision/nav zones (Phase 8) are baked into a passOv-compatible overlay at
+  // map load; a non-zero cell is an explicit force-block/force-pass that wins
+  // over the tile's own passability. Guarded so a map with no such zones keeps
+  // the verbatim passOv read below — byte-identical movement (goldens gate it).
+  if (mapHasZones()) {
+    const zo = zonePassAt(x, y);
+    if (zo === 1) return true;
+    if (zo === 2) return false;
+  }
   const ov = ctx.map.passOv ? ctx.map.passOv[y * ctx.map.width + x] : 0;
   if (ov === 1) return true;
   if (ov === 2 || ov === 3) return false; // 3 = ledge: blocked for walking, jumped over (Phase 5)
-  const d2 = tileAt("decor2", x, y);
+  // Mask the Stage-E transform-flag bits off the raw id before the tile-def
+  // lookup: a flipped/rotated floor is as passable as its unflipped self.
+  const d2 = tileId(tileAt("decor2", x, y));
   if (d2 !== 0) return Assets.tiles[d2] ? Assets.tiles[d2].pass : false;
-  const d = tileAt("decor", x, y);
+  const d = tileId(tileAt("decor", x, y));
   if (d !== 0) return Assets.tiles[d] ? Assets.tiles[d].pass : false;
-  const g = tileAt("ground", x, y);
+  const g = tileId(tileAt("ground", x, y));
   if (g === 0) return false;
   return Assets.tiles[g] ? Assets.tiles[g].pass : false;
 }
@@ -194,6 +209,73 @@ async function prerenderMap(): Promise<void> {
     typeof Renderer !== "undefined" &&
     (await Renderer.available());
   if (ctx.hdActive) await Renderer.setMap(ctx.lowerBuf, ctx.upperBuf, ctx.map);
+  recordAnimatedCells();
+}
+
+// ---- animated terrain (Phase 8 Stage C) ----
+// Cells painted with an animated terrain group are recorded once at prerender;
+// a per-tick pass re-composites only those cells onto the lower buffer (and
+// re-textures HD) when their frame advances. Absent any animated group the list
+// is empty and tickMapAnim early-returns — zero cost for classic maps.
+const ANIM_FRAME_STATE = new Map<number, number>();
+function recordAnimatedCells(): void {
+  ANIM_FRAME_STATE.clear();
+  ctx.animCells = null;
+  if (!anyAutotileAnimated()) return;
+  const m = ctx.map;
+  const layers: number[][] = m.layersAdv
+    ? m.layersAdv.flatMap((L: any) =>
+      L.type === "tile" ? [L.data] : L.type === "group" ? [] : [])
+      .concat([m.layers.ground, m.layers.decor, m.layers.decor2, m.layers.over])
+    : [m.layers.ground, m.layers.decor, m.layers.decor2, m.layers.over];
+  const cells = scanAnimatedCells(layers, m.width, m.height);
+  // Perf cap: an absurd number of animated cells (a whole 64x64 map of water)
+  // would recompose ~4k cells/frame; keep it bounded so the loop can never
+  // dominate a frame. Beyond the cap, only the first N animate (rare edge case).
+  const ANIM_CELL_CAP = 2048;
+  ctx.animCells = cells.length > ANIM_CELL_CAP ? cells.slice(0, ANIM_CELL_CAP) : cells;
+}
+
+/** Advance animated terrain onto the lower buffer for the current frame; called
+ *  once per engine tick from the map update with the engine tick counter
+ *  (ctx.globalT). Frames derive from that tick via frameAtTick, so terrain
+ *  animation is perfectly deterministic under the golden-image frozen clock.
+ *  Returns true when the buffer changed (so HD re-textures); no-op when nothing
+ *  animates. */
+export function tickMapAnim(tick: number): boolean {
+  const cells = ctx.animCells;
+  if (!cells || !cells.length || !ctx.lowerBuf) return false;
+  const lg = ctx.lowerBuf.getContext("2d");
+  const frameFn = (fps: number, frames: number) => frameAtTick(tick, fps, frames, 60);
+  const changed = redrawAnimatedCells(cells, frameFn, ANIM_FRAME_STATE, (x, y, frame) => {
+    recomposeLowerCell(lg, ctx.map, x, y, frame, Assets.drawTile, TILE, "#101018");
+    redrawCellShadow(lg, x, y);
+  });
+  if (changed && ctx.hdActive && typeof Renderer !== "undefined") {
+    // Re-upload the lower texture only (upper is untouched by terrain anim).
+    Renderer.setMap(ctx.lowerBuf, ctx.upperBuf, ctx.map);
+  }
+  return changed;
+}
+
+// Redraw the quadrant shadow for one cell after its tiles were recomposed
+// (mirrors the shadow pass in prerenderMap, so a shadow over animated water is
+// not lost). No-op when the map has no shadows or none on this cell.
+function redrawCellShadow(lg: any, x: number, y: number): void {
+  const sh = ctx.map.shadows;
+  if (!sh) return;
+  const mask = sh[y * ctx.map.width + x];
+  if (!mask) return;
+  const H = TILE / 2;
+  lg.save();
+  lg.globalCompositeOperation = "source-over";
+  lg.globalAlpha = 1;
+  lg.fillStyle = "rgba(10,10,26,0.35)";
+  if (mask & 1) lg.fillRect(x * TILE, y * TILE, H, H);
+  if (mask & 2) lg.fillRect(x * TILE + H, y * TILE, H, H);
+  if (mask & 4) lg.fillRect(x * TILE, y * TILE + H, H, H);
+  if (mask & 8) lg.fillRect(x * TILE + H, y * TILE + H, H, H);
+  lg.restore();
 }
 
 export async function loadMap(mapId: any): Promise<void> {
@@ -226,6 +308,11 @@ export async function loadMap(mapId: any): Promise<void> {
   // layers keep looping seamlessly across a transfer.
   setAmbience(ctx.map.ambience || []);
   Plugins.fire("mapLoad", ctx.map);
+  // Gameplay zones (Phase 8): bake collision/nav into the pass overlay and reset
+  // presence tracking. Runs AFTER mapLoad so the weather baseline captures the
+  // map's intended weather (the weather plugin sets per-map weather on mapLoad).
+  // Absent `zones` ⇒ empty state, zero per-step work.
+  resetZoneState(ctx.map);
 }
 
 export function entityAt(x: any, y: any, exclude?: any): any[] {
@@ -654,7 +741,7 @@ export function regionAt(x: any, y: any): number {
 
 function groundKeyAt(x: any, y: any): string {
   if (x < 0 || y < 0 || x >= ctx.map.width || y >= ctx.map.height) return "";
-  const t = Assets.tiles[tileAt("ground", x, y)];
+  const t = Assets.tiles[tileId(tileAt("ground", x, y))]; // mask Stage-E flags
   return t ? t.key : "";
 }
 

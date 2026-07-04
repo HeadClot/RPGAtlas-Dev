@@ -976,7 +976,10 @@ a.console-link:hover { text-decoration: underline; color: var(--text-bright); }
 .console-busy .console-prompt { opacity: 0.5; }
 
 /* ---------- Advanced Map Editor panel (Phase 8 Stage A) ---------- */
-.adv-root { display: flex; height: 100%; min-height: 0; background: var(--bg-deep); }
+/* Row layout (left rail | canvas | right rail). Must override .dock-panel-content's
+   flex-direction: column, or the three sections stack and the right rail overlaps
+   the canvas (latent since the panel gained a right rail). */
+.adv-root { display: flex; flex-direction: row; height: 100%; min-height: 0; background: var(--bg-deep); }
 .adv-rail { flex: 0 0 220px; display: flex; flex-direction: column; min-height: 0;
   border-right: 1px solid var(--line-2); background: var(--panel); }
 .adv-section-head { display: flex; align-items: center; justify-content: space-between;
@@ -1031,3 +1034,147 @@ a.console-link:hover { text-decoration: underline; color: var(--text-bright); }
 .adv-prop-tint { flex: 1; display: flex; align-items: center; gap: 5px; }
 .adv-prop-color { width: 34px; height: 20px; padding: 0; border: 1px solid var(--line-3); background: none; }
 .adv-tool-sep { flex: 0 0 auto; width: 1px; height: 18px; background: var(--line-2); margin: 0 3px; }
+/* ---------- Terrain & Autotile Studio (Phase 8 Stage C) ---------- */
+.adv-studio-btn { display: block; width: calc(100% - 12px); margin: 4px 6px 8px;
+  padding: 7px 10px; text-align: left; background: var(--raise); color: var(--text);
+  border: 1px solid var(--line-3); border-radius: 6px; cursor: pointer; font-weight: 600; }
+.adv-studio-btn:hover { background: var(--line); border-color: var(--accent-edge); color: var(--text-bright); }
+.studio-modal { width: min(920px, 94vw); max-width: 94vw; }
+.studio-modal .modal-body { padding: 0; }
+.studio-body { display: flex; min-height: 460px; }
+.studio-rail { flex: 0 0 190px; background: var(--panel-2); border-right: 1px solid var(--line-2);
+  padding: 8px 0; }
+.studio-step { display: flex; align-items: center; gap: 8px; padding: 9px 14px;
+  color: var(--text-mid); cursor: pointer; font-size: 13px; border-left: 3px solid transparent; }
+.studio-step:hover { background: var(--panel-3); color: var(--text-bright); }
+.studio-step.sel { background: var(--panel-3); color: var(--text-bright);
+  border-left-color: var(--accent-edge); font-weight: 600; }
+.studio-step.done .studio-step-n { background: var(--accent); color: #fff; }
+.studio-step-n { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 11px;
+  background: var(--raise-2); color: var(--text-dim); }
+.studio-pane { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
+.studio-step-pane h3 { margin: 0 0 4px; color: var(--text-bright); font-size: 17px; }
+.studio-step-pane h4 { margin: 14px 0 4px; color: var(--text-mid); font-size: 13px; }
+.studio-help { margin: 0 0 12px; color: var(--text-dim); font-size: 12px; }
+.studio-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
+.studio-row > label { color: var(--text-mid); font-size: 12px; }
+.studio-row input[type=number] { width: 62px; }
+.studio-drop { min-height: 150px; border: 2px dashed var(--line-3); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; background: var(--bg-deep);
+  margin-bottom: 10px; overflow: hidden; }
+.studio-drop.over { border-color: var(--accent-edge); background: var(--panel-3); }
+.studio-drop-hint { color: var(--text-dim); font-size: 13px; padding: 20px; text-align: center; }
+.studio-src-img, .studio-grid-img { max-width: 100%; max-height: 260px; image-rendering: pixelated; }
+.studio-dims { color: var(--text-dim); font-size: 12px; margin: 6px 0 0; }
+.studio-detect { background: var(--panel-3); border: 1px solid var(--line-2); border-radius: 6px;
+  padding: 8px 10px; font-size: 12px; color: var(--text-mid); margin-bottom: 10px; }
+.studio-kind { min-width: 220px; }
+.studio-grid-wrap { margin-top: 12px; }
+.studio-grid-box { position: relative; display: inline-block; background: var(--bg-deep);
+  border: 1px solid var(--line-2); }
+.studio-grid-lines { position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(to right, rgba(120,200,255,0.35) 0 1px, transparent 1px calc(100% / var(--cols))),
+    repeating-linear-gradient(to bottom, rgba(120,200,255,0.35) 0 1px, transparent 1px calc(100% / var(--rows))); }
+.studio-chks { display: flex; flex-direction: column; gap: 5px; margin: 6px 0; }
+.studio-chk { display: flex; align-items: center; gap: 7px; color: var(--text); font-size: 13px; cursor: pointer; }
+.studio-chk-help { font-size: 11px; }
+.studio-variant { display: flex; align-items: center; gap: 8px; margin: 5px 0;
+  background: var(--panel-3); border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 8px; }
+.studio-variant-img { width: 40px; height: 40px; object-fit: contain; image-rendering: pixelated;
+  background: var(--bg-deep); border: 1px solid var(--line-3); }
+.studio-mini { padding: 2px 8px; font-size: 11px; }
+.studio-mini.danger { color: #ff9a9a; }
+.studio-preview-canvas { display: block; image-rendering: pixelated; border: 1px solid var(--line-2);
+  background: var(--bg-deep); margin-bottom: 12px; max-width: 100%; }
+.studio-checks { display: flex; flex-direction: column; gap: 4px; }
+.studio-check { font-size: 12px; }
+.studio-check.ok { color: #8fe0a0; }
+.studio-check.warn { color: #ffc477; }
+.studio-foot { align-items: center; }
+.studio-foot-sep { flex: 1; }
+/* ---------- Advanced Map Editor — stamps, transforms & palette (Phase 8 Stage E) ---------- */
+.adv-xfm-label { min-width: 34px; text-align: center; color: var(--text-dim);
+  font-size: var(--fs-small); letter-spacing: 1px; }
+.adv-xfm-label.active { color: var(--gold-edge); font-weight: 700; }
+/* right rail: tiles / stamps */
+.adv-rail-right { flex: 0 0 240px; display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid var(--line-2); background: var(--panel); }
+.adv-rail-tabs { display: flex; flex: 0 0 auto; border-bottom: 1px solid var(--line-2); }
+.adv-rail-tab { flex: 1; padding: 6px 4px; background: var(--bar-2); border: none;
+  border-right: 1px solid var(--line-2); color: var(--text-mid); font-size: var(--fs-small);
+  cursor: pointer; }
+.adv-rail-tab:last-child { border-right: none; }
+.adv-rail-tab.sel { background: var(--accent); color: #fff; font-weight: 600; }
+.adv-rail-tiles, .adv-rail-stamps { flex: 1 1 auto; overflow-y: auto; min-height: 0;
+  display: flex; flex-direction: column; }
+.adv-rail-search { margin: 6px; padding: 4px 6px; font-size: var(--fs-small);
+  background: var(--bg-deep); border: 1px solid var(--line-3); color: var(--text); border-radius: 4px; }
+.adv-rail-cats { display: flex; flex-wrap: wrap; gap: 3px; padding: 0 6px 6px; }
+.adv-cat-chip { padding: 2px 7px; font-size: var(--fs-tiny); border: 1px solid var(--line-3);
+  border-radius: 10px; background: var(--bar-2); color: var(--text-mid); cursor: pointer; }
+.adv-cat-chip:hover { background: var(--hover-2); }
+.adv-cat-chip.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+.adv-tile-grid { display: grid; grid-template-columns: repeat(auto-fill, 40px); gap: 3px;
+  padding: 0 6px 8px; align-content: start; }
+.adv-tile-swatch { width: 40px; height: 40px; border: 1px solid var(--line-3); border-radius: 3px;
+  overflow: hidden; cursor: pointer; background: #15151d; }
+.adv-tile-swatch:hover { border-color: var(--text-mid); }
+.adv-tile-swatch.sel { border-color: var(--gold-edge); box-shadow: 0 0 0 1px var(--gold-edge); }
+.adv-tile-swatch-c { display: block; image-rendering: pixelated; }
+.adv-rail-empty { padding: 10px; font-size: var(--fs-small); }
+/* stamps */
+.adv-rail-actions { padding: 6px; border-bottom: 1px solid var(--line-2); }
+.adv-mini-btn.wide { width: 100%; padding: 5px; }
+.adv-stamp-row { display: flex; gap: 8px; padding: 6px; border-bottom: 1px solid var(--line-2);
+  align-items: flex-start; }
+.adv-stamp-row.sel { background: var(--hover-2); }
+.adv-stamp-thumb-c { flex: 0 0 auto; border: 1px solid var(--line-3); border-radius: 3px;
+  image-rendering: pixelated; }
+.adv-stamp-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.adv-stamp-name { font-size: var(--fs-small); color: var(--text); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; cursor: text; }
+.adv-stamp-btns { display: flex; gap: 3px; }
+.adv-stamp-prob { display: flex; align-items: center; gap: 5px; font-size: var(--fs-tiny);
+  color: var(--text-dim); }
+/* ---------- Advanced Map Editor — Objects & gameplay zones (Phase 8 Stage D) ---------- */
+/* Left-rail mode tabs (Layers / Objects) — distinct from the right-rail
+   .adv-rail-tabs (Tiles / Stamps) so the two tab strips don't cascade-clash. */
+.adv-mode-tabs { display: flex; gap: 2px; padding: 4px 6px 0; border-top: 1px solid var(--line-2); }
+.adv-mode-tab { flex: 1; padding: 4px 6px; font-size: var(--fs-small); cursor: pointer;
+  border: 1px solid var(--line-2); border-bottom: none; border-radius: 5px 5px 0 0;
+  background: var(--bar-2); color: var(--text-mid); }
+.adv-mode-tab.sel { background: var(--panel); color: var(--text-hi); border-color: var(--line-3); }
+.adv-objects { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 8px 8px; background: var(--panel); }
+.adv-obj-kinds, .adv-obj-tools { display: flex; flex-wrap: wrap; gap: 3px; padding: 3px 0; }
+.adv-obj-kinds .adv-mini-btn { font-size: 11px; padding: 2px 6px; }
+.adv-obj-hint, .adv-prop-note { font-size: var(--fs-small); margin: 3px 0; line-height: 1.35; }
+.adv-zone-list { display: flex; flex-direction: column; gap: 1px; margin: 2px 0; }
+.adv-zone-row { display: flex; align-items: center; gap: 5px; padding: 2px 4px; cursor: pointer;
+  border-radius: 4px; font-size: var(--fs-small); }
+.adv-zone-row:hover { background: var(--bar-2); }
+.adv-zone-row.sel { background: var(--accent); color: #fff; }
+.adv-zone-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adv-zone-swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+.adv-zone-encounter { background: #ff6a8a; } .adv-zone-transfer { background: #7ac8ff; }
+.adv-zone-sound { background: #8affc8; } .adv-zone-weather { background: #c9a2ff; }
+.adv-zone-spawn { background: #ffd86a; } .adv-zone-collision { background: #ff5555; }
+.adv-zone-nav { background: #55dd88; } .adv-zone-custom { background: #c0c0c0; }
+.adv-zone-btn { flex: 0 0 auto; width: 18px; padding: 0; background: none; border: none;
+  color: var(--text-dim); cursor: pointer; font-size: 11px; }
+.adv-zone-row.sel .adv-zone-btn { color: #fff; }
+.adv-zone-inspector { border-top: 1px solid var(--line-2); margin-top: 6px; padding-top: 6px; }
+.adv-prop-input { flex: 1; min-width: 0; }
+.adv-prop-num { flex: 0 0 70px; }
+.adv-prop-dest { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adv-troop-list { max-height: 140px; overflow: auto; border: 1px solid var(--line-2);
+  border-radius: 5px; padding: 3px 5px; margin: 3px 0; }
+.adv-troop-item { display: flex; align-items: center; gap: 5px; font-size: var(--fs-small); padding: 1px 0; }
+.adv-obj-testbtn { width: 100%; margin: 6px 0 2px; padding: 5px; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: 5px; background: var(--bar-2); color: var(--text-hi); }
+.adv-obj-testbtn:hover { background: var(--accent); color: #fff; }
+.adv-prop-props { display: flex; flex-direction: column; gap: 2px; margin: 3px 0; }
+.adv-prop-kv { display: flex; align-items: center; gap: 4px; }
+.adv-prop-key { flex: 0 0 70px; font-size: var(--fs-small); color: var(--text-mid);
+  overflow: hidden; text-overflow: ellipsis; }

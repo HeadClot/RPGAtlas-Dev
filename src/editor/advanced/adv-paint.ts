@@ -16,7 +16,20 @@ import { touch } from "../persistence";
 import { renderMap, normRect } from "../map-editor/map-render";
 import { pushUndo } from "../map-editor/history";
 import { layerView } from "../../shared/layer-view";
+import { isAutotileId } from "../../shared/autotile-registry";
+import { withFlags } from "../../shared/tile-flags";
 import { advState, advHooks, ensureLayersAdv, findLayer } from "./adv-state";
+import { placeStampAt } from "./adv-stamps";
+
+/** The value the active brush writes for a plain tile: the selected id with the
+ *  current brush transform flags folded in. Autotile groups resolve their own
+ *  shape, so their reserved id is written flag-free (v1 scope). */
+function brushValue(): number {
+  const id = S.selectedTile;
+  if (isAutotileId(id)) return id;
+  const f = advState.brushFlags;
+  return (f.h || f.v || f.r) ? withFlags(id, f) : id;
+}
 
 /** The mutable tile array the active layer writes into: the role array for a
  *  core, the layer's own data for a tile layer. null when nothing paintable is
@@ -74,22 +87,33 @@ function afterEdit() {
 
 function paintAt(m: any, arr: number[], cell: { x: number; y: number }) {
   if (advState.tool === "pen") {
-    forBrush(m, cell, (x, y) => { arr[y * m.width + x] = S.selectedTile; });
+    const v = brushValue();
+    forBrush(m, cell, (x, y) => { arr[y * m.width + x] = v; });
   } else if (advState.tool === "erase") {
     forBrush(m, cell, (x, y) => { arr[y * m.width + x] = 0; });
   } else if (advState.tool === "fill") {
-    // Autotile groups fill by their reserved id like any other tile.
-    floodFill(m, arr, cell.x, cell.y, S.selectedTile);
+    // Autotile groups fill by their reserved id like any other tile; plain
+    // tiles fill with the brush transform folded in.
+    floodFill(m, arr, cell.x, cell.y, brushValue());
   }
 }
 
 export function attachAdvPainting(canvas: HTMLCanvasElement) {
   canvas.addEventListener("mousedown", (e: MouseEvent) => {
-    if (e.button !== 0) return;
+    // Objects mode owns the canvas (zone drawing) — painting only in Layers mode.
+    if (e.button !== 0 || advState.rail !== "layers") return;
     const m = curMap();
     if (!m) return;
     const cell = cellFromMouse(canvas, e);
     if (!cell) return;
+    // Stamp placement (Stage E): click stamps the armed library entry through
+    // the shared paste path (own pushUndo inside placeStampAt). Random-scatter
+    // mode scatters across the brush footprint with per-stamp probability.
+    if (advState.placingStamp) {
+      placeStampAt(m, cell);
+      afterEdit();
+      return;
+    }
     const arr = activeArray(m);
     if (!arr) return; // no paintable active layer (group / locked / none)
     advState.painting = true;
@@ -98,6 +122,7 @@ export function attachAdvPainting(canvas: HTMLCanvasElement) {
     else { paintAt(m, arr, cell); afterEdit(); }
   });
   canvas.addEventListener("mousemove", (e: MouseEvent) => {
+    if (advState.rail !== "layers") return; // zone-draw handles hover in Objects mode
     const m = curMap();
     if (!m) return;
     const cell = cellFromMouse(canvas, e);
@@ -117,8 +142,9 @@ export function attachAdvPainting(canvas: HTMLCanvasElement) {
       const arr = activeArray(m);
       if (arr) {
         const r = normRect(advState.rectStart, advState.hoverCell);
+        const v = brushValue();
         for (let y = r.y1; y <= r.y2; y++)
-          for (let x = r.x1; x <= r.x2; x++) arr[y * m.width + x] = S.selectedTile;
+          for (let x = r.x1; x <= r.x2; x++) arr[y * m.width + x] = v;
         afterEdit();
       }
     }
