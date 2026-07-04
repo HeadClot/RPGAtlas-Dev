@@ -5,6 +5,19 @@
 export const PATCH_NOTES = [
   {
     date: "July 4, 2026",
+    title: "Advanced Map Editor — paintable layers",
+    summary:
+      "The Advanced tab's layer list is now fully editable. Add your own tile layers on top of the classic four, paint straight onto whichever layer is selected, and give each one an opacity, a blend mode (add / multiply / screen), or a colour tint. Everything you build shows up identically in the regular editor, in play-testing, and in exported games — and a map you never touch here is saved exactly as before.",
+    items: [
+      "Add Layer (＋) makes a new tile layer; paint it with the Pen, Eraser, Fill, or Rectangle tools using the same tile palette as the Map view.",
+      "Set each layer's Opacity, Blend (Normal / Add / Multiply / Screen), and Tint in the properties box below the list.",
+      "Group layers together, reorder with ▲ / ▼, toggle the 👁 eye to hide a layer or the lock to protect it, and double-click to rename.",
+      "Tile layers draw below or above the characters — your pick — so you can build overhead canopies and ground overlays.",
+      "The four base layers (Ground, Decor, Decor 2, Overhead) are always kept and shared with the regular editor; Undo (Ctrl+Z) works across both.",
+    ],
+  },
+  {
+    date: "July 4, 2026",
     title: "Advanced Map Editor — first look",
     summary:
       "A new Advanced tab opens next to the Map view (View menu or F4). It shows the same map as the regular editor — nothing moves or changes — with a map tree you can organize into folders, a layer list, and its own zoom. This is the foundation for terrain brushes, zones, stamps, and auto-mapping coming in the next updates.",

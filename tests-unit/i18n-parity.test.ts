@@ -32,6 +32,11 @@ const CURATED_KEYS = [
   // Advanced Map Editor chrome (Phase 8 Stage A, src/editor/advanced/adv-panel.ts)
   "Map Tree", "Layers", "Events", "Collision",
   "New Folder…", "Rename…", "Folder name",
+  // Advanced Map Editor — layers CRUD & tools (Phase 8 Stage B, adv-layers.ts)
+  "Add Layer", "Add Group", "Group Layer", "Ungroup", "Move Up", "Move Down",
+  "Delete Layer", "Layer name", "Group", "Toggle Visibility", "Toggle Lock",
+  "Opacity", "Blend", "Tint", "Clear Tint", "Draw slot",
+  "Below characters", "Above (overhead)",
 ];
 
 /** Command labels that are dynamic composites or deliberately English-only

@@ -1012,3 +1012,22 @@ a.console-link:hover { text-decoration: underline; color: var(--text-bright); }
 .adv-zoom-label { min-width: 38px; text-align: center; color: var(--text-mid); font-size: var(--fs-small); }
 .adv-canvas-wrap { flex: 1; overflow: auto; min-height: 0; background: #101018; }
 .adv-canvas { display: block; image-rendering: pixelated; }
+/* ---------- Advanced Map Editor — layers CRUD & tools (Phase 8 Stage B) ---------- */
+.adv-layers-toolbar { display: flex; align-items: center; gap: 3px; flex-wrap: wrap;
+  padding: 3px 6px; border-bottom: 1px solid var(--line-2); background: var(--bar-2); }
+.adv-layer-row { cursor: pointer; }
+.adv-layer-row.sel { background: var(--accent); color: #fff; }
+.adv-layer-row.sel .adv-layer-eye, .adv-layer-row.sel .adv-layer-badge { color: #fff; }
+.adv-layer-icon { width: 16px; flex: 0 0 auto; text-align: center; color: var(--text-dim); cursor: pointer; }
+.adv-layer-props { flex: 0 0 auto; border-top: 1px solid var(--line-2);
+  padding: 4px 8px 8px; background: var(--panel); }
+.adv-prop-head { font-size: var(--fs-small); font-weight: 600; color: var(--text-mid);
+  padding: 2px 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adv-prop-row { display: flex; align-items: center; gap: 6px; margin: 3px 0;
+  font-size: var(--fs-small); color: var(--text-mid); }
+.adv-prop-label { flex: 0 0 62px; }
+.adv-prop-range { flex: 1; min-width: 0; }
+.adv-prop-select { flex: 1; min-width: 0; }
+.adv-prop-tint { flex: 1; display: flex; align-items: center; gap: 5px; }
+.adv-prop-color { width: 34px; height: 20px; padding: 0; border: 1px solid var(--line-3); background: none; }
+.adv-tool-sep { flex: 0 0 auto; width: 1px; height: 18px; background: var(--line-2); margin: 0 3px; }

@@ -1,7 +1,7 @@
 # Phase 8 Spec — Advanced Map Editor (Tiled-class mapping)
 
-**Status:** IN PROGRESS — Stage A landed 2026-07-04. Stage log accumulates below,
-phase-3-spec style, as stages land.
+**Status:** IN PROGRESS — Stages A & B landed 2026-07-04. Stage log accumulates
+below, phase-3-spec style, as stages land. Next: C/D/E (parallel worktrees).
 **Authored:** 2026-07-04 by Claude Fable 5 (grand designer / orchestrator)
 **Branch (when work starts):** `phase-8-advanced-map` (off `main`)
 **Sources:** Codex feasibility discussion (2026-07-03, recovered from
@@ -501,6 +501,72 @@ Verified live (vite dev + preview): panel opens via F4, tree renders the
 sample project's 3 maps, folder create/file-into works and autosaves, map
 selection syncs Advanced ↔ classic both ways, Layers list shows the classic
 stack read-only, canvas renders at the panel's own zoom, zero console errors.
+
+### Stage B — Generalized layer system (landed 2026-07-04, Opus)
+
+Both Stage A open items 1–2 resolved as recommended (documented below); image/
+parallax layers deferred to the post-phase list (not needed for the exit).
+
+Shipped:
+
+- **Shared composite** (`src/shared/layer-composite.ts`, pure-ish): `drawEntryTiles`
+  (per-layer draw with tint via a confined offscreen multiply) and
+  `composeAdvBuffers` (folds the flattened stack into the engine's lower/upper
+  buffers — `slot:"below"→lower`, `above→upper`, honoring opacity/blend/tint).
+  `layer-view.ts` gained `BLEND_COMPOSITE` (blend→globalCompositeOperation) and
+  `entryArray` (a flattened entry's live tile array: role array for cores, own
+  `data` for tile layers).
+- **Three render sites branch on `layersAdv`**, classic path kept **verbatim**
+  (byte-identical, golden-proof): `renderMapView` (editor 2D — new inline
+  `drawAdvLayers` with shadow interleave at `shadowIndex` + active-layer dim via
+  the new `MapView.activeLayerId`), engine `prerenderMap`, and the live HD-2D
+  `buildBuffers`. HD-2D gets blend/opacity **exactly** (baked into the 2D buffers
+  it textures) — the Stage A "approximate HD-2D blend" caveat is moot.
+- **Undo captures `layersAdv`**: `snapshotOf`/`applySnapshot` now deep-clone and
+  restore it, so Advanced-editor paints/reorders/props undo (and cross-editor
+  undo stays consistent). Absent on classic maps ⇒ undefined round-trips.
+- **Advanced panel is editable** (`adv-state.ts` view-state + pure nested-stack
+  ops; `adv-layers.ts` Layers UI; `adv-paint.ts` canvas painting; `adv-panel.ts`
+  wires them via a cycle-safe `advHooks`): add tile layer / group, group /
+  ungroup, reorder (▲▼), delete (cores protected), rename, 👁 visibility, lock,
+  and a properties block (opacity slider, blend select, tint colour, draw slot).
+  Painting (pen/erase/fill/rect) routes to the **active** layer through
+  `pushUndo`/`touch()`; the tile palette + brush size are shared with the
+  Standard editor. `ensureLayersAdv` promotes a classic map to a stored stack
+  only on first edit, so untouched projects stay byte-identical.
+- **i18n**: 18 new layer keys added to all 10 locales + the parity gate's curated
+  list. **CSS**: `.adv-layers-toolbar` / `.adv-layer-props` / `.adv-prop-*` block;
+  `?v=55 → 56`. Patch-notes "Advanced Map Editor — paintable layers"; `?v=36 → 37`
+  (help.ts + shims.d.ts).
+
+Gate: tsc, eslint clean; vitest **324** (+10: `adv-layers-ops` 8, `layer-view`
++2); `node --test` 16/16; Playwright renderer-golden — the **3 new
+`generalized layers` tests pass** and the pre-existing **8 failures are byte-for-
+byte identical to a clean-`main` run** (7 heavy-WebGL post goldens + the stale
+`classic2d` baseline; confirmed via `git stash` A/B). New goldens use **in-run
+comparison** (no committed PNG): 2D defaults-only composite == classic (0 pixel
+diffs, proving `composeAdvBuffers` reproduces the four-array loop buffer-for-
+buffer); 2D user blend/opacity layers change the frame and are boot-deterministic;
+HD-2D folding adds no divergence beyond the classic-vs-classic WebGL noise floor.
+
+Stage B traps / decisions:
+- **The `classic2d-meridian-village.png` golden is stale on `main`** (New Game
+  loads `system.startMapId=10` "Murky Swamp", but the baseline is Meridian) — it
+  fails 0.31 on any machine now, pre-existing. Stage B goldens therefore avoid
+  committed baselines entirely (in-run pixel comparison). Consider re-recording
+  or renaming that baseline in Stage G.
+- Golden fixtures MUST target the **start map** (`system.startMapId`), not
+  `maps[0]` — the earlier version applied `layersAdv` to Meridian while the engine
+  rendered the swamp, so the composite path was never exercised (0 diffs for the
+  wrong reason).
+- `renderMapView` composite path only runs when `map.layersAdv` is present; the
+  sample maps have none, so the editor canvas-hash / painting e2e still exercise
+  the classic branch — untouched.
+- Opacity is applied live on the slider (mutate + render + save on release) but is
+  **not** pushed to undo (continuous sliders would spam the stack); discrete props
+  (blend, tint, slot, visibility, lock) and structural ops all push one undo entry.
+- Dynamic `import()` in the preview returns a **fresh** module instance (proj null)
+  — verify live editor state through the DOM + `localStorage`, not module imports.
 
 ## Open items to confirm before Stage A starts
 
