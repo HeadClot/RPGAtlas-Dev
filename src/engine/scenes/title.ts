@@ -37,6 +37,7 @@ export async function newGame(start?: { mapId: number; x: number; y: number }): 
   if (!G.party.length && ctx.proj.actors.length)
     G.party = [makeActor(ctx.proj.actors[0].id)];
   G.steps = 0;
+  G.timeOfDay = 12; // fresh day/night clock (loadMap applies the map's pin below)
   G.vehicles = {}; // fresh vehicle placements (lazily seeded from System)
   G.vehicle = null;
   ctx.cameraZoom = 1;

@@ -772,6 +772,44 @@ export const Battle: any = {
               await say(en.d.name + " can't move!", 500);
               return;
             }
+            if (c.skill && c.skill.type === "heal") {
+              // The Actions editor offers every skill, so heal-type ones must
+              // work here too: heal the most-wounded living troop member (self
+              // included), with the formula the editor documents (power + 1.2·MAT).
+              let ally = en;
+              for (const e2 of livingE()) {
+                if (
+                  e2.hp / Math.max(1, e2.d.stats.mhp) <
+                  ally.hp / Math.max(1, ally.d.stats.mhp)
+                )
+                  ally = e2;
+              }
+              const healAnim = animById(c.skill.animationId);
+              enemyStep(en);
+              const amount = variance(c.skill.power + en.d.stats.mat * 1.2);
+              ally.hp = Math.min(ally.d.stats.mhp, ally.hp + amount);
+              if (healAnim) {
+                await playBattleAnim(healAnim, sprs[en.i], [sprs[ally.i]]);
+              } else {
+                Sfx.play("heal");
+                castFx(sprs[en.i], c.skill, 1);
+                burst(sprs[ally.i], "heal", { color: c.skill.color, count: 14 });
+              }
+              floatText(sprs[ally.i], "+" + amount, "heal");
+              await say(
+                en.d.name +
+                  " casts " +
+                  c.skill.name +
+                  " — " +
+                  ally.d.name +
+                  " recovers " +
+                  amount +
+                  " HP!",
+                550,
+              );
+              await applySkillState(c.skill, ally);
+              return;
+            }
             const pool = livingP();
             if (!pool.length) return;
             const t = pool[weightedTargetIndex(pool, rndf())];

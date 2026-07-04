@@ -83,16 +83,17 @@ export async function runEventBlocking(rt: any): Promise<void> {
   if (ctx.blockingRun) return;
   ctx.blockingRun = true;
   rt.locked = true;
-  const prevDir = rt.dir;
   if (rt.kind === "human" && rt.page.trigger === "action") {
     rt.dir = dirTo(rt.x, rt.y, G.player.x, G.player.y);
   }
+  // If the commands turn the NPC (a "turn_*" route step), that facing sticks
+  // after the event; otherwise snap back to the page's authored facing.
+  const facedDir = rt.dir;
   try {
     await new Interp(rt).runList(rt.page.commands);
   } finally {
     rt.locked = false;
-    if (rt.kind === "human")
-      rt.dir = prevDir === rt.dir ? rt.page.dir || 0 : rt.page.dir || 0;
+    if (rt.kind === "human" && rt.dir === facedDir) rt.dir = rt.page.dir || 0;
     refreshAllPages();
     ctx.blockingRun = false;
   }
@@ -257,13 +258,15 @@ export function update(): void {
     if (rt.erased || !rt.page) continue;
     // Same no-dead-frame pattern as the player above: a finished step chains into the next
     // route/random step this same tick instead of pausing a frame at each tile.
-    if (rt.moving) {
+    if (rt.jumping) {
+      updateJumpMotion(rt); // route "jump" steps: NPC hops advance like the player's
+    } else if (rt.moving) {
       const arrived = updateEntityMotion(rt, rt.combat && rt.combat.knockback ? 0.18 : rt.speed);
       if (arrived && rt.combat) rt.combat.knockback = false;
     }
-    if (!rt.moving && rt.route) {
+    if (!rt.moving && !rt.jumping && rt.route) {
       updateRoute(rt);
-    } else if (!rt.moving) {
+    } else if (!rt.moving && !rt.jumping) {
       const chaseDir = combatChaseDir(rt);
       if (chaseDir >= 0) {
         startMove(rt, chaseDir);
