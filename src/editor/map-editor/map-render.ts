@@ -52,6 +52,15 @@ import { drawEntryTiles } from "../../shared/layer-composite";
       /** an in-progress shape being drawn (rect drag / poly points / point). */
       draft?: import("../../shared/schema").ZoneShape | null;
     };
+    /** Advanced editor Automap drawer (Phase 8 Stage F): the evaluated diff a
+     *  Preview would apply, drawn as a translucent overlay so the author sees
+     *  the change before committing. Tile edits blit the resulting tile at
+     *  reduced alpha with a green marker; region edits show a magenta badge.
+     *  Absent in every other view ⇒ nothing drawn. */
+    automapPreview?: {
+      x: number; y: number;
+      role?: string; layerId?: number; tile?: number; region?: number;
+    }[];
   }
   function viewFromS(): MapView {
     return {
@@ -276,6 +285,36 @@ import { drawEntryTiles } from "../../shared/layer-composite";
       }
     }
   }
+  function drawAutomapPreview(g: any, v: MapView) {
+    const edits = v.automapPreview;
+    if (!edits || !edits.length) return;
+    for (const e of edits) {
+      const px = e.x * TILE, py = e.y * TILE;
+      if (e.region != null) {
+        g.fillStyle = "rgba(210, 70, 220, 0.42)";
+        g.fillRect(px, py, TILE, TILE);
+        g.fillStyle = "#ffffff";
+        g.textAlign = "center"; g.textBaseline = "middle";
+        g.font = "bold 15px monospace";
+        g.fillText(String(e.region), px + TILE / 2, py + TILE / 2 + 1);
+        continue;
+      }
+      // Tile edit: blit the resulting tile at reduced alpha (plain tiles draw
+      // exactly; an autotile id falls back to its base sheet cell — fine for a
+      // preview), then a green wash + border to flag "will be added here".
+      if (e.tile) {
+        g.save();
+        g.globalAlpha = 0.85;
+        Assets.drawTile(g, tileId(e.tile), px, py);
+        g.restore();
+      }
+      g.fillStyle = "rgba(90, 220, 120, 0.28)";
+      g.fillRect(px, py, TILE, TILE);
+      g.strokeStyle = "rgba(120, 255, 150, 0.95)";
+      g.lineWidth = 1.5 / v.zoom;
+      g.strokeRect(px + 0.75, py + 0.75, TILE - 1.5, TILE - 1.5);
+    }
+  }
   /** The shared render core (Phase 8 Stage A): draw `m` onto `g`'s canvas
    *  under view-state `v`. The canvas is resized to fit the map at v.zoom. */
   export function renderMapView(g: any, m: any, v: MapView) {
@@ -413,6 +452,8 @@ import { drawEntryTiles } from "../../shared/layer-composite";
     }
     // Objects mode (Phase 8 Stage D): gameplay zones over everything else.
     drawZonesOverlay(g, v);
+    // Automap drawer (Phase 8 Stage F): the pending Preview diff, on top.
+    drawAutomapPreview(g, v);
   }
   export function renderMap() {
     const m = curMap();

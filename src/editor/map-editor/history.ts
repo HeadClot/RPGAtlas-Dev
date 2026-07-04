@@ -31,8 +31,11 @@ const STACK_MAX = 60;
     // clone it too or Advanced-editor paints/reorders would not undo. Absent on
     // classic maps — undefined round-trips as an absent key. zones (Phase 8
     // Stage D) are captured the same way so drawing/editing a gameplay zone in
-    // the Advanced editor undoes as one step.
-    return { kind: "map", label: label || "Map edit", mapId, layers: RA.clone(m.layers), shadows: m.shadows.slice(), passOv: m.passOv.slice(), heights: heightsOf(m).slice(), events: RA.clone(m.events), layersAdv: m.layersAdv ? RA.clone(m.layersAdv) : undefined, zones: m.zones ? RA.clone(m.zones) : undefined };
+    // the Advanced editor undoes as one step. regions (Phase 8 Stage F): region
+    // tags are captured too so a Region-mode paint and an Automap `setRegion`
+    // Apply both undo (this closed a latent gap — region edits pushed undo but
+    // regions was not in the snapshot). Absent ⇒ undefined round-trips.
+    return { kind: "map", label: label || "Map edit", mapId, layers: RA.clone(m.layers), shadows: m.shadows.slice(), passOv: m.passOv.slice(), heights: heightsOf(m).slice(), events: RA.clone(m.events), layersAdv: m.layersAdv ? RA.clone(m.layersAdv) : undefined, zones: m.zones ? RA.clone(m.zones) : undefined, regions: m.regions ? m.regions.slice() : undefined };
   }
   export function applySnapshot(s: any) {
     const m = RA.byId(S.proj.maps, s.mapId);
@@ -40,6 +43,7 @@ const STACK_MAX = 60;
     m.layers = s.layers; m.shadows = s.shadows; m.passOv = s.passOv; m.heights = s.heights; m.events = s.events;
     m.layersAdv = s.layersAdv;
     m.zones = s.zones;
+    m.regions = s.regions;
     if (S.curMapId !== s.mapId) { S.curMapId = s.mapId; rebuildMapList(); }
     S.selectedEvent = null;
     touch(); renderMap(); refreshToolbar();

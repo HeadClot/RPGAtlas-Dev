@@ -65,6 +65,13 @@ const CURATED_KEYS = [
   "Encounter rate", "Troops", "Test Encounter in This Area", "Destination", "Facing",
   "Pick Destination", "Keep facing", "Down", "Left", "Right", "Up",
   "Audio key", "Volume", "Falloff", "None", "Linear (by distance)", "Power",
+  // Advanced Map Editor — Automap Rules drawer (Phase 8 Stage F, adv-automap.ts).
+  // Predicate/action kind labels + drawer chrome; command labels (Automap
+  // Rules… / Preview / Apply) are auto-collected from panels.ts. Longer hints,
+  // tooltips, IF/AND/THEN glyphs, and select fallbacks stay English by design.
+  "Automap", "Add Rule", "Add condition", "Add action", "Delete Rule",
+  "Terrain is", "Tile is", "Near", "Not near", "Region is", "Passable",
+  "Place tile", "Place stamp", "Set region", "Tile",
 ];
 
 /** Command labels that are dynamic composites or deliberately English-only

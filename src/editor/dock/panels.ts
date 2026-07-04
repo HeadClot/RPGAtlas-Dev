@@ -18,6 +18,7 @@ import { mountConsole, CONSOLE_PANEL } from "../console/console-panel";
 import { mountAdvanced, ADV_PANEL, captureStampCommand, toggleStampRandom, stampRandomActive } from "../advanced/adv-panel";
 import { openTerrainStudio } from "../advanced/terrain-studio";
 import { flipBrushH, flipBrushV, rotateBrush, advFocus } from "../advanced/adv-transform";
+import { toggleAutomapDrawer, previewAutomap, applyAutomap } from "../advanced/adv-automap";
 import {
   registerDockPanel, initDock, setDockChangeHook,
   focusPanel, togglePanel, isPanelVisible, focusNextPanel, getFocusedPanel,
@@ -96,6 +97,21 @@ export function initDockWorkspace() {
     label: "Random Stamp Scatter",
     tip: "Toggle random-scatter placement for the armed stamp",
     active: () => stampRandomActive(), run: toggleStampRandom,
+  });
+  // Automap Rules drawer (Stage F): open the Advanced panel and expand the
+  // bottom rule drawer; Preview / Apply are also reachable from the palette.
+  registerCommand("adv-automap", {
+    label: "Automap Rules…",
+    tip: "Open the Advanced editor's Automap drawer — IF/THEN rules that scatter detail, preview the diff, apply as one undo",
+    run: () => { if (!isPanelVisible(ADV_PANEL)) togglePanel(ADV_PANEL); focusPanel(ADV_PANEL); toggleAutomapDrawer(true); },
+  });
+  registerCommand("adv-automap-preview", {
+    label: "Automap: Preview", tip: "Show the diff the current map's automap rules would produce",
+    run: previewAutomap,
+  });
+  registerCommand("adv-automap-apply", {
+    label: "Automap: Apply", tip: "Apply the current map's automap rules as one undoable step",
+    run: applyAutomap,
   });
   registerCommand("focus-next-panel", {
     label: "Focus Next Panel", key: "F6", tip: "Move keyboard focus to the next panel", run: focusNextPanel,

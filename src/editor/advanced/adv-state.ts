@@ -62,6 +62,12 @@ export const advState = {
   polyPts: null as { x: number; y: number }[] | null,
   /** vertex being dragged in select mode: index into the zone's vertices. */
   vertexDrag: null as { zoneId: number; index: number } | null,
+  // ---- Automap drawer (Phase 8 Stage F) ----
+  /** whether the collapsible Automap rule drawer is expanded. */
+  automapOpen: false,
+  /** the pending Preview diff (evaluated edits) drawn as a canvas overlay;
+   *  null = no preview shown. Cleared on Apply / rule edits / map switch. */
+  automapPreview: null as import("../../shared/automap").AutomapEdit[] | null,
 };
 
 /** Panel refresh callbacks, bound on mount so the Layers/paint modules can
@@ -72,6 +78,7 @@ export const advHooks = {
   rebuildObjects: () => {}, // rebuild the Objects palette / inspector
   rebuild: () => {},       // full panel rebuild (tree + layers + canvas)
   rebuildRail: (() => {}) as () => void, // rebuild the right rail (tiles / stamps)
+  rebuildAutomap: (() => {}) as () => void, // rebuild the Automap drawer (Stage F)
 };
 
 /** Promote a classic map to a stored generalized stack the first time the

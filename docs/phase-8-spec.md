@@ -1,9 +1,9 @@
 # Phase 8 Spec — Advanced Map Editor (Tiled-class mapping)
 
-**Status:** IN PROGRESS — Stages A–E landed 2026-07-04 (C/D/E built in parallel
-worktrees off B and integrated together). Stage log accumulates below, phase-3-spec
-style, as stages land. Next: F (needs C+E terrain/stamp predicates) then G (closes
-the phase).
+**Status:** IN PROGRESS — Stages A–F landed 2026-07-04 (C/D/E built in parallel
+worktrees off B and integrated together; F built on the merged tree). Stage log
+accumulates below, phase-3-spec style, as stages land. Next: G (polish/docs/
+showcase/perf, closes the phase) — switch back to Fable for it.
 **Authored:** 2026-07-04 by Claude Fable 5 (grand designer / orchestrator)
 **Branch (when work starts):** `phase-8-advanced-map` (off `main`)
 **Sources:** Codex feasibility discussion (2026-07-03, recovered from
@@ -938,6 +938,88 @@ Conflict-resolution decisions worth recording:
 - Shared-chrome reconciled: `editor.css?v=57`, `patch-notes.js?v=38` (one entry
   per stage), `i18n.js` locale blocks + `CURATED_KEYS` unioned with the duplicate
   `Name`/`Terrain`/`Objects` keys de-duped so `no-dupe-keys` stays green.
+
+### Stage F — Visual automapping (landed 2026-07-04, Opus)
+
+Rules stored on `map.automapRules` (schema from Stage A) become a working
+editor tool: authors build IF/AND/THEN rules in a bottom drawer, Preview the
+diff as an overlay, and Apply as one undoable step. The whole feature is
+editor-only — the engine never reads `automapRules`, so a map with rules
+exports byte-identically (a project that never opens the drawer keeps NO
+`automapRules` key at all).
+
+Shipped:
+
+- **Pure evaluator** (`src/shared/automap.ts`, 15 unit tests in
+  `tests-unit/automap.test.ts`): `evaluateAutomap(map, rules, opts) → { edits,
+  changed }` and `applyAutomapEdits(map, edits)`. Predicates (`terrainIs`,
+  `tileIs`, `near`, `notNear`, `regionIs`, `passable`) are ANDed; actions
+  (`placeTile` prob, `placeStamp` expanded into per-cell writes via the stamp's
+  role arrays, `setRegion`) emit flat cell edits. Determinism: a **mulberry32**
+  PRNG seeded per rule (caller seed → rule.seed → default, mixed with the rule
+  id) with row-major cell visitation, so a given `(map, rules, seed)` yields the
+  identical edit list — **Preview == Apply**. Rules evaluate against the
+  ORIGINAL map (no read-after-write between rules) and edits de-dupe last-wins,
+  so the batch is one atomic diff. Every id compare masks with `tileId()`
+  (Stage-E flag-safe: a flipped grass tile still satisfies `terrainIs grass`).
+  `passable` uses an injectable `passableAt` (the editor can pass engine-accurate
+  passability) and falls back to `passOv` (2 ⇒ blocked) so the core stays pure.
+- **Automap drawer** (`src/editor/advanced/adv-automap.ts` + `.adv-automap*`
+  CSS): a collapsible bottom drawer in the Advanced panel's centre column
+  (mockup 3). Per rule: enable toggle, name, 🎲 seed reshuffle, delete; an IF
+  block of predicate rows (kind picker + operands) and a THEN block of action
+  rows, each with add/remove. Operand pickers are bound to the live project —
+  terrains/tiles from the palette selection (🎯) or `proj.autotiles` groups,
+  layers from the generalized stack (`layerView`), stamps from `proj.stamps`,
+  regions/radius/probability as plain fields. **Preview** evaluates and stores
+  the diff on `advState.automapPreview`; **Apply** takes ONE `pushUndo("Automap")`
+  snapshot, writes the edits, clears the preview. Rule edits are autosaved config
+  (`touch()`, NOT `pushUndo`) — the recipe, not the output — so they persist
+  across an Apply's undo, like map folders.
+- **Preview overlay** (`renderMapView`, new optional `MapView.automapPreview`,
+  absent in every other view): tile edits blit the resulting tile at 0.85 alpha
+  under a green wash + border; region edits show a magenta badge. Threaded from
+  the Advanced panel; cleared on Apply / rule edits / map switch.
+- **Undo now captures `map.regions`** (`snapshotOf`/`applySnapshot`): needed so a
+  `setRegion` Apply undoes — this also closed a **latent pre-existing gap** where
+  Region-mode painting pushed undo but `regions` was never in the snapshot.
+  `automapRules` is deliberately NOT snapshotted (rules are persistent config;
+  coupling them to the paint stack would wrongly revert later rule edits).
+- **Commands** (`dock/panels.ts`): `adv-automap` (open the panel + expand the
+  drawer), `adv-automap-preview`, `adv-automap-apply` — all palette-reachable.
+- **i18n**: 15 curated drawer keys + 3 command labels × 10 locales + `CURATED_KEYS`
+  (parity gate green; IF/AND/THEN glyphs, tooltips, and long hints stay English
+  by design per the file's scope rule). **CSS**: `.adv-automap*` block; `?v=57 →
+  58`. Patch-notes "Advanced Map Editor — automap rules"; `?v=38 → 39` (help.ts +
+  shims.d.ts).
+
+Gate: tsc + eslint clean; `node --test` 16/16; vitest **438** (+15 automap).
+Playwright: the new **editor-only** `tests-e2e/automapF.spec.mjs` (unique port,
+built bundle) builds a rule in the drawer, Previews, Applies, and asserts the
+target map's decor gained cells then Ctrl+Z reverts the whole batch to baseline
+while the rule itself survives — **passed**. No new golden failures: the 9 reds
+are the pre-existing GPU-drift renderer goldens + showcase, identical to the
+C/D/E-merge baseline (automap adds no new render behaviour on classic maps — the
+preview overlay is only drawn under the new `automapPreview` view field, absent
+in every golden fixture).
+
+Stage F traps / decisions:
+- **`automapRules` stays out of the undo snapshot.** Apply's tile/region writes
+  are captured (layers + the newly-added regions); the rules are config edited
+  through `touch()`. This gives clean apply-as-one-undo without an undo wrongly
+  resurrecting a deleted rule or reverting a rule edit made after an Apply.
+- **`regions` added to `snapshotOf`/`applySnapshot`.** Any future map-level
+  array that an undoable edit mutates needs the same (the Stage-D `zones`
+  precedent). This incidentally fixed Region-mode paint undo.
+- **Preview == Apply is a hard contract.** Both call one `evaluateAutomap`; the
+  🎲 button re-rolls `rule.seed` (and re-previews) for variety without breaking
+  it. The editor passes no per-call `seed`, so `rule.seed ?? default` governs.
+- **`placeStamp` is expanded in the pure core**, not at apply time, so the
+  preview overlay shows the real stamp cells and undo captures them like any
+  tile write.
+- **Flag-safety:** the evaluator is the newest reader of stored tile ids; all
+  compares go through `tileId()` (Stage E audit posture), and `placeStamp`
+  preserves the stamp's flag bits verbatim.
 
 ## Open items to confirm before Stage A starts
 
