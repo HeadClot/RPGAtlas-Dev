@@ -17,6 +17,7 @@ import { Assets, Music, RA } from "../../shared/deps.js";
 import { Renderer } from "../../renderer/index.js";
 import { drawLayerCell } from "../../shared/autotile-draw.js";
 import { composeAdvBuffers } from "../../shared/layer-composite.js";
+import { tileId } from "../../shared/tile-flags.js";
 import { syncAutotileRegistry } from "../../shared/autotile-load.js";
 import { clamp, rnd, compareVariable, sysSe } from "../util.js";
 import { ctx, fns } from "../state/engine-context.js";
@@ -50,11 +51,13 @@ export function tilePassable(x: any, y: any): boolean {
   const ov = ctx.map.passOv ? ctx.map.passOv[y * ctx.map.width + x] : 0;
   if (ov === 1) return true;
   if (ov === 2 || ov === 3) return false; // 3 = ledge: blocked for walking, jumped over (Phase 5)
-  const d2 = tileAt("decor2", x, y);
+  // Mask the Stage-E transform-flag bits off the raw id before the tile-def
+  // lookup: a flipped/rotated floor is as passable as its unflipped self.
+  const d2 = tileId(tileAt("decor2", x, y));
   if (d2 !== 0) return Assets.tiles[d2] ? Assets.tiles[d2].pass : false;
-  const d = tileAt("decor", x, y);
+  const d = tileId(tileAt("decor", x, y));
   if (d !== 0) return Assets.tiles[d] ? Assets.tiles[d].pass : false;
-  const g = tileAt("ground", x, y);
+  const g = tileId(tileAt("ground", x, y));
   if (g === 0) return false;
   return Assets.tiles[g] ? Assets.tiles[g].pass : false;
 }
@@ -654,7 +657,7 @@ export function regionAt(x: any, y: any): number {
 
 function groundKeyAt(x: any, y: any): string {
   if (x < 0 || y < 0 || x >= ctx.map.width || y >= ctx.map.height) return "";
-  const t = Assets.tiles[tileAt("ground", x, y)];
+  const t = Assets.tiles[tileId(tileAt("ground", x, y))]; // mask Stage-E flags
   return t ? t.key : "";
 }
 

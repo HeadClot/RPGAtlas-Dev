@@ -27,6 +27,11 @@ import type { MapFolder } from "../../shared/schema";
 import { advState, advHooks, type AdvTool } from "./adv-state";
 import { attachAdvPainting } from "./adv-paint";
 import { buildLayersToolbar, renderLayersList, renderLayerProps } from "./adv-layers";
+import { renderRail } from "./adv-rail";
+import { flashStatus } from "../map-editor/status";
+import { nameDialog } from "./adv-dialogs";
+import { captureStamp } from "./adv-stamps";
+import { flipBrushH, flipBrushV, rotateBrush } from "./adv-transform";
 
 export const ADV_PANEL = "adv";
 
@@ -37,8 +42,10 @@ let root: HTMLElement | null = null;
 let treeEl: HTMLElement | null = null;
 let layersEl: HTMLElement | null = null;
 let propsEl: HTMLElement | null = null;
+let railEl: HTMLElement | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let zoomLabel: HTMLElement | null = null;
+let xfmLabel: HTMLElement | null = null;
 let toolBtns: Record<string, HTMLElement> = {};
 const openFolders = new Set<number>();
 
@@ -59,11 +66,26 @@ function rebuild() {
   dirty = false;
   rebuildTree();
   rebuildLayers();
+  rebuildRail();
   renderAdvCanvas();
 }
 function rebuildLayers() {
   if (layersEl) renderLayersList(layersEl);
   if (propsEl) renderLayerProps(propsEl);
+  updateTransformIndicator();
+}
+function rebuildRail() {
+  if (railEl) renderRail(railEl);
+}
+function updateTransformIndicator() {
+  if (!xfmLabel) return;
+  const f = advState.brushFlags;
+  const parts: string[] = [];
+  if (f.h) parts.push("↔");
+  if (f.v) parts.push("↕");
+  if (f.r) parts.push("⟳");
+  xfmLabel.textContent = parts.length ? parts.join("") : "—";
+  xfmLabel.classList.toggle("active", parts.length > 0);
 }
 
 // ============================ map tree ============================
@@ -239,7 +261,9 @@ export function mountAdvanced(): HTMLElement {
   treeEl = h("div", { class: "adv-tree" }) as HTMLElement;
   layersEl = h("div", { class: "adv-layers" }) as HTMLElement;
   propsEl = h("div", { class: "adv-layer-props" }) as HTMLElement;
+  railEl = h("div", { class: "adv-rail-right" }) as HTMLElement;
   zoomLabel = h("span", { class: "adv-zoom-label" }, "50%") as HTMLElement;
+  xfmLabel = h("span", { class: "adv-xfm-label", title: t("Brush transform (X flip / Y flip / R rotate)") }, "—") as HTMLElement;
   const treeHead = h("div", { class: "adv-section-head" },
     h("span", null, t("Map Tree")),
     h("button", { class: "adv-mini-btn", onclick() {
@@ -260,6 +284,8 @@ export function mountAdvanced(): HTMLElement {
     ["fill", "🪣", t("Fill")], ["rect", "▭", t("Rectangle")],
   ];
   toolBtns = {};
+  const xfmBtn = (icon: string, title: string, onclick: () => void) =>
+    h("button", { class: "adv-mini-btn", title, onclick }, icon);
   const toolStrip = h("div", { class: "adv-toolstrip" },
     ...tools.map(([id, icon, title]) => {
       const b = h("button", {
@@ -269,6 +295,12 @@ export function mountAdvanced(): HTMLElement {
       toolBtns[id] = b;
       return b;
     }),
+    h("span", { class: "adv-tool-sep" }),
+    // Brush transforms (Stage E) — also X / Y / R keys and the command palette.
+    xfmBtn("↔", t("Flip Brush Horizontal") + " (X)", () => { flipBrushH(); updateTransformIndicator(); }),
+    xfmBtn("↕", t("Flip Brush Vertical") + " (Y)", () => { flipBrushV(); updateTransformIndicator(); }),
+    xfmBtn("⟳", t("Rotate Brush 90°") + " (R)", () => { rotateBrush(); updateTransformIndicator(); }),
+    xfmLabel,
     h("span", { class: "adv-tool-sep" }),
     h("button", { class: "adv-mini-btn", title: t("Zoom Out"), onclick: () => stepZoom(-1) }, "−"),
     zoomLabel,
@@ -290,6 +322,7 @@ export function mountAdvanced(): HTMLElement {
       toolStrip,
       h("div", { class: "adv-canvas-wrap" }, canvas),
     ),
+    railEl,
   ) as HTMLElement;
 
   attachAdvPainting(canvas);
@@ -297,10 +330,41 @@ export function mountAdvanced(): HTMLElement {
   advHooks.render = renderAdvCanvas;
   advHooks.rebuildLayers = rebuildLayers;
   advHooks.rebuild = rebuild;
+  advHooks.rebuildRail = rebuildRail;
 
   // Catch "shown while dirty" (the dock displays the tab after edits landed
   // while it was hidden) — same job worldDirty's debounce does when visible.
   new ResizeObserver(() => { if (dirty && isShowing()) rebuild(); }).observe(root);
   rebuild();
   return root;
+}
+
+// ============================ stamp commands ============================
+// Palette/menu-reachable stamp actions (registered in dock/panels.ts). Capture
+// works from the tile selection (S.selection) the Standard editor shares.
+
+/** "Save Selection as Stamp…": prompt for a name, capture the current tile
+ *  marquee into proj.stamps, and show it in the Advanced rail's Stamps tab. */
+export function captureStampCommand() {
+  if (!S.proj) return;
+  if (!S.selection) {
+    flashStatus("Select an area in the Map editor first (Shift+drag), then Save Selection as Stamp");
+    return;
+  }
+  nameDialog(t("Save Selection as Stamp…"), t("Stamp"), (name) => {
+    const s = captureStamp(name);
+    if (!s) return;
+    advState.railTab = "stamps";
+    if (railEl) renderRail(railEl);
+    flashStatus("Saved stamp “" + s.name + "” — open the Advanced editor's Stamps tab to place it");
+  });
+}
+
+/** Toggle random-scatter for the armed stamp (no-op with nothing armed). */
+export function toggleStampRandom() {
+  advState.stampRandom = !advState.stampRandom;
+  if (railEl) renderRail(railEl);
+}
+export function stampRandomActive() {
+  return advState.stampRandom;
 }

@@ -16,9 +16,11 @@ import { mountViewport, VIEWPORT_PANEL } from "../map-editor/hd-viewport";
 import { mountWorldView, WORLD_PANEL } from "../map-editor/world-view";
 import { mountConsole, CONSOLE_PANEL } from "../console/console-panel";
 import { mountAdvanced, ADV_PANEL } from "../advanced/adv-panel";
+import { flipBrushH, flipBrushV, rotateBrush, advFocus } from "../advanced/adv-transform";
+import { captureStampCommand, toggleStampRandom, stampRandomActive } from "../advanced/adv-panel";
 import {
   registerDockPanel, initDock, setDockChangeHook,
-  focusPanel, togglePanel, isPanelVisible, focusNextPanel,
+  focusPanel, togglePanel, isPanelVisible, focusNextPanel, getFocusedPanel,
   resetLayout, saveNamedLayout, loadNamedLayout, listNamedLayouts, deleteNamedLayout,
 } from "./dock";
 
@@ -60,6 +62,35 @@ export function initDockWorkspace() {
     label: "Advanced Map Editor", key: "F4",
     tip: "Show or hide the Advanced Map Editor — generalized layers, terrain, zones, and automapping over this same map",
     active: () => isPanelVisible(ADV_PANEL), run: () => togglePanel(ADV_PANEL),
+  });
+  // Advanced-editor brush transforms (Stage E). Key bindings in boot.ts fire
+  // only while the Advanced panel is focused (advFocus); the palette/menus reach
+  // them anywhere. advFocus is bound here so boot's key table stays dock-free.
+  advFocus.isFocused = () => getFocusedPanel() === ADV_PANEL;
+  registerCommand("adv-flip-h", {
+    label: "Flip Brush Horizontal", key: "X",
+    tip: "Flip the paint brush left-to-right (Advanced editor; plain tiles)",
+    run: flipBrushH,
+  });
+  registerCommand("adv-flip-v", {
+    label: "Flip Brush Vertical", key: "Y",
+    tip: "Flip the paint brush top-to-bottom (Advanced editor; plain tiles)",
+    run: flipBrushV,
+  });
+  registerCommand("adv-rotate", {
+    label: "Rotate Brush 90°", key: "R",
+    tip: "Rotate the paint brush 90° clockwise (Advanced editor; plain tiles)",
+    run: rotateBrush,
+  });
+  registerCommand("adv-capture-stamp", {
+    label: "Save Selection as Stamp…",
+    tip: "Save the current tile selection as a reusable stamp (select an area in the Map editor first)",
+    run: captureStampCommand,
+  });
+  registerCommand("adv-stamp-random", {
+    label: "Random Stamp Scatter",
+    tip: "Toggle random-scatter placement for the armed stamp",
+    active: () => stampRandomActive(), run: toggleStampRandom,
   });
   registerCommand("focus-next-panel", {
     label: "Focus Next Panel", key: "F6", tip: "Move keyboard focus to the next panel", run: focusNextPanel,
