@@ -85,6 +85,16 @@ export function param(a: any, stat: any): number {
   v = Math.floor(v * RA.traitRate(c, "param", stat, 1));
   return Math.max(1, v);
 }
+/** Read-only battler facade for the sandboxed damage-formula evaluator
+ *  (Project Compass M3·A, decision D1) — a plain snapshot of exactly the
+ *  whitelisted stats, nothing else reachable. */
+export function actorFormulaFacade(a: any): any {
+  return {
+    atk: param(a, "atk"), def: param(a, "def"), mat: param(a, "mat"),
+    mdf: param(a, "mdf"), agi: param(a, "agi"), mhp: param(a, "mhp"),
+    mmp: param(a, "mmp"), hp: a.hp, mp: a.mp, level: a.level || 1,
+  };
+}
 export function learnedSkills(a: any): any[] {
   const c = actorClass(a);
   // Class learnings by level, plus any skill taught via Change Skills, minus

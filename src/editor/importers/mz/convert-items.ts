@@ -2,8 +2,11 @@
    Project Compass M1·A: Skills (type / element / scope / mp / effects +
    `formula` verbatim), Items (hp/mp/revive/desc + formula), Weapons/Armors
    (params, `luk` dropped; trait rows reported). Matrix §2/§6/§7, decision
-   A5 (formula field) / A3 (equip traits reported). Copyright (C) 2026 RPGAtlas
-   contributors — GPL-3.0-or-later (see LICENSE). */
+   A5 (formula field) / A3 (equip traits reported). M3·A: formulas are
+   parse-validated at import (reject → kept verbatim + honest report +
+   structured fallback, per D1), and the MZ companions convert — variance /
+   critical / dmgType (MP damage + drains) / powerPct / hpPct / mpPct.
+   Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 
 import type {
   Armor,
@@ -16,12 +19,23 @@ import type { ImportReport } from "./report";
 import type { RmArmor, RmDamage, RmItem, RmList, RmSkill, RmWeapon } from "./raw-types";
 import { paramsFromArray } from "./convert-system";
 import { bumpLuk } from "./traits";
+import { parseFormula } from "../../../shared/formula";
 
 const notNull = <T>(x: T | null): x is T => x != null;
 
 /** MZ damage `type`: 3 HP-recover / 4 MP-recover are "heal" skills. */
 function isHealType(dmg: RmDamage | undefined): boolean {
   return !!dmg && (dmg.type === 3 || dmg.type === 4);
+}
+
+/** MZ damage `type` → the M3·A `dmgType` variant (absent = plain HP). */
+function dmgTypeOf(dmg: RmDamage | undefined): "mp" | "hpDrain" | "mpDrain" | undefined {
+  switch (dmg && dmg.type) {
+    case 2: case 4: return "mp"; // MP damage / MP recover
+    case 5: return "hpDrain";
+    case 6: return "mpDrain";
+    default: return undefined;
+  }
 }
 
 /** A non-trivial formula worth storing verbatim ("0"/"" are noise). */
@@ -101,19 +115,28 @@ export function convertSkills(
     if (scope) skill.scope = scope;
     if (revive) skill.revive = true;
 
-    // Damage formula stored verbatim for the M3·A evaluator (A5/D1).
+    // Damage formula (D1): stored verbatim, and since M3·A parsed at import —
+    // a compilable formula just WORKS in battle; a rejected one is kept (a
+    // later re-import can upgrade it) and honestly reported, and the skill
+    // falls back to its structured power curve (never silently zero).
     const formula = realFormula(s.damage);
     if (formula) {
       skill.formula = formula;
-      if (!heal) {
-        report.bump("formula", () => ({
+      const parsed = parseFormula(formula);
+      if (!parsed.ok) {
+        report.bump("formula-reject", () => ({
           area: "Skills",
-          kind: "todo",
-          what: "damage formulas",
-          detail: "custom damage formulas are saved and turn on in a later update",
+          kind: "partial",
+          what: "damage formulas Atlas can't run yet",
+          detail: "a formula used tricks outside Atlas's safe list — the skill uses simple damage instead",
         }));
       }
+      // MZ pipeline companions travel with the formula.
+      if (s.damage!.variance) skill.variance = s.damage!.variance;
+      if (s.damage!.critical) skill.critical = true;
     }
+    const dt = dmgTypeOf(s.damage);
+    if (dt) skill.dmgType = dt;
 
     applyEffects(s.effects, skill, report, "Skills");
     out.push(skill);
@@ -121,8 +144,9 @@ export function convertSkills(
   return out;
 }
 
-/** Map recover/state/common-event effects onto Skill fields (matrix §6). Buffs,
- *  TP, learn, grow, %-recover → M3·A/B (reported). */
+/** Map recover/state/common-event effects onto Skill fields (matrix §6).
+ *  %-recover converts since M3·A (`powerPct`); buffs, TP, learn, grow → M3·B
+ *  (reported). */
 function applyEffects(
   effects: RmSkill["effects"],
   skill: Skill,
@@ -132,8 +156,10 @@ function applyEffects(
   let stateSet = false;
   for (const e of effects || []) {
     switch (e.code) {
-      case 11: // Recover HP — flat part → power (heal amount).
+      case 11: // Recover HP — flat part → power, %-of-max part → powerPct (M3·A).
         if (e.value2) skill.power = (skill.power || 0) + e.value2;
+        if (e.value1)
+          skill.powerPct = (skill.powerPct || 0) + Math.round((Number(e.value1) || 0) * 100);
         break;
       case 21: // Add State.
         if (!stateSet) {
@@ -186,9 +212,14 @@ export function convertItems(list: RmList<RmItem>, report: ImportReport): Item[]
     if (it.description) item.desc = it.description;
 
     for (const e of it.effects || []) {
-      if (e.code === 11 && e.value2) item.hp = (item.hp || 0) + e.value2;
-      else if (e.code === 12 && e.value2) item.mp = (item.mp || 0) + e.value2;
-      else if (e.code === 22) {
+      if (e.code === 11 || e.code === 12) {
+        // Recover HP/MP — flat part → hp/mp, %-of-max part → hpPct/mpPct (M3·A).
+        const flat: "hp" | "mp" = e.code === 11 ? "hp" : "mp";
+        const pctKey: "hpPct" | "mpPct" = e.code === 11 ? "hpPct" : "mpPct";
+        if (e.value2) item[flat] = (item[flat] || 0) + e.value2;
+        if (e.value1)
+          item[pctKey] = (item[pctKey] || 0) + Math.round((Number(e.value1) || 0) * 100);
+      } else if (e.code === 22) {
         report.bump("item-cure", () => ({
           area: "Items",
           kind: "todo",
@@ -208,8 +239,40 @@ export function convertItems(list: RmList<RmItem>, report: ImportReport): Item[]
     // Dead-target recover items revive (matrix §Items).
     if ((it.scope === 9 || it.scope === 10) && item.hp) item.revive = true;
 
+    // Item formulas (M3·A): a recover-type formula (damage.type 3/4) adds to
+    // the item's healing (useItemOn evaluates it with a = b = target). An
+    // OFFENSIVE formula has no home — Atlas's battle has no use-item-on-enemy
+    // flow — so it is reported, not stored (storing it would heal instead).
     const formula = realFormula(it.damage);
-    if (formula) item.formula = formula;
+    if (formula && it.damage) {
+      if (it.damage.type === 4) {
+        // MP-recover formulas have no Item carrier yet (Item.formula heals HP).
+        report.bump("item-mp-formula", () => ({
+          area: "Items",
+          kind: "todo",
+          what: "MP-restoring item formulas",
+          detail: "an item that restores MP by formula needs a later update — its flat amount still works",
+        }));
+      } else if (it.damage.type === 3) {
+        item.formula = formula;
+        if (!parseFormula(formula).ok) {
+          report.bump("formula-reject", () => ({
+            area: "Items",
+            kind: "partial",
+            what: "recovery formulas Atlas can't run yet",
+            detail: "a formula used tricks outside Atlas's safe list — the item uses its flat amount instead",
+          }));
+        }
+        if (it.damage.variance) item.variance = it.damage.variance;
+      } else {
+        report.bump("item-attack", () => ({
+          area: "Items",
+          kind: "todo",
+          what: "items that damage enemies",
+          detail: "battle items that attack need a later update — they heal-only for now",
+        }));
+      }
+    }
 
     if (it.itypeId === 2) {
       report.add({

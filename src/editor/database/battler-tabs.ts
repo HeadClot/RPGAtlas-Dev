@@ -12,6 +12,7 @@ import {
   elementSelOpts, skillTypeSelOpts,
 } from "../dom";
 import { touch } from "../persistence";
+import { parseFormula } from "../../shared/formula";
 import {
   STAT_KEYS, listFormTab, nameRefresher, iconPickerField,
   traitDefault, skillTypeTraitOpts, subTabs,
@@ -302,6 +303,43 @@ export const skillsTab = () => listFormTab({
         h("label", { class: "dmg-fld" }, atkLbl, previewNum(ref, "atk")),
         defWrap, out));
       p.addEventListener("input", () => { relabel(); recomputeDmg(); });
+      // Advanced damage (Project Compass M3·A): an optional MZ-style formula
+      // that replaces Power when set, plus the variance/critical companions.
+      // The sandboxed parser (decision D1) validates live, in plain language.
+      p.appendChild(h("div", { class: "subhead" }, "Advanced damage (optional)"));
+      const verdict = h("div", { class: "dim" });
+      function checkFormula() {
+        const src = String(e.formula || "").trim();
+        if (!src) {
+          verdict.textContent =
+            "No formula — this skill uses Power above (the classic way).";
+          return;
+        }
+        const res = parseFormula(src);
+        verdict.textContent = res.ok
+          ? "✓ The formula replaces Power (a = user, b = target, v[n] = game variables)."
+          : "This formula can't run yet — " + res.error + ". The skill uses Power until it's fixed.";
+      }
+      const fIn = h("input", {
+        type: "text",
+        value: e.formula == null ? "" : e.formula,
+        placeholder: "a.atk * 4 - b.def * 2",
+        oninput(ev: any) {
+          const v = String(ev.target.value);
+          if (v.trim()) e.formula = v;
+          else delete e.formula;
+          touch();
+          checkFormula();
+        },
+      });
+      checkFormula();
+      if (e.variance == null) e.variance = 0;
+      p.appendChild(row(
+        field("Formula", fIn),
+        field("Variance %", nIn(e, "variance", 0, 100)),
+        field("Can critical", chk(e, "critical")),
+      ));
+      p.appendChild(verdict);
       return p;
     }
   },

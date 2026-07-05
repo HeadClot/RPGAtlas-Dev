@@ -117,6 +117,15 @@ describe("Classes (§2/§5)", () => {
     // 21 dataId 7 (luk) never becomes a param trait.
     expect(c.traits.some((t) => t.type === "param" && t.value === 120)).toBe(false);
   });
+  it("converts ex-param hit/eva/cri to special traits (M3·A, §5 code 22)", () => {
+    // Wanderer carries {code:22, dataId:0, value:0.95} → hitChance 95% (the
+    // MZ-default actor hit rate; amended from 0.05 when the trait became
+    // real in M3·A so the imported fixture battle plays like a real import).
+    const c = byId(mv.db.classes, 1);
+    expect(c.traits).toContainEqual({ type: "special", key: "hitChance", value: 95 });
+    // The code-62 special flag on the same class still reports for M3·B.
+    expect(mv.report.lines.some((l) => /advanced battler bonuses/i.test(l.what))).toBe(true);
+  });
   it("keeps learnings (note dropped)", () => {
     expect(byId(mv.db.classes, 1).learnings).toEqual([
       { level: 2, skillId: 1 },
@@ -169,6 +178,22 @@ describe("Skills (§2/§6/§7)", () => {
   it("keeps the basic Attack formula and a trivial-formula skill has none", () => {
     expect(byId(mv.db.skills, 1).formula).toBe("a.atk * 4 - b.def * 2");
     expect(byId(mv.db.skills, 4).formula).toBeUndefined(); // Guard formula "0"
+  });
+  it("stores the MZ pipeline companions with the formula (M3·A)", () => {
+    const attack = byId(mv.db.skills, 1);
+    expect(attack.variance).toBe(20);
+    expect(attack.critical).toBe(true);
+    // Heal has variance 0 / critical false → the optional fields stay absent.
+    const heal = byId(mv.db.skills, 3);
+    expect(heal.variance).toBeUndefined();
+    expect(heal.critical).toBeUndefined();
+  });
+  it("every fixture formula compiles — no reject report lines (M3·A)", () => {
+    for (const r of [mv, mz]) {
+      expect(r.report.lines.filter((l) => /can't run/i.test(l.what))).toHaveLength(0);
+      // The pre-M3·A "turns on in a later update" line is gone: formulas work.
+      expect(r.report.lines.filter((l) => /damage formulas$/i.test(l.what))).toHaveLength(0);
+    }
   });
 });
 

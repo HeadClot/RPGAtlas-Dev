@@ -87,7 +87,10 @@ test.describe("imported MZ project — playtest, battle, save/load", () => {
         async () => {
           const done = await page.evaluate(() => window.__battleResult || window.__battleError);
           if (done) return done;
-          if (await page.locator(".cmdwin, .targetwin").count()) await page.keyboard.press("Enter");
+          // M3·A: the imported battle now plays honestly (formula damage
+          // instead of the old NaN insta-loss), so the troop-page message
+          // ("The slimes wobble…") really opens — dismiss it like a player.
+          if (await page.locator(".cmdwin, .targetwin, .msgwin").count()) await page.keyboard.press("Enter");
           return null;
         },
         { timeout: 60_000, intervals: [250] },

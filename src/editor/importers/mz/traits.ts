@@ -1,11 +1,13 @@
 /* RPGAtlas — src/editor/importers/mz/traits.ts
    Project Compass M1·A: MZ trait rows → Atlas `Trait` rows (matrix §5, decision
    D6/D7). Atlas trait `value` is a PERCENTAGE (RA.traitRate divides by 100), so
-   MZ multipliers/probabilities convert as round(mz × 100). Only the six
-   "directly-representable" D6 codes are emitted; the three the engine reads
+   MZ multipliers/probabilities convert as round(mz × 100). The six
+   "directly-representable" D6 codes are emitted — the three the engine reads
    (11 element / 13 state / 21 param) change gameplay, the other three
    (43 add-skill, 51/52 equip-type) are preserved-but-inert by design (Atlas
-   semantics differ — see mig-1-spec A2). `luk` (param index 7) is a locked skip
+   semantics differ — see mig-1-spec A2) — plus, since M3·A, ex-param code 22
+   hit/eva/cri as `special` hitChance/evadeChance/critChance (the battle
+   path's to-hit/crit sums). `luk` (param index 7) is a locked skip
    aggregated into one report line (D7). Copyright (C) 2026 RPGAtlas
    contributors — GPL-3.0-or-later (see LICENSE). */
 
@@ -60,6 +62,20 @@ export function convertTrait(t: RmTrait, ctx: TraitConvertCtx): Trait | null {
       }
       return { type: "param", key: pk, value: pct(t.value) };
     }
+    case 22: {
+      // Ex-Param (M3·A): hit/eva/cri become additive special-trait
+      // percentages the battle path reads (hitChance/evadeChance were new in
+      // M3·A; critChance is the key the engine already rolled for crits).
+      // The other seven ex-params (cev/mev/mrf/cnt/hrg/mrg/trg) → M3·B.
+      const key =
+        t.dataId === 0 ? "hitChance"
+        : t.dataId === 1 ? "evadeChance"
+        : t.dataId === 2 ? "critChance"
+        : null;
+      if (key) return { type: "special", key, value: pct(t.value) };
+      bumpAdvTrait(ctx.report);
+      return null;
+    }
     case 43:
       // Add Skill — Atlas `skill` traits are damage-rate amps keyed by skill
       // TYPE, so an id-keyed row is a harmless no-op; preserved for M3·B.
@@ -89,15 +105,20 @@ export function convertTrait(t: RmTrait, ctx: TraitConvertCtx): Trait | null {
         value: t.dataId,
       };
     default:
-      // 12/14/22/23/31–35/41/42/44/53–55/61–64 → M3·B.
-      ctx.report.bump("adv-trait", () => ({
-        area: "Battlers",
-        kind: "todo",
-        what: "advanced battler bonuses",
-        detail: "some trait effects need a later update to work (they'll turn on when you re-import)",
-      }));
+      // 12/14/23/31–35/41/42/44/53–55/61–64 (+ non-hit/eva/cri 22s) → M3·B.
+      bumpAdvTrait(ctx.report);
       return null;
   }
+}
+
+/** The aggregated "advanced battler bonuses" M3·B line. */
+function bumpAdvTrait(report: ImportReport): void {
+  report.bump("adv-trait", () => ({
+    area: "Battlers",
+    kind: "todo",
+    what: "advanced battler bonuses",
+    detail: "some trait effects need a later update to work (they'll turn on when you re-import)",
+  }));
 }
 
 /** Convert a list of MZ trait rows, returning the representable Atlas rows. */

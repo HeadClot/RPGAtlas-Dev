@@ -61,6 +61,28 @@ put your mage there. Back-row members show a ▽ marker in battle.
 
 ---
 
+## Damage formulas (advanced)
+
+Every skill works fine with just **Power** — but if you want full control, open a skill's
+**Effects & preview** tab and fill in the **Advanced damage** box:
+
+- **Formula** — a little math expression that *replaces* Power, written the RPG Maker way:
+  `a.atk * 4 - b.def * 2`. `a` is the user, `b` is the target, and `v[n]` reads game variable
+  *n*. You can use the stats `atk def mat mdf agi mhp mmp hp mp level`, the operators
+  `+ - * / %`, comparisons with `? :` choices, and `Math.min / max / floor / ceil / round /
+  abs / pow / sqrt / randomInt`.
+- **Variance %** — how much the result wiggles (20 means ±20%).
+- **Can critical** — lets the hit critical for ×3 damage (the chance comes from the class's
+  crit bonus).
+
+Formula hits follow the classic order: element rate → critical → variance → guard (a guarding
+target takes half). The box checks your formula as you type and explains, in plain words,
+anything it can't accept — formulas are read by Atlas's own safe checker, never run as raw
+code. Games imported from RPG Maker MV/MZ bring their formulas (and HP/MP drains, MP damage,
+%-of-max heals, and hit/evade bonuses) across automatically.
+
+---
+
 ## Troop battle events
 
 Each troop (Database ▸ Troops) can carry **battle-event pages**: ordinary event commands that run
