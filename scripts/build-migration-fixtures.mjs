@@ -519,6 +519,27 @@ function harborEvents(mz) {
       trigger: 4, priorityType: 0,
       list: [pluginCmd, { code: 0, indent: 0, parameters: [] }],
     })]),
+    // 7 Busker: the M4·B audio bill — BGM options (241), Save/Resume BGM
+    // (243/244), ME (249), BGS play/fade (245/246), SE options + Stop SE
+    // (250/251), Change Victory/Defeat ME (133/139), timed BGM fade (242).
+    ev(7, "Busker", 2, 9, [page({
+      image: img({ characterName: "People", characterIndex: 3, direction: 2, pattern: 1 }), trigger: 0, priorityType: 1,
+      list: [
+        { code: 241, indent: 0, parameters: [{ name: "Harbor", volume: 80, pitch: 120, pan: -20 }] }, // Play BGM w/ options
+        { code: 243, indent: 0, parameters: [] },                    // Save BGM
+        { code: 249, indent: 0, parameters: [se("Victory")] },       // Play ME (interrupts BGM)
+        { code: 244, indent: 0, parameters: [] },                    // Resume BGM
+        { code: 245, indent: 0, parameters: [{ name: "Waves", volume: 60, pitch: 100, pan: 0 }] }, // Play BGS
+        { code: 230, indent: 0, parameters: [30] },                  // Wait
+        { code: 246, indent: 0, parameters: [2] },                   // Fadeout BGS (2 s)
+        { code: 250, indent: 0, parameters: [{ name: "Cursor", volume: 90, pitch: 150, pan: 40 }] }, // Play SE w/ options
+        { code: 251, indent: 0, parameters: [] },                    // Stop SE
+        { code: 133, indent: 0, parameters: [se("Fanfare")] },       // Change Victory ME
+        { code: 139, indent: 0, parameters: [{ name: "", volume: 90, pitch: 100, pan: 0 }] }, // Change Defeat ME -> silent
+        { code: 242, indent: 0, parameters: [3] },                   // Fadeout BGM (3 s)
+        { code: 0, indent: 0, parameters: [] },
+      ],
+    })]),
   ];
 }
 
@@ -592,8 +613,9 @@ function MapInfos() {
 function mapFile(kind, events) {
   const geo = kind === "harbor" ? buildHarbor() : buildCave();
   const base = {
-    autoplayBgm: true, autoplayBgs: false, battleback1Name: kind === "cave" ? "Cave" : "", battleback2Name: "",
-    bgm: audio(kind === "harbor" ? "Harbor" : "Cave"), bgs: audio(""), disableDashing: false,
+    // Cave autoplays a BGS layer (M4·B: ambience with the RM volume mix).
+    autoplayBgm: true, autoplayBgs: kind === "cave", battleback1Name: kind === "cave" ? "Cave" : "", battleback2Name: "",
+    bgm: audio(kind === "harbor" ? "Harbor" : "Cave"), bgs: kind === "cave" ? { name: "Drips", volume: 80, pitch: 100, pan: 0 } : audio(""), disableDashing: false,
     displayName: kind === "harbor" ? "Harbor Town" : "Sea Cave", encounterList: [], encounterStep: 30,
     height: geo.h, note: kind === "harbor" ? "<Region1: safe zone>" : "", parallaxLoopX: false, parallaxLoopY: false,
     parallaxName: kind === "harbor" ? "Sea" : "", parallaxShow: true, parallaxSx: 0, parallaxSy: 0,

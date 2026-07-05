@@ -10,7 +10,7 @@ import { Assets, RA, Sfx, editorState as S } from "../editor-state";
 import {
   h, tIn, nIn, sel, chk, field, row,
   dbOpts, switchOpts, varOpts, cmpOpts, charsetOpts,
-  DIR_OPTS, SE_OPTS, MUSIC_OPTS, stringSelOpts,
+  DIR_OPTS, SE_OPTS, MUSIC_OPTS, BGS_OPTS, ME_OPTS, stringSelOpts,
 } from "../dom";
 import { modal, confirmBox } from "../modals";
 import { touch } from "../persistence";
@@ -117,8 +117,15 @@ import { openLocationPicker } from "./location-picker";
       case "battle": return "Battle: " + dbName(S.proj.troops, c.troopId) + (c.escape === false ? " (no escape)" : "") + (c.lose ? " (lose allowed)" : "");
       case "shop": return "Open Shop (" + (c.goods || []).length + " goods)";
       case "wait": return "Wait " + c.frames + " frames";
-      case "se": return "Sound: " + c.name;
+      case "se": return "Sound: " + c.name + (c.pitch && c.pitch !== 1 ? " (pitch " + Math.round(c.pitch * 100) + "%)" : "");
       case "music": return "Music: " + c.theme;
+      // --- Streamed-audio channels (Project Compass M4·B) ---
+      case "bgs": return c.key ? "Background Sound: " + String(c.key).replace(/^asset:[^/]*\//, "") : "Stop Background Sound";
+      case "me": return "Play Jingle: " + String(c.key || "").replace(/^asset:[^/]*\//, "");
+      case "saveBgm": return "Remember Music";
+      case "resumeBgm": return "Replay Remembered Music";
+      case "stopSe": return "Stop All Sounds";
+      case "jingle": return "Change " + (c.channel === "defeat" ? "Defeat" : "Victory") + " Jingle" + (c.key ? ": " + String(c.key).replace(/^asset:[^/]*\//, "") : " (silent)");
       case "move": return "Move " + (c.target === "player" ? "Player" : "This Event") + ": " + c.steps.join(", ").slice(0, 40) + (c.wait ? " (wait)" : "");
       case "cameraZoom": return "Camera Zoom: " + Math.round((c.zoom || 1) * 100) + "% over " + (c.frames || 0) + " frames";
       case "transparency": return "Player Transparency: " + (c.val ? "hidden" : "visible");
@@ -598,18 +605,98 @@ import { openLocationPicker } from "./location-picker";
       } },
     { t: "se", label: "Play Sound", make: () => ({ t: "se", name: "ok" }),
       form(c: any, box: any) {
-        const w = { name: c.name, positional: c.at === "event" };
+        const w = {
+          name: c.name, positional: c.at === "event",
+          vol: c.vol == null ? 100 : Math.round(c.vol * 100),
+          pitch: c.pitch == null ? 100 : Math.round(c.pitch * 100),
+          pan: c.pan == null ? 0 : Math.round(c.pan * 100),
+        };
         const s = sel(w, "name", SE_OPTS());
         box.appendChild(row(field("Sound", s), h("button", { class: "mini", onclick() { Sfx.play(w.name); } }, "▶ test")));
+        box.appendChild(row(field("Volume %", nIn(w, "vol", 0, 100)),
+          field("Pitch % (imported sounds)", nIn(w, "pitch", 50, 200)),
+          field("Pan −100…100", nIn(w, "pan", -100, 100))));
         box.appendChild(row(field("Positional (pan/fade by this event's distance — imported sounds)", chk(w, "positional"))));
-        return () => { c.name = w.name; if (w.positional) c.at = "event"; else delete c.at; };
+        return () => {
+          c.name = w.name;
+          if (w.positional) c.at = "event"; else delete c.at;
+          if (w.vol !== 100) c.vol = w.vol / 100; else delete c.vol;
+          if (w.pitch !== 100) c.pitch = w.pitch / 100; else delete c.pitch;
+          if (w.pan) c.pan = w.pan / 100; else delete c.pan;
+        };
       } },
     { t: "music", label: "Change Music", make: () => ({ t: "music", theme: "field" }),
       form(c: any, box: any) {
-        const w = { theme: c.theme, fadeMs: c.fadeMs == null ? 800 : c.fadeMs };
+        const w = {
+          theme: c.theme, fadeMs: c.fadeMs == null ? 800 : c.fadeMs,
+          vol: c.vol == null ? 100 : Math.round(c.vol * 100),
+          pitch: c.pitch == null ? 100 : Math.round(c.pitch * 100),
+          pan: c.pan == null ? 0 : Math.round(c.pan * 100),
+        };
         box.appendChild(row(field("Theme", sel(w, "theme", MUSIC_OPTS())),
           field("Crossfade ms (imported music)", nIn(w, "fadeMs", 0, 10000))));
-        return () => { c.theme = w.theme; if (w.fadeMs !== 800) c.fadeMs = w.fadeMs; else delete c.fadeMs; };
+        box.appendChild(row(field("Volume % (imported music)", nIn(w, "vol", 0, 100)),
+          field("Pitch %", nIn(w, "pitch", 50, 200)),
+          field("Pan −100…100", nIn(w, "pan", -100, 100))));
+        return () => {
+          c.theme = w.theme;
+          if (w.fadeMs !== 800) c.fadeMs = w.fadeMs; else delete c.fadeMs;
+          if (w.vol !== 100) c.vol = w.vol / 100; else delete c.vol;
+          if (w.pitch !== 100) c.pitch = w.pitch / 100; else delete c.pitch;
+          if (w.pan) c.pan = w.pan / 100; else delete c.pan;
+        };
+      } },
+    // --- Streamed-audio channels (Project Compass M4·B) ---
+    { t: "bgs", label: "Background Sound", make: () => ({ t: "bgs", key: "" }),
+      form(c: any, box: any) {
+        const opts: any = [{ v: "", l: "(stop)" }].concat(BGS_OPTS());
+        opts.stringValues = true;
+        const w = {
+          key: c.key || "",
+          vol: c.vol == null ? 100 : Math.round(c.vol * 100),
+          fadeMs: c.fadeMs == null ? 500 : c.fadeMs,
+        };
+        box.appendChild(row(field("Sound (imported audio)", sel(w, "key", opts)),
+          field("Volume %", nIn(w, "vol", 0, 100)), field("Fade ms", nIn(w, "fadeMs", 0, 10000))));
+        box.appendChild(h("div", { class: "dim" }, "Loops a background sound (rain, waves…) on top of the music until stopped or a map with its own ambience starts. Saved with the game."));
+        return () => {
+          c.key = w.key;
+          if (w.vol !== 100) c.vol = w.vol / 100; else delete c.vol;
+          if (w.fadeMs !== 500) c.fadeMs = w.fadeMs; else delete c.fadeMs;
+        };
+      } },
+    { t: "me", label: "Play Jingle", make: () => ({ t: "me", key: "" }),
+      form(c: any, box: any) {
+        const w = { key: c.key || "" };
+        box.appendChild(field("Jingle (imported audio)", sel(w, "key", ME_OPTS())));
+        box.appendChild(h("div", { class: "dim" }, "Plays a short one-shot piece — the music pauses and comes back when it ends."));
+        return () => { c.key = w.key; };
+      } },
+    { t: "saveBgm", label: "Remember Music", make: () => ({ t: "saveBgm" }),
+      form(_c: any, box: any) {
+        box.appendChild(h("div", { class: "dim" }, "Remembers the music playing right now (and where it is), so Replay Remembered Music can bring it back."));
+        return () => {};
+      } },
+    { t: "resumeBgm", label: "Replay Remembered Music", make: () => ({ t: "resumeBgm" }),
+      form(_c: any, box: any) {
+        box.appendChild(h("div", { class: "dim" }, "Brings back the music saved by Remember Music, from where it left off."));
+        return () => {};
+      } },
+    { t: "stopSe", label: "Stop All Sounds", make: () => ({ t: "stopSe" }),
+      form(_c: any, box: any) {
+        box.appendChild(h("div", { class: "dim" }, "Silences every imported sound effect that's still playing (long rumbles, loops…)."));
+        return () => {};
+      } },
+    { t: "jingle", label: "Change Victory/Defeat Jingle", make: () => ({ t: "jingle", channel: "victory", key: "" }),
+      form(c: any, box: any) {
+        const opts: any = [{ v: "", l: "(silent)" }].concat(ME_OPTS());
+        opts.stringValues = true;
+        const w = { channel: c.channel || "victory", key: c.key || "" };
+        box.appendChild(row(
+          field("Moment", sel(w, "channel", [{ v: "victory", l: "Victory" }, { v: "defeat", l: "Defeat" }] as any)),
+          field("Jingle", sel(w, "key", opts))));
+        box.appendChild(h("div", { class: "dim" }, "Swaps the battle victory or defeat jingle from here on (saved with the game)."));
+        return () => { c.channel = w.channel; c.key = w.key; };
       } },
     { t: "move", label: "Set Move Route", make: () => ({ t: "move", target: "this", steps: [], wait: true }),
       form(c: any, box: any) {

@@ -187,7 +187,17 @@ export function convertMap(
   if (md.passOv) map.passOv = md.passOv;
 
   if (m.autoplayBgm && m.bgm && m.bgm.name) map.music = "asset:audio/" + m.bgm.name;
-  if (m.autoplayBgs && m.bgs && m.bgs.name) map.ambience = [{ key: "asset:audio/" + m.bgs.name }];
+  // M4·B: the BGS autoplay layer keeps its RM volume (default 80 ⇒ 0.8) —
+  // pitch/pan ride along when non-default.
+  if (m.autoplayBgs && m.bgs && m.bgs.name) {
+    const vol = m.bgs.volume;
+    map.ambience = [{
+      key: "asset:audio/" + m.bgs.name,
+      ...(vol != null && Number(vol) !== 100 ? { vol: Math.round(Math.max(0, Math.min(100, Number(vol) || 0))) / 100 } : {}),
+      ...(m.bgs.pitch != null && Number(m.bgs.pitch) !== 100 && Number(m.bgs.pitch) > 0 ? { pitch: Math.round(Number(m.bgs.pitch)) / 100 } : {}),
+      ...(m.bgs.pan ? { pan: Math.round(Math.max(-100, Math.min(100, Number(m.bgs.pan)))) / 100 } : {}),
+    }];
+  }
 
   const enc = convertEncounters(m, report);
   if (enc) map.encounters = enc;

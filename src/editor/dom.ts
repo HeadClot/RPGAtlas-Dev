@@ -115,6 +115,13 @@ export const $ = (id: any): any => document.getElementById(id);
     o.stringValues = true;
     return o;
   };
+  // Jingle/ME pickers (Project Compass M4·B): me-kind assets first, the rest
+  // of the imported audio after them.
+  export const ME_OPTS = () => {
+    const o: any = audioAssetOpts(["me"]).concat(audioAssetOpts(["se", "bgm", "bgs"]));
+    o.stringValues = true;
+    return o;
+  };
 
   // Type-list options (sourced from Database ▸ Types) ---------------------
   export function elementSelOpts() {

@@ -42,6 +42,12 @@ export async function newGame(start?: { mapId: number; x: number; y: number }): 
   G.timeOfDay = 12; // fresh day/night clock (loadMap applies the map's pin below)
   G.vehicles = {}; // fresh vehicle placements (lazily seeded from System)
   G.vehicle = null;
+  G.vehicleImages = null; // M4·A image overrides don't survive a New Game
+  // M4·B audio channels: fresh game = no command BGS, no remembered BGM, no
+  // victory/defeat jingle overrides.
+  G.bgs = null;
+  G.savedBgm = null;
+  G.jingles = null;
   ctx.cameraZoom = 1;
   resetPresentation(); // clear pictures/tint/timer/scroll (Project Compass M2·A)
   // System toggles (Project Compass M2·C): fresh game re-enables everything and

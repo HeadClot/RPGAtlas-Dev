@@ -98,6 +98,17 @@ describe("System conversion (§1)", () => {
     // MV has no advanced block → those fields are left for the base default.
     expect(mv.db.system.fontSize).toBeUndefined();
   });
+  it("stores the victory/defeat/gameover jingles as music keys (M4·B)", () => {
+    for (const conv of [mv, mz]) {
+      expect(conv.db.system.music).toMatchObject({
+        title: "asset:audio/Theme",
+        battle: "asset:audio/Battle",
+        victory: "asset:audio/Victory",
+        defeat: "asset:audio/Defeat",
+        gameover: "asset:audio/Gameover",
+      });
+    }
+  });
 });
 
 describe("Classes (§2/§5)", () => {

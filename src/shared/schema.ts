@@ -772,6 +772,12 @@ export interface CmdSe {
    *  imported SE by the firing event's offset from the player. Absent =
    *  centered, exactly as before. */
   at?: "event" | "player";
+  /** Playback options (M4·B, RM 250): volume 0–1, pitch rate (1 = normal),
+   *  stereo pan −1…1. Absent = the exact pre-M4·B playback. Streamed assets
+   *  only; procedural SEs ignore them. */
+  vol?: number;
+  pitch?: number;
+  pan?: number;
 }
 export interface CmdMusic {
   t: "music";
@@ -779,6 +785,52 @@ export interface CmdMusic {
   theme: string;
   /** Streamed-BGM crossfade length, ms (Phase 6; default 800). */
   fadeMs?: number;
+  /** Playback options (M4·B, RM 241): volume 0–1, pitch rate (1 = normal),
+   *  stereo pan −1…1. Replaying the current BGM with options retunes it in
+   *  place (MZ parameter-update semantics). Streamed assets only. */
+  vol?: number;
+  pitch?: number;
+  pan?: number;
+}
+/** Looping background sound on the ambience bus (M4·B, RM 245/246). One
+ *  command-owned layer, merged with the map's own ambience; `key` "" stops it
+ *  (with `fadeMs`). Persists across maps until a map with its own ambience
+ *  autoplays (MZ replace rule). */
+export interface CmdBgs {
+  t: "bgs";
+  key: string;
+  vol?: number;
+  pitch?: number;
+  pan?: number;
+  fadeMs?: number;
+}
+/** One-shot musical effect (M4·B, RM 249): pauses a streamed BGM and resumes
+ *  it when the jingle ends (MZ ME semantics). */
+export interface CmdMe {
+  t: "me";
+  key: string;
+  vol?: number;
+  pitch?: number;
+  pan?: number;
+}
+/** Remember the playing BGM + position (M4·B, RM 243). Saved with the game. */
+export interface CmdSaveBgm {
+  t: "saveBgm";
+}
+/** Replay the remembered BGM from its saved position (M4·B, RM 244). */
+export interface CmdResumeBgm {
+  t: "resumeBgm";
+}
+/** Stop all playing streamed sound effects (M4·B, RM 251). */
+export interface CmdStopSe {
+  t: "stopSe";
+}
+/** Swap the victory/defeat jingle (M4·B, RM 133/139). `key` "" silences the
+ *  channel; the override persists with the save. */
+export interface CmdJingle {
+  t: "jingle";
+  channel: "victory" | "defeat";
+  key: string;
 }
 export interface CmdMove {
   t: "move";
@@ -1147,6 +1199,12 @@ export type AnyCommand =
   | CmdWait
   | CmdSe
   | CmdMusic
+  | CmdBgs
+  | CmdMe
+  | CmdSaveBgm
+  | CmdResumeBgm
+  | CmdStopSe
+  | CmdJingle
   | CmdMove
   | CmdCameraZoom
   | CmdTransparency
@@ -1473,8 +1531,9 @@ export interface GameMap {
   /** Procedural theme, "none", or an "asset:audio/…" key (Phase 6). */
   music?: string;
   /** Looping ambience layers (Phase 6): imported BGS assets mixed on the bgs
-   *  bus, diffed across transfers. Optional; absent = none. */
-  ambience?: { key: string; vol?: number }[];
+   *  bus, diffed across transfers. Optional; absent = none. Pitch/pan (M4·B)
+   *  apply when the layer starts. */
+  ambience?: { key: string; vol?: number; pitch?: number; pan?: number }[];
   encounters?: MapEncounters;
   layers: MapLayers;
   /** 4-bit quadrant shadow mask per tile. */

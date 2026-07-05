@@ -124,6 +124,24 @@ describe("runRmImport → a ready-to-load project + saved report", () => {
     expect(mv.project.actors.length).toBe(mz.project.actors.length);
     expect(mv.project.enemies.length).toBe(mz.project.enemies.length);
   });
+
+  it("replaces the base animations (M4·B): MV for real, MZ via the D4 fallback", () => {
+    // MV: sheet animations convert to flipbook timelines over asset keys.
+    expect(mv.project.animations.map((a) => a.name)).toEqual(["Heal", "Fire"]);
+    expect(mv.project.animations[0].items[0]).toMatchObject({
+      type: "flipbook", sheet: "asset:pictures/heal", cols: 5, fps: 15,
+    });
+    expect(mv.report.lines.some((l) => l.what === "battle animation sheet images")).toBe(true);
+    // MZ: Effekseer entries borrow the nearest base animation's visuals and
+    // keep their own flash/sound timings; each substitution is reported.
+    expect(mz.project.animations.map((a) => a.name)).toEqual(["Heal", "Fire"]);
+    expect(mz.project.animations[1].items.some((i) => i.type === "particles")).toBe(true);
+    expect(mz.project.animations[1].items).toContainEqual({ at: 8, type: "sound", se: "asset:audio/Fire" });
+    expect(mz.report.lines.some((l) => l.what === 'the "Fire" animation' && /Fire Burst/.test(l.detail || ""))).toBe(true);
+    // Skill/weapon animationId refs resolve against the imported ids.
+    const withAnim = mz.project.skills.find((s) => (s as { animationId?: number }).animationId === 2);
+    expect(withAnim).toBeTruthy();
+  });
 });
 
 describe("readZip → the wizard's .zip intake", () => {

@@ -82,7 +82,7 @@ emits one report line. Re-importing after a phase ships picks up the real transl
 | `boat`/`ship`/`airship {characterName,characterIndex,bgm,startMapId,startX,startY}` | `system.vehicles.{boat,ship,airship}` (`VehicleDef`) | `= M1·A` | charset name+index → Atlas `charset`; `bgm` → `music`; start pos maps 1:1. See §12. |
 | `titleBgm` | `system.music.title` | `≈ M1·A` | Atlas music is procedural-theme-or-asset key; imported BGM becomes an `asset:audio/…` key. |
 | `battleBgm` | `system.music.battle` | `≈ M1·A` | as above. |
-| `victoryMe`/`defeatMe`/`gameoverMe` | `system.music.*` / `system.sounds.*` | `≈ M4·B` | ME channel semantics land in M4·B; M1 stores the asset keys. |
+| `victoryMe`/`defeatMe`/`gameoverMe` | `system.music.victory/defeat/gameover` | `≈ M4·B` | ME channel semantics + key storage both landed in M4·B (the M0 draft said M1 stored the keys — it didn't). |
 | `sounds[]` (24 system SEs) | `system.sounds{}` | `≈ M1·A` | MZ's fixed 24-entry array → Atlas's logical-key map; unmatched entries dropped with a count in the report. |
 | `title1Name`/`title2Name` | title background asset | `≈ M1·A` | imported as an asset; Atlas title screen is themed, so it's a best-effort backdrop + report. |
 | `optDrawTitle` | — | `−` | report if OFF. |

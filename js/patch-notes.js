@@ -5,6 +5,21 @@
 export const PATCH_NOTES = [
   {
     date: "July 5, 2026",
+    title: "Imported animations & the full soundtrack: jingles, background sounds, pitch & pan",
+    summary:
+      "Imported RPG Maker games look and sound like themselves now. MV's sheet-based battle animations convert into real Atlas animations (add the sheet image and they play frame by frame), and MZ's Effekseer effects honestly borrow the closest Atlas animation while keeping your own flashes, sounds, and screen shakes. The soundtrack grew a whole channel rack: victory/defeat/game-over jingles, looping background sounds like rain, remember-and-replay music, and volume/pitch/pan on music and sounds. Atlas-made games play exactly as before — every new behavior stays off until something asks for it.",
+    items: [
+      "RPG Maker MV animations convert for real: frames become flipbook timelines over the animation sheet, flashes and sound timings come along — drop the sheet PNG into the Assets library as a picture and it plays.",
+      "RPG Maker MZ animations can't bring their Effekseer particle files, so each one borrows the nearest Atlas animation by name and element (Fire → Fire Burst) and keeps its own flashes, sounds, and quakes — the import report lists every substitution.",
+      "Victory, defeat, and game-over jingles: imported games play their own MEs at those moments, and the new Change Victory/Defeat Jingle command swaps them mid-game.",
+      "Six new event commands: Background Sound (play/stop looping rain, waves…), Play Jingle (pauses the music and resumes it after — real ME behavior), Remember Music & Replay Remembered Music (picks up where it left off), Stop All Sounds, and Change Victory/Defeat Jingle.",
+      "Play Music, Play Sound, and map background-sound layers now honor volume, pitch, and stereo pan — imported commands keep their RPG Maker mix, and the editor forms grew the same knobs.",
+      "Replaying the music that's already playing with new settings retunes it in place instead of restarting it, just like MZ.",
+      "A map whose RPG Maker settings auto-play a background sound (BGS) now starts that layer on entry, at its authored volume.",
+    ],
+  },
+  {
+    date: "July 5, 2026",
     title: "Living maps: bushes, ladders, counters, damage floors & looping worlds",
     summary:
       "Maps caught up with battles. Tiles can now behave: tall grass hides your hero's feet, ladders make you climb, shop counters let you talk across them, and lava floors hurt to walk on. Maps can wrap around at the edges like a little planet, scroll a background picture behind the tiles, and bring their own battle backdrop. Vehicles obey events too. Everything is off until you turn it on — Atlas-made games play exactly as before, and imported RPG Maker MV/MZ games get all of it automatically.",

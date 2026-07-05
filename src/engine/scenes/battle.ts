@@ -40,6 +40,7 @@ import { useItemOn, iconEntryHtml, bar } from "./menus.js";
 import { gaugeColors } from "../state/player-options.js";
 import { createBattleFx } from "./battle-fx.js";
 import { playAnimation } from "../../shared/anim-player.js";
+import { playMe } from "../../shared/audio-deck.js";
 import { resolvePlaybackSheet } from "../../shared/asset-library.js";
 import { Interp } from "../interpreter/interp.js";
 import { resolvePictureSrc } from "./presentation-runtime.js";
@@ -67,6 +68,17 @@ import {
 } from "./battle-logic.js";
 
 const TILE = Assets.TILE;
+
+/** Victory/defeat jingle resolution (M4·B): the Change-ME command override
+ *  (G.jingles, RM 133/139) wins over the imported System ME
+ *  (system.music.victory/defeat); "" = silenced by the command; null = none
+ *  configured → the caller plays its classic sting. */
+function jingleKey(channel: "victory" | "defeat"): string | null {
+  const ov = G.jingles && G.jingles[channel];
+  if (ov != null) return ov;
+  const m = (ctx.proj && ctx.proj.system && ctx.proj.system.music) || {};
+  return m[channel] ? m[channel] : null;
+}
 
 export const Battle: any = {
   async run(troopId: any, canEscape: any, opts?: any) {
@@ -2275,7 +2287,12 @@ export const Battle: any = {
           defeated.reduce((s: any, e: any) => s + (e.d.gold || 0), 0) *
           (partyAbility("goldDouble") ? 2 : 1);
         Music.stop();
-        sysSe("levelup");
+        // Victory jingle (M4·B): the 133-command override wins over the
+        // imported System ME; "" silences it; none configured = the classic
+        // sting, exactly as before.
+        const victoryJingle = jingleKey("victory");
+        if (victoryJingle) void playMe(victoryJingle);
+        else if (victoryJingle == null) sysSe("levelup");
         const lines: any[] = [];
         await say(
           "Victory!  +" + exp + " EXP, +" + gold + " " + proj.system.currency,
@@ -2302,6 +2319,10 @@ export const Battle: any = {
         }
       } else if (result === "lose") {
         noteBattleFailure(troopId, troop.enemies.map((id: any) => Number(id) || 0));
+        // Defeat jingle (M4·B): imported/overridden ME only — there was never
+        // a native defeat sting here, so none configured plays nothing.
+        const defeatJingle = jingleKey("defeat");
+        if (defeatJingle) { Music.stop(); void playMe(defeatJingle); }
         await say("The party has fallen...", 1100);
       }
     } finally {

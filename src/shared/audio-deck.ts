@@ -81,18 +81,52 @@ interface Slot {
   key: string;
   el: HTMLAudioElement;
   gain: GainNode;
+  pan?: StereoPannerNode;
 }
 
-function makeSlot(actx: AudioContext, bus: AudioNode, url: string, key: string, loop: boolean, level: number): Slot {
+/** Playback options shared by the streamed channels (M4·B): `pitch` is a
+ *  playback rate (1 = normal, RM-style — speed AND pitch shift), `pan` −1…1. */
+interface SlotOpts {
+  pitch?: number;
+  pan?: number;
+}
+
+function applyPitch(el: HTMLAudioElement, pitch: number | undefined): void {
+  if (pitch == null) return;
+  const rate = Math.max(0.1, Math.min(4, Number(pitch) || 1));
+  try {
+    (el as any).preservesPitch = false; // RM pitch shifts speed AND pitch
+  } catch { /* older engines: rate-only is close enough */ }
+  el.playbackRate = rate;
+}
+
+function makeSlot(
+  actx: AudioContext,
+  bus: AudioNode,
+  url: string,
+  key: string,
+  loop: boolean,
+  level: number,
+  opts: SlotOpts = {},
+): Slot {
   const el = new Audio(url);
   el.loop = loop;
+  applyPitch(el, opts.pitch);
   const src = actx.createMediaElementSource(el);
   const gain = actx.createGain();
   gain.gain.value = level;
   src.connect(gain);
-  gain.connect(bus);
+  let tail: AudioNode = gain;
+  let pan: StereoPannerNode | undefined;
+  if (opts.pan && actx.createStereoPanner) {
+    pan = actx.createStereoPanner();
+    pan.pan.value = Math.max(-1, Math.min(1, opts.pan));
+    tail.connect(pan);
+    tail = pan;
+  }
+  tail.connect(bus);
   playElement(el);
-  return { key, el, gain };
+  return { key, el, gain, pan };
 }
 
 function fadeSlot(actx: AudioContext, slot: Slot, to: number, ms: number, thenStop: boolean): void {
@@ -119,9 +153,36 @@ const SE_CACHE_MAX = 32;
 
 const DEFAULT_FADE = 800;
 
-/** Crossfade to a streamed BGM (no-op when it already owns the deck). */
-export async function playBgm(key: string, opts: { fadeMs?: number } = {}): Promise<void> {
-  if (bgmSlot && bgmSlot.key === key) return;
+export interface BgmOpts {
+  fadeMs?: number;
+  /** Target volume 0–1 (M4·B, RM 241; default 1). */
+  vol?: number;
+  pitch?: number;
+  pan?: number;
+  /** Start position in seconds (M4·B Resume BGM; applied once metadata is in). */
+  seek?: number;
+}
+
+function seekWhenReady(el: HTMLAudioElement, seconds: number): void {
+  const apply = () => {
+    try { el.currentTime = Math.max(0, seconds); } catch { /* not seekable */ }
+  };
+  if (el.readyState >= 1) apply();
+  else el.addEventListener("loadedmetadata", apply, { once: true });
+}
+
+/** Crossfade to a streamed BGM. Replaying the current key RETUNES it in place
+ *  (MZ parameter-update semantics: volume/pitch/pan/seek without a restart). */
+export async function playBgm(key: string, opts: BgmOpts = {}): Promise<void> {
+  const level = opts.vol == null ? 1 : Math.max(0, Math.min(1, opts.vol));
+  if (bgmSlot && bgmSlot.key === key) {
+    const { actx } = Sfx.getBuses();
+    fadeSlot(actx, bgmSlot, level, 250, false);
+    applyPitch(bgmSlot.el, opts.pitch);
+    if (opts.pan != null && bgmSlot.pan) bgmSlot.pan.pan.value = Math.max(-1, Math.min(1, opts.pan));
+    if (opts.seek != null) seekWhenReady(bgmSlot.el, opts.seek);
+    return;
+  }
   const url = await urlFor(key);
   if (!url) {
     console.warn("[audio] missing BGM asset " + key);
@@ -130,8 +191,17 @@ export async function playBgm(key: string, opts: { fadeMs?: number } = {}): Prom
   const fade = opts.fadeMs == null ? DEFAULT_FADE : Math.max(0, opts.fadeMs);
   const { actx, bgm } = Sfx.getBuses();
   if (bgmSlot) fadeSlot(actx, bgmSlot, 0, fade, true);
-  bgmSlot = makeSlot(actx, bgm, url, key, true, fade ? 0 : 1);
-  if (fade) fadeSlot(actx, bgmSlot, 1, fade, false);
+  bgmSlot = makeSlot(actx, bgm, url, key, true, fade ? 0 : level, opts);
+  if (opts.seek != null) seekWhenReady(bgmSlot.el, opts.seek);
+  if (fade) fadeSlot(actx, bgmSlot, level, fade, false);
+}
+
+/** The playing streamed BGM + its position, for Save BGM (M4·B, RM 243). */
+export function bgmPosition(): { key: string; pos: number } | null {
+  if (!bgmSlot) return null;
+  let pos = 0;
+  try { pos = bgmSlot.el.currentTime || 0; } catch { /* detached element */ }
+  return { key: bgmSlot.key, pos };
 }
 
 /** Fade out and stop the streamed BGM (procedural themes call this too). */
@@ -143,8 +213,10 @@ export function stopBgm(opts: { fadeMs?: number } = {}): void {
   bgmSlot = null;
 }
 
-/** Reconcile the looping ambience layers with a map's wanted list. */
-export async function setAmbience(layers: AmbienceLayer[]): Promise<void> {
+/** Reconcile the looping ambience layers with a map's wanted list. `fadeMs`
+ *  overrides the 500 ms default (M4·B Fadeout BGS). */
+export async function setAmbience(layers: AmbienceLayer[], opts: { fadeMs?: number } = {}): Promise<void> {
+  const fade = opts.fadeMs == null ? 500 : Math.max(0, opts.fadeMs);
   const current = Array.from(bgsSlots.values(), (s) => ({ key: s.key, vol: s.vol }));
   const { start, stop, retune } = ambienceDiff(current, layers || []);
   if (!start.length && !stop.length && !retune.length) return;
@@ -152,41 +224,55 @@ export async function setAmbience(layers: AmbienceLayer[]): Promise<void> {
   for (const key of stop) {
     const slot = bgsSlots.get(key)!;
     bgsSlots.delete(key);
-    fadeSlot(actx, slot, 0, 500, true);
+    fadeSlot(actx, slot, 0, fade, true);
   }
   for (const { key, vol } of retune) {
     const slot = bgsSlots.get(key)!;
     slot.vol = vol;
-    fadeSlot(actx, slot, vol, 500, false);
+    fadeSlot(actx, slot, vol, fade, false);
   }
-  for (const { key, vol } of start) {
+  for (const { key, vol, pitch, pan } of start) {
     const url = await urlFor(key);
     if (!url) {
       console.warn("[audio] missing ambience asset " + key);
       continue;
     }
-    const slot = makeSlot(actx, bgs, url, key, true, 0) as Slot & { vol: number };
+    const slot = makeSlot(actx, bgs, url, key, true, 0, { pitch, pan }) as Slot & { vol: number };
     slot.vol = vol;
     bgsSlots.set(key, slot);
-    fadeSlot(actx, slot, vol, 500, false);
+    fadeSlot(actx, slot, vol, fade, false);
   }
 }
 
-/** One-shot jingle on the ME bus, ducking BGM to 20% for its duration. */
-export async function playMe(key: string): Promise<void> {
+/** One-shot jingle on the ME bus. Default: duck the BGM bus to 20% and
+ *  restore (the Phase 6 behavior, byte-identical). `interrupt: true` (M4·B,
+ *  MZ ME semantics) PAUSES a streamed BGM element instead and resumes it when
+ *  the jingle ends; a procedural chiptune still ducks (it has no position to
+ *  pause — spec-logged). */
+export async function playMe(key: string, opts: SlotOpts & { interrupt?: boolean; vol?: number } = {}): Promise<void> {
   const url = await urlFor(key);
   if (!url) return;
   const { actx, me, bgm } = Sfx.getBuses();
   if (meSlot) fadeSlot(actx, meSlot, 0, 120, true);
+  const paused = opts.interrupt && bgmSlot && !bgmSlot.el.paused ? bgmSlot : null;
+  if (paused) paused.el.pause();
+  const duck = !paused;
   const restore = bgm.gain.value;
-  const t = actx.currentTime;
-  bgm.gain.cancelScheduledValues(t);
-  bgm.gain.setValueAtTime(bgm.gain.value, t);
-  bgm.gain.linearRampToValueAtTime(restore * 0.2, t + 0.25);
-  const slot = makeSlot(actx, me, url, key, false, 1);
+  if (duck) {
+    const t = actx.currentTime;
+    bgm.gain.cancelScheduledValues(t);
+    bgm.gain.setValueAtTime(bgm.gain.value, t);
+    bgm.gain.linearRampToValueAtTime(restore * 0.2, t + 0.25);
+  }
+  const slot = makeSlot(actx, me, url, key, false, opts.vol == null ? 1 : Math.max(0, Math.min(1, opts.vol)), opts);
   meSlot = slot;
   slot.el.onended = () => {
     if (meSlot === slot) meSlot = null;
+    if (paused) {
+      // Resume the interrupted BGM if it's still the live slot.
+      if (paused === bgmSlot && paused.el.dataset.dead !== "1") playElement(paused.el);
+      return;
+    }
     const t2 = actx.currentTime;
     bgm.gain.cancelScheduledValues(t2);
     bgm.gain.setValueAtTime(bgm.gain.value, t2);
@@ -216,9 +302,13 @@ async function seBuffer(key: string): Promise<AudioBuffer | null> {
   }
 }
 
+/** Live streamed-SE sources, so Stop SE (M4·B, RM 251) can silence them. */
+const activeSes = new Set<AudioBufferSourceNode>();
+
 /** Play an imported sound: ME-kind assets duck-and-jingle, everything else
- *  is a (optionally positional) buffered SE. */
-export async function playSound(key: string, opts: { pan?: number; vol?: number } = {}): Promise<void> {
+ *  is a (optionally positional/pitched) buffered SE. `rate` is a playback
+ *  rate (1 = normal; RM pitch/100). */
+export async function playSound(key: string, opts: { pan?: number; vol?: number; rate?: number } = {}): Promise<void> {
   if (audioKindOf(key) === "me") {
     return playMe(key);
   }
@@ -227,6 +317,9 @@ export async function playSound(key: string, opts: { pan?: number; vol?: number 
   const { actx, se } = Sfx.getBuses();
   const src = actx.createBufferSource();
   src.buffer = buf;
+  if (opts.rate != null && opts.rate !== 1) {
+    src.playbackRate.value = Math.max(0.1, Math.min(4, Number(opts.rate) || 1));
+  }
   let node: AudioNode = src;
   if (opts.pan) {
     const pan = actx.createStereoPanner();
@@ -241,18 +334,30 @@ export async function playSound(key: string, opts: { pan?: number; vol?: number 
     node = g;
   }
   node.connect(se);
+  activeSes.add(src);
+  src.onended = () => activeSes.delete(src);
   src.start();
 }
 
+/** Stop every playing streamed SE (M4·B, RM 251). Procedural SEs are
+ *  fire-and-forget blips and are not tracked. */
+export function stopSe(): void {
+  for (const src of activeSes) {
+    try { src.stop(); } catch { /* already ended */ }
+  }
+  activeSes.clear();
+}
+
 /** Introspection for tests/diagnostics: what the deck is currently playing. */
-export function deckState(): { bgmKey: string | null; ambience: { key: string; vol: number }[] } {
+export function deckState(): { bgmKey: string | null; meKey: string | null; ambience: { key: string; vol: number }[] } {
   return {
     bgmKey: bgmSlot ? bgmSlot.key : null,
+    meKey: meSlot ? meSlot.key : null,
     ambience: Array.from(bgsSlots.values(), (s) => ({ key: s.key, vol: s.vol })),
   };
 }
 
 // The classic-script handshake: js/sfx.js routes "asset:" references here.
 if (typeof window !== "undefined") {
-  (window as any).AtlasAudioDeck = { playBgm, stopBgm, setAmbience, playMe, playSound, deckState };
+  (window as any).AtlasAudioDeck = { playBgm, stopBgm, bgmPosition, setAmbience, playMe, playSound, stopSe, deckState };
 }
