@@ -59,8 +59,11 @@ function convertCond(page: RmEventPage, eventName: string, report: ImportReport)
 function convertPage(page: RmEventPage, eventName: string, translate: CommandTranslator, report: ImportReport): EventPage {
   const out: EventPage = { commands: translate(page.list || []) };
 
-  const cond = convertCond(page, eventName, report);
-  if (cond) out.cond = cond;
+  // Always emit a `cond` object — the engine's page-selection (map-runtime.ts
+  // pageActive) reads `page.cond.*` unguarded, and editor-authored pages always
+  // carry one (data.js newPage()); an imported page must match that invariant or
+  // map load throws on an event with no conditions.
+  out.cond = convertCond(page, eventName, report) || {};
 
   const img = page.image;
   if (img) {
@@ -113,7 +116,7 @@ export function convertMapEvents(
       name: e.name || "Event " + e.id,
       x: e.x || 0,
       y: e.y || 0,
-      pages: pages.length ? pages : [{ commands: [] }],
+      pages: pages.length ? pages : [{ commands: [], cond: {} }],
     });
   }
   return out;

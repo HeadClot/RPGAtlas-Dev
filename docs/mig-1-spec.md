@@ -1,6 +1,6 @@
 # Phase M1 Spec — Importer core: an MZ/MV project becomes an Atlas project
 
-**Status:** 🚧 IN PROGRESS — M1·A + M1·B + M1·C landed; M1·D pending.
+**Status:** ✅ COMPLETE — M1·A + M1·B + M1·C + M1·D landed. Phase exit tags `mig-1`.
 **Authored:** 2026-07-04 by Claude Opus 4.8 (Extra High), from the M1 section of
 `docs/MZ_MV_MIGRATION_ROADMAP.md`, the signed parity matrix
 `docs/mz-mv-parity-matrix.md`, and the decision log in `docs/mig-0-spec.md`.
@@ -393,3 +393,100 @@ command picker and only an import can create one), consistent with M1·A/M1·B (
 agreement step 2).
 
 **Next:** M1·D — import wizard UX + plain-language report + end-to-end proof (tag `mig-1`).
+
+---
+
+## Module map — M1·D additions
+
+| File | Role |
+|---|---|
+| `src/editor/importers/mz/zip-read.ts` | `readZip(bytes)` — a dependency-free ZIP reader (mirror of the STORE writer in `export-web.ts`) + DEFLATE via the platform's `DecompressionStream("deflate-raw")`. Walks the central directory → `{ path: bytes }` map for `objectSource`. Pure (no DOM). |
+| `src/editor/importers/mz/import-run.ts` | The **DOM-free wizard core**. `runRmImport(source, base)` runs `importMzProject` → `assembleProject(base, …)` → attaches the report; `buildImportReportDoc(conv, project)` turns the converters' structured `ReportLine[]` + the assembled project's counts into the reopenable `ImportReportDoc`. Base is INJECTED (not `DataDefaults.newProject()`, which lives on `window`) so it stays node/vitest-testable. |
+| `src/editor/importers/rm-import-wizard.ts` | The **UI**: `openRmImportWizard()` (folder/zip launcher), `initRmImport()` (wires the hidden `#rm-import-folder` / `#rm-import-zip` inputs — the seam Playwright drives), the progress + report modals, `renderReportDoc()` (kid-friendly grouping, D11), `openSavedImportReport()`, and `commit()` (loads the imported project the same live-refresh way `persistence.importProject` does). |
+
+`index.ts` re-exports `runRmImport` / `buildImportReportDoc` / `readZip`. `index.html` gains the two hidden pickers. `boot.ts` calls `initRmImport()`. `workspace.ts` adds the `import-rm` + `import-report` actions to the **File** menu. `help.ts` gains a "Coming from RPG Maker MZ / MV?" quick-help section; `js/patch-notes.js` gains the release entry and `help.ts` + `shims.d.ts` bump the cache-bust to `?v=45`. `schema.ts` adds the additive optional `Project.importReport?: ImportReportDoc` (+ `ImportReportLine` / `ImportReportSummary`) — FORMAT_VERSION stays 2 (D2).
+
+## M1·D design decisions (extending the signed contract)
+
+- **D1 · The report leads with good news, then honest caveats (D11 / locked decision 6).**
+  The converters already write each line in the "what it was → what happened" voice; the
+  wizard adds a summary (counts of maps/heroes/skills/items/… computed from the assembled
+  project) up front, then groups the lines by kind — ✏️ "came in a little differently"
+  (`partial`), ⏳ "saved for a later update" (`todo`), 📦 "left out on purpose" (`skipped`) —
+  and closes with next steps. No stack traces ever reach the user (errors show a plain
+  "couldn't bring that in" note); a vitest guard asserts no `detail` line contains
+  `undefined`/`NaN`/`Error`/`.ts:`.
+- **D2 · The report is saved on the project + reopenable.** `Project.importReport` is a new
+  additive optional field (FORMAT_VERSION stays 2); `migrateProject` mutates in place so it
+  survives save/load, and **File ▸ Import Report** reopens it (the action disables itself when
+  no report is present). Old projects simply have none.
+- **D3 · Import replaces the project the same way `Open` does.** `commit()` mirrors
+  `persistence.importProject`: migrate + `validateProject`, `consumeEmbeddedAssets`,
+  `registerCustomChars`, `registerExternalAssets`, reset selection/undo, `rebuildAll`,
+  `touch`. So an import behaves exactly like opening a `.json` (autosave, live pickers), plus
+  the report. The launcher warns the user to Export first.
+- **D4 · Folder AND zip intake, one convert path.** A picked directory rides the existing
+  `fileListSource` (lazy `File` reads); a `.zip` is inflated by `readZip` into an
+  `objectSource`, with a `data/System.json`-anchored prefix strip so a zip whose entries sit
+  under a top-level game folder still resolves. Both feed the same `runRmImport`. The hidden
+  inputs' change handlers do the work, so Playwright drives the real path by setting files on
+  `#rm-import-folder` (no native dialog).
+- **D5 · Tile/terrain *art* pixel-slicing is a conscious, honest re-scope (refines B3).**
+  M1·B pre-seeded `project.assets.tiles` keys and shipped placeholder autotile sheets, noting
+  M1·D "slices the project's real images into the same keys." M1·D **keeps** those placeholders
+  and instead tells the user — in the report and quick-help — to bring their tileset artwork in
+  with the existing, battle-tested Asset Browser slicer + Import Autotile Sheet. Rationale: the
+  hand-authored fixtures are 1×1 placeholder art (locked decision 5), so an auto-slicer for RM's
+  five different sheet layouts (A1/A2/A3/A4 + A5/B–E) could not be *validated* end-to-end here,
+  and shipping an unverifiable cutter risks wrong art — worse than an honest placeholder and a
+  one-click path to the real thing. The B3 key seam is untouched, so a future art pass drops in
+  cleanly. Consistent with the migration's "honest about the rest, never a silent drop" ethos
+  and the M6·C "re-scoped with a report line" allowance. **The maps' shapes, layout, passability,
+  events, and encounters all import for real** — only the tile *pixels* wait.
+- **D6 · Fixed an M1·C latent crash the weak boot assertion hid.** `convert-map-events.ts` set
+  a page's `cond` only when conditions existed, but the engine's `pageActive` (map-runtime.ts)
+  reads `page.cond.*` unguarded — editor-authored pages always carry a `cond` (data.js
+  `newPage()`), so a condition-less imported page crashed map load (`reading 'switchId' of
+  undefined`). The M1·B/M1·C `import-boot` e2e only asserted `#stage` visible (always true), so
+  it slipped through. Fix: `convertPage` (and the empty-page fallback) now always emit a `cond`
+  object, and the boot e2e now polls `scene === "map"` (real proof that `loadMap` resolved).
+
+## Stage log
+
+### M1·D — Import wizard UX + report + end-to-end proof — ✅ 2026-07-05 (branch `mig-1d`)
+
+**Delivered — the user face of the migration.** A **File ▸ Import from RPG Maker…** wizard:
+pick the game's project **folder** or a **.zip** → detect MV/MZ → progress note → convert →
+the imported project becomes the live project → a kid-friendly **Import Report** modal (D1).
+The report is **saved on the project** (`Project.importReport`) and reopens from **File ▸ Import
+Report** (D2). Both hand-authored fixtures import, boot, playtest, battle, and save/load. Module
+map + decisions D1–D6 above.
+
+**Schema:** one additive optional field — `Project.importReport?: ImportReportDoc` (+
+`ImportReportLine` / `ImportReportSummary`). FORMAT_VERSION stays 2; old projects unaffected.
+
+**User-facing (working-agreement step 2 — the first M1 step with a user surface):**
+`js/patch-notes.js` gains the "Import from RPG Maker MZ / MV" entry; `help.ts` gains a "Coming
+from RPG Maker" quick-help section; `help.ts` + `shims.d.ts` bump the patch-notes cache-bust to
+`?v=45`. Ten locale packs (`js/editor/i18n.js`) gain the two new command labels so the i18n
+parity gate stays green.
+
+**Bug fixed (D6):** the M1·C map-event converter omitted `cond` on condition-less pages, which
+crashed the engine's `pageActive` on map load — invisible to the old `#stage`-only boot check.
+`convertPage` now always emits `cond`; the boot e2e now asserts `scene === "map"`.
+
+**Vitest (new `tests-unit/mz-import-wizard.test.ts`, +9):** `runRmImport` over both fixtures
+(bootable-clean project; MV/MZ sniff; report summary counts; every honest caveat kept + no
+stack-trace copy; the page-`cond` engine invariant; MV≡MZ shape) + the `readZip` reader
+(STORE round-trip, DEFLATE inflate, objectSource intake). **Baselines: vitest 648 → 657 (+9);**
+typecheck green; `eslint .` clean; legacy `node --test` 16/16.
+
+**Playwright (new `tests-e2e/import-wizard.spec.mjs` +3; `import-boot.spec.mjs` +5, net):**
+the wizard driven through the **real editor UI** (folder set on the hidden picker → report
+renders → project loaded → reopen from the File menu; MZ + MV; freshly imported MZ boots in the
+player), plus the imported MZ project running a **battle to a result** and a **save/load
+round-trip** — the phase-exit "playtest, battle, save/load" proof. Boot specs now poll
+`scene === "map"`. **Playwright 60 → 66 (+6); 0 golden regressions.**
+
+**Phase exit:** M1 complete — an MZ/MV project imports, boots, and plays with `mzTodo`
+placeholders standing in for future engine features. Tag `mig-1`.

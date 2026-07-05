@@ -63,6 +63,10 @@
     <span id="save-ind">✓ saved</span>
   </footer>
   <input id="import-file" type="file" accept=".json,application/json" hidden>
+  <!-- RPG Maker MZ/MV importer (Project Compass M1·D): a directory picker and a
+       .zip picker feed the import wizard (src/editor/importers/rm-import-wizard.ts). -->
+  <input id="rm-import-folder" type="file" webkitdirectory hidden>
+  <input id="rm-import-zip" type="file" accept=".zip,application/zip" hidden>
   <div id="modal-root"></div>
 
   <script src="js/assets.js?v=17"></script>

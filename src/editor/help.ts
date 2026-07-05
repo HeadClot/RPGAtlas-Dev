@@ -9,7 +9,7 @@
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { PATCH_NOTES } from "../../js/patch-notes.js?v=44";
+import { PATCH_NOTES } from "../../js/patch-notes.js?v=45";
 import { editorI18n } from "./editor-state";
 import { $, h, field } from "./dom";
 import { modal } from "./modals";
@@ -129,6 +129,13 @@ export function openHelp() {
 <li><b>Character Generator</b>: build original walking sprites; they appear in every sprite picker.</li>
 <li><b>Resource Manager</b>: browse every generated tile/character/battler and export PNGs.</li>
 <li><b>Custom assets</b>: copy images into the shared <code>img/characters</code>, <code>facesets</code>, <code>enemies</code>, or <code>tilesets</code> folders, then reload the editor.</li>
+</ul>
+<h3>Coming from RPG Maker MZ / MV?</h3>
+<ul>
+<li><b>File ▸ Import from RPG Maker…</b> brings your own MV or MZ game in. Pick the game's project folder (the one with a <code>data</code> folder inside), or a <code>.zip</code> of it.</li>
+<li>Maps, the database (heroes, skills, items, enemies, battle groups), switches/variables, common events, and event pages all come across. Anything that can't convert yet is <b>kept, never dropped</b> — it shows up as a friendly “coming in a later update” note.</li>
+<li>When the import finishes you get a plain-language <b>report</b> of what came along, what changed, and what to do next. Reopen it any time from <b>File ▸ Import Report</b>.</li>
+<li>Only your <b>own</b> project is supported — encrypted artwork is unlocked with the project's own key. To see your tile artwork, bring your tileset images in with the Asset Browser and Import Autotile Sheet.</li>
 </ul>
 <h3>Playtesting & saving</h3>
 <ul>

@@ -4,6 +4,19 @@
 
 export const PATCH_NOTES = [
   {
+    date: "July 5, 2026",
+    title: "Import from RPG Maker MZ / MV — bring your own game into RPGAtlas",
+    summary:
+      "Made a game in RPG Maker MV or MZ? File ▸ Import from RPG Maker… brings it in — maps, database, common events, and event pages all convert, and you get a friendly report of what came along and what didn't. Nothing is ever dropped silently.",
+    items: [
+      "New File ▸ Import from RPG Maker… wizard: pick your game's project folder (the one with a “data” folder) or a .zip of it, and RPGAtlas converts it into a playable project.",
+      "Works with both RPG Maker MV and MZ, and unlocks your project's own encrypted artwork using its own key (only your own project is supported).",
+      "Maps keep their shapes, layout, encounters, and events; the whole database — heroes, classes, skills, items, weapons, armor, enemies, battle groups, states, switches, variables, and common events — comes across.",
+      "Anything that can't convert yet is kept, not thrown away: it appears as a plain-language “coming in a later update” note so you always know what happened.",
+      "A plain-language Import Report opens when the import finishes — what came along, what changed a little, and what to do next. Reopen it any time from File ▸ Import Report.",
+    ],
+  },
+  {
     date: "July 4, 2026",
     title: "Add art & sound by copying files into a folder — the Asset Browser picks them up",
     summary:

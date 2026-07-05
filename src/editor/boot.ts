@@ -37,6 +37,7 @@ import { initDockWorkspace } from "./dock/panels";
 import { advFocus } from "./advanced/adv-transform";
 import { initAutotileUI, renderAutotileBar, stepBrush } from "./map-editor/autotile-ui";
 import { syncAutotileRegistry } from "./autotile-store";
+import { initRmImport } from "./importers/rm-import-wizard";
 import { consumeEmbeddedAssets, initAssetLibrary } from "../shared/asset-library";
 import { createDefaultAssetStore } from "../platform/default-asset-store";
 // Side effect: registers window.AtlasAudioDeck so imported audio previews
@@ -154,6 +155,7 @@ async function boot() {
   buildMenubar();
   buildToolbar();
   initAutotileUI();
+  initRmImport(); // wire the RPG Maker MZ/MV import pickers (Project Compass M1·D)
 
   // palette
   S.palCanvas.addEventListener("mousedown", (e: any) => {

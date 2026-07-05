@@ -1180,6 +1180,55 @@ export interface ProjectAssets {
 }
 
 // ============================================================================
+// RPG Maker import report (Project Compass, M1·D)
+// ============================================================================
+
+/** One line of the import report — a structured note the converters emit so
+ *  nothing an MZ/MV project needed is ever dropped silently (locked decision
+ *  6). `kind` says how it fared; `what`/`detail` are already written in the
+ *  kid-friendly "what it was → what happened" voice the wizard renders. */
+export interface ImportReportLine {
+  area: string;
+  kind: "converted" | "partial" | "skipped" | "todo";
+  what: string;
+  detail?: string;
+  /** For aggregated lines ("the Luck stat — seen N times"). */
+  count?: number;
+  /** Raw MZ command/trait/effect code, when relevant. */
+  code?: number;
+}
+
+/** Headline "what came along" counts, computed from the assembled project so
+ *  the report can lead with good news before the caveats. */
+export interface ImportReportSummary {
+  maps: number;
+  actors: number;
+  skills: number;
+  items: number;
+  weapons: number;
+  armors: number;
+  enemies: number;
+  troops: number;
+  commonEvents: number;
+  switches: number;
+  variables: number;
+}
+
+/** The saved import report (Project Compass, M1·D). Stored on the project so
+ *  it can be reopened any time from File ▸ Import Report. Additive + optional
+ *  (FORMAT_VERSION stays 2); old projects simply have no `importReport`. */
+export interface ImportReportDoc {
+  /** Which RPG Maker format the project came from. */
+  source: "mv" | "mz";
+  /** When the import ran (Date.now()). */
+  when: number;
+  /** The imported game's title, for the report header. */
+  gameTitle?: string;
+  summary: ImportReportSummary;
+  lines: ImportReportLine[];
+}
+
+// ============================================================================
 // The whole project document
 // ============================================================================
 
@@ -1213,6 +1262,10 @@ export interface Project {
   enemies: Enemy[];
   troops: Troop[];
   maps: GameMap[];
+  /** Saved RPG Maker import report (Project Compass, M1·D). Present only on
+   *  projects created by the MZ/MV importer; reopenable from File ▸ Import
+   *  Report. Additive + optional (FORMAT_VERSION stays 2). */
+  importReport?: ImportReportDoc;
 }
 
 // ============================================================================

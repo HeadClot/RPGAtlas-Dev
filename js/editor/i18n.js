@@ -28,6 +28,7 @@ const SHARED = {
       "Scale": "Escala", "View": "Ver", "Tools": "Herramientas", "Game": "Juego", "Help": "Ayuda",
       // File
       "New Project…": "Nuevo proyecto…", "Open Project (.json)…": "Abrir proyecto (.json)…",
+      "Import from RPG Maker…": "Importar de RPG Maker…", "Import Report": "Informe de importación",
       "Save Project": "Guardar proyecto", "Export Project As File…": "Exportar proyecto como archivo…",
       "Export Standalone Game…": "Exportar juego independiente…", "Playtest": "Probar juego",
       // Game / map
@@ -111,6 +112,7 @@ const SHARED = {
       "Scale": "Échelle", "View": "Affichage", "Tools": "Outils", "Game": "Jeu", "Help": "Aide",
       // File
       "New Project…": "Nouveau projet…", "Open Project (.json)…": "Ouvrir un projet (.json)…",
+      "Import from RPG Maker…": "Importer depuis RPG Maker…", "Import Report": "Rapport d'importation",
       "Save Project": "Enregistrer le projet", "Export Project As File…": "Exporter le projet…",
       "Export Standalone Game…": "Exporter le jeu autonome…", "Playtest": "Tester",
       // Game / map
@@ -194,6 +196,7 @@ const SHARED = {
       "Scale": "Maßstab", "View": "Ansicht", "Tools": "Werkzeuge", "Game": "Spiel", "Help": "Hilfe",
       // File
       "New Project…": "Neues Projekt…", "Open Project (.json)…": "Projekt öffnen (.json)…",
+      "Import from RPG Maker…": "Aus RPG Maker importieren…", "Import Report": "Importbericht",
       "Save Project": "Projekt speichern", "Export Project As File…": "Projekt als Datei exportieren…",
       "Export Standalone Game…": "Eigenständiges Spiel exportieren…", "Playtest": "Testspielen",
       // Game / map
@@ -277,6 +280,7 @@ const SHARED = {
       "Scale": "表示倍率", "View": "表示", "Tools": "ツール", "Game": "ゲーム", "Help": "ヘルプ",
       // File
       "New Project…": "新規プロジェクト…", "Open Project (.json)…": "プロジェクトを開く (.json)…",
+      "Import from RPG Maker…": "RPG Maker から読み込む…", "Import Report": "インポートレポート",
       "Save Project": "プロジェクトを保存", "Export Project As File…": "プロジェクトをファイルに書き出す…",
       "Export Standalone Game…": "スタンドアロンゲームを書き出す…", "Playtest": "テストプレイ",
       // Game / map
@@ -360,6 +364,7 @@ const SHARED = {
       "Scale": "縮放比例", "View": "檢視", "Tools": "工具", "Game": "遊戲", "Help": "說明",
       // File
       "New Project…": "新增專案…", "Open Project (.json)…": "開啟專案 (.json)…",
+      "Import from RPG Maker…": "從 RPG Maker 匯入…", "Import Report": "匯入報告",
       "Save Project": "儲存專案", "Export Project As File…": "匯出專案為檔案…",
       "Export Standalone Game…": "匯出獨立遊戲…", "Playtest": "試玩",
       // Game / map
@@ -443,6 +448,7 @@ const SHARED = {
       "Scale": "缩放比例", "View": "视图", "Tools": "工具", "Game": "游戏", "Help": "帮助",
       // File
       "New Project…": "新建项目…", "Open Project (.json)…": "打开项目 (.json)…",
+      "Import from RPG Maker…": "从 RPG Maker 导入…", "Import Report": "导入报告",
       "Save Project": "保存项目", "Export Project As File…": "导出项目为文件…",
       "Export Standalone Game…": "导出独立游戏…", "Playtest": "试玩",
       // Game / map
@@ -526,6 +532,7 @@ const SHARED = {
       "Scale": "Escala", "View": "Exibir", "Tools": "Ferramentas", "Game": "Jogo", "Help": "Ajuda",
       // File
       "New Project…": "Novo projeto…", "Open Project (.json)…": "Abrir projeto (.json)…",
+      "Import from RPG Maker…": "Importar do RPG Maker…", "Import Report": "Relatório de importação",
       "Save Project": "Salvar projeto", "Export Project As File…": "Exportar projeto como arquivo…",
       "Export Standalone Game…": "Exportar jogo independente…", "Playtest": "Testar jogo",
       // Game / map
@@ -609,6 +616,7 @@ const SHARED = {
       "Scale": "배율", "View": "보기", "Tools": "도구", "Game": "게임", "Help": "도움말",
       // File
       "New Project…": "새 프로젝트…", "Open Project (.json)…": "프로젝트 열기 (.json)…",
+      "Import from RPG Maker…": "RPG Maker에서 가져오기…", "Import Report": "가져오기 보고서",
       "Save Project": "프로젝트 저장", "Export Project As File…": "프로젝트를 파일로 내보내기…",
       "Export Standalone Game…": "독립 실행형 게임 내보내기…", "Playtest": "테스트 플레이",
       // Game / map
@@ -692,6 +700,7 @@ const SHARED = {
       "Scale": "Scala", "View": "Visualizza", "Tools": "Strumenti", "Game": "Gioco", "Help": "Aiuto",
       // File
       "New Project…": "Nuovo progetto…", "Open Project (.json)…": "Apri progetto (.json)…",
+      "Import from RPG Maker…": "Importa da RPG Maker…", "Import Report": "Rapporto di importazione",
       "Save Project": "Salva progetto", "Export Project As File…": "Esporta progetto come file…",
       "Export Standalone Game…": "Esporta gioco autonomo…", "Playtest": "Prova di gioco",
       // Game / map
@@ -775,6 +784,7 @@ const SHARED = {
       "Scale": "Масштаб", "View": "Вид", "Tools": "Инструменты", "Game": "Игра", "Help": "Справка",
       // File
       "New Project…": "Новый проект…", "Open Project (.json)…": "Открыть проект (.json)…",
+      "Import from RPG Maker…": "Импорт из RPG Maker…", "Import Report": "Отчёт об импорте",
       "Save Project": "Сохранить проект", "Export Project As File…": "Экспортировать проект в файл…",
       "Export Standalone Game…": "Экспортировать автономную игру…", "Playtest": "Тестовая игра",
       // Game / map
