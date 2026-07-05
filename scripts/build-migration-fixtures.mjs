@@ -145,8 +145,9 @@ function Classes() {
         { code: 21, dataId: 7, value: 1.2 }, // Param: LUCK  -> locked skip + report (§5)
         { code: 43, dataId: 3, value: 0 },   // Add Skill: Guard       (~= M1·A)
         { code: 51, dataId: 2, value: 0 },   // Equip Weapon Type: Sword (~= M1·A)
-        { code: 22, dataId: 0, value: 0.05 }, // Ex-Param HIT -> + M3·B
+        { code: 22, dataId: 0, value: 0.95 }, // Ex-Param HIT -> + M3·B (0.95 = MZ default actor hit; 0.05 made battles unplayable once the trait became real — M3·A amendment)
         { code: 62, dataId: 1, value: 1 },    // Special Flag (guard)  -> + M3·B
+        { code: 64, dataId: 3, value: 0 },    // Party Ability: raise preemptive -> + M3·C
       ],
       note: "",
     },
@@ -168,11 +169,15 @@ function Skills() {
     // 1 Attack (the reserved "normal attack" skill, id 1 in RM)
     { id: 1, name: "Attack", iconIndex: 76, stypeId: 0, mpCost: 0, tpCost: 0, scope: 1, occasion: 1,
       damage: { type: 1, elementId: -1, formula: "a.atk * 4 - b.def * 2", variance: 20, critical: true },
-      effects: [], animationId: -1, repeats: 1, message1: "", message2: "", requiredWtypeId1: 0, requiredWtypeId2: 0, note: "" },
+      effects: [{ code: 21, dataId: 0, value1: 1, value2: 0 }], // MZ's real default Attack effect (attack states, 100%) -> + M3·B
+      animationId: -1, repeats: 1, message1: "", message2: "", requiredWtypeId1: 0, requiredWtypeId2: 0, note: "" },
     // 2 Firebolt — the DAMAGE FORMULA fixture (§7 flagship). Reads a var (v[3]).
     { id: 2, name: "Firebolt", iconIndex: 64, stypeId: 1, mpCost: 8, tpCost: 0, scope: 1, occasion: 1,
       damage: { type: 1, elementId: 2, formula: "a.mat * 2 - b.mdf + v[3]", variance: 20, critical: true },
-      effects: [{ code: 21, dataId: 1, value1: 0.5, value2: 0 }], // 50% inflict Poison
+      effects: [
+        { code: 21, dataId: 1, value1: 0.5, value2: 0 }, // 50% inflict Poison
+        { code: 32, dataId: 3, value1: 4, value2: 0 },   // Add Debuff: DEF, 4 turns -> + M3·B
+      ],
       animationId: 2, repeats: 1, message1: "casts %1!", message2: "", requiredWtypeId1: 0, requiredWtypeId2: 0,
       note: "<Cooldown: 3>" },
     // 3 Heal — recover-HP + common-event effect (§6 codes 11 & 44 = M1·A)
@@ -184,6 +189,20 @@ function Skills() {
     { id: 4, name: "Guard", iconIndex: 81, stypeId: 2, mpCost: 0, tpCost: 25, scope: 11, occasion: 1,
       damage: { type: 0, elementId: 0, formula: "0", variance: 0, critical: false },
       effects: [], animationId: 0, repeats: 1, message1: "", message2: "", requiredWtypeId1: 0, requiredWtypeId2: 0, note: "" },
+    // 5 War Chant — buff/remove-debuff/gain-TP effects (31/34/13) -> + M3·B
+    { id: 5, name: "War Chant", iconIndex: 80, stypeId: 2, mpCost: 4, tpCost: 0, scope: 8, occasion: 1,
+      damage: { type: 0, elementId: 0, formula: "0", variance: 0, critical: false },
+      effects: [
+        { code: 31, dataId: 2, value1: 5, value2: 0 },  // Add Buff: ATK, 5 turns
+        { code: 34, dataId: 3, value1: 0, value2: 0 },  // Remove Debuff: DEF
+        { code: 13, dataId: 0, value1: 10, value2: 0 }, // Gain TP 10
+      ],
+      animationId: 0, repeats: 1, message1: "", message2: "", requiredWtypeId1: 0, requiredWtypeId2: 0, note: "" },
+    // 6 Slip Away — escape effect (41), used from the Crab's action list -> + M3·C
+    { id: 6, name: "Slip Away", iconIndex: 82, stypeId: 2, mpCost: 0, tpCost: 0, scope: 11, occasion: 1,
+      damage: { type: 0, elementId: 0, formula: "0", variance: 0, critical: false },
+      effects: [{ code: 41, dataId: 0, value1: 0, value2: 0 }],
+      animationId: 0, repeats: 1, message1: " slips away!", message2: "", requiredWtypeId1: 0, requiredWtypeId2: 0, note: "" },
   ];
 }
 
@@ -202,6 +221,11 @@ function Items() {
     { id: 3, name: "Rusty Key", iconIndex: 195, description: "Opens something in the cave.", itypeId: 2, price: 0,
       consumable: false, scope: 0, occasion: 3, speed: 0, successRate: 100, repeats: 1, tpGain: 0, hitType: 0,
       animationId: 0, damage: { type: 0, elementId: 0, formula: "0", variance: 0, critical: false }, effects: [], note: "" },
+    // 4 Sage Tonic — permanent effects: Grow MAT +3 (42) + Learn Skill Firebolt (43) -> + M3·B
+    { id: 4, name: "Sage Tonic", iconIndex: 176, description: "A bitter draught that sharpens the mind for good.", itypeId: 1,
+      price: 120, consumable: true, scope: 7, occasion: 2, speed: 0, successRate: 100, repeats: 1, tpGain: 0, hitType: 0,
+      animationId: 0, damage: { type: 0, elementId: 0, formula: "0", variance: 0, critical: false },
+      effects: [{ code: 42, dataId: 4, value1: 3, value2: 0 }, { code: 43, dataId: 2, value1: 0, value2: 0 }], note: "" },
   ];
 }
 
@@ -226,7 +250,8 @@ function Armors() {
     { id: 3, name: "Sailor's Charm", iconIndex: 162, description: "", atypeId: 2, etypeId: 5, price: 150,
       params: [30, 10, 0, 0, 2, 2, 0, 0], traits: [{ code: 22, dataId: 2, value: 0.05 }], note: "" }, // Ex-Param CRI -> M3·B
     { id: 4, name: "Cap", iconIndex: 135, description: "", atypeId: 1, etypeId: 3, price: 60,
-      params: [0, 0, 0, 3, 0, 1, 0, 0], traits: [], note: "" },
+      params: [0, 0, 0, 3, 0, 1, 0, 0],
+      traits: [{ code: 64, dataId: 4, value: 0 }], note: "" }, // Party Ability: gold double (merges onto Finn) -> + M3·C
   ];
 }
 
@@ -245,14 +270,19 @@ function Enemies() {
     { id: 2, name: "Crab", battlerName: "Crab", battlerHue: 0, params: [180, 0, 18, 16, 2, 4, 6, 4],
       exp: 22, gold: 18,
       dropItems: [{ kind: 0, dataId: 0, denominator: 1 }, { kind: 0, dataId: 0, denominator: 1 }, { kind: 0, dataId: 0, denominator: 1 }],
-      actions: [{ skillId: 1, conditionType: 5, conditionParam1: 0.5, conditionParam2: 0, rating: 5 }], // HP <=50%
+      actions: [ // AI condition coverage (party level / switch / turn spans) -> + M3·C
+        { skillId: 1, conditionType: 5, conditionParam1: 1, conditionParam2: 0, rating: 5 },  // party level >= 1
+        { skillId: 2, conditionType: 6, conditionParam1: 2, conditionParam2: 0, rating: 4 },  // switch 2 (Boss Defeated) ON
+        { skillId: 6, conditionType: 1, conditionParam1: 4, conditionParam2: 2, rating: 9 },  // turn 4 + 2x -> Slip Away
+      ],
       traits: [], note: "" },
   ];
 }
 
 function Troops() {
   // Battle-event page conditions (§8.5): page 0 fires on turn 2 (turnValid);
-  // page 1 fires when Slime HP <= 50% (enemyValid). Spans: 1=turn, 0=battle.
+  // page 1 fires at turn end (turnEnding, + M3·C) when Slime HP <= 50%
+  // (enemyValid). Spans: 1=turn, 0=battle.
   const cond = (o) => Object.assign({
     turnEnding: false, turnValid: false, turnA: 0, turnB: 0, enemyValid: false, enemyIndex: 0, enemyHp: 100,
     actorValid: false, actorId: 1, actorHp: 100, switchValid: false, switchId: 1,
@@ -273,10 +303,11 @@ function Troops() {
             { code: 401, indent: 0, parameters: ["The slimes wobble menacingly!"] },
             { code: 0, indent: 0, parameters: [] },
           ] },
-        { conditions: cond({ enemyValid: true, enemyIndex: 0, enemyHp: 50 }), span: 0,
+        { conditions: cond({ turnEnding: true, enemyValid: true, enemyIndex: 0, enemyHp: 50 }), span: 0,
           list: [
-            { code: 337, indent: 0, parameters: [0, 0, 2] }, // Show Battle Animation -> ~= M3·C
-            { code: 331, indent: 0, parameters: [0, 0, 0, 20] }, // Change Enemy HP -> + M3·C (mzTodo)
+            { code: 337, indent: 0, parameters: [0, 2, false] }, // Show Battle Animation (real MZ shape) -> ~= M3·C
+            { code: 331, indent: 0, parameters: [0, 0, 0, 20] }, // Change Enemy HP -> + M3·C
+            { code: 335, indent: 0, parameters: [2] }, // Enemy Appear: reveals the hidden Crab (member 2) -> + M3·C
             { code: 0, indent: 0, parameters: [] },
           ] },
       ],
@@ -604,7 +635,8 @@ function System(mz, keyHex) {
       messages: { possession: "Possession", levelUp: "%1 is now %2 %3!", obtainSkill: "%1 learned!", actorDamage: "%1 took %2 damage!" },
     },
     startMapId: 1, startX: 6, startY: 1, optTransparent: false, optFollowers: true, optSideView: true,
-    optDisplayTp: false, optDrawTitle: true, optExtraExp: false, optFloorDeath: false, optSlipDeath: false,
+    optDisplayTp: mz, // true in MZ only -> both displayTp gate paths covered -> + M3·B
+    optDrawTitle: true, optExtraExp: false, optFloorDeath: false, optSlipDeath: false,
     battleback1Name: "", battleback2Name: "", windowTone: [16, -16, 48, 0], battleSystem: 0,
     hasEncryptedImages: true, hasEncryptedAudio: false, encryptionKey: keyHex,
     testBattlers: [{ actorId: 1, level: 3, equips: [1, 1, 0, 2, 3] }], testTroopId: 1, editMapId: 1,
