@@ -18,13 +18,18 @@ import { Assets, DataDefaults, RA, editorState as S, editorHooks } from "../edit
 import { touch } from "../persistence";
 import { validateProject, type ImportReportDoc, type ImportReportLine, type ImportReportPlugin } from "../../shared/schema";
 import { consumeEmbeddedAssets, libraryImageEntries } from "../../shared/asset-library";
+import { downloadBlob } from "../../../js/editor/project-io.js";
 import {
   fileListSource,
   objectSource,
   readZip,
   runRmImport,
+  reportDocToText,
+  reimportDelta,
+  PLUGIN_VERDICT_WORD,
   type MzFileSource,
   type RmImportOutcome,
+  type ImportProgressFn,
 } from "./mz";
 
 // ---------------------------------------------------------------------------
@@ -93,24 +98,45 @@ function showError(e: any): void {
 
 /** The shared pick → progress → convert → load → report flow. `getSource` is
  *  awaited only after the progress note is on screen, so a big project shows
- *  feedback before the CPU-heavy convert blocks the thread. */
+ *  feedback before the CPU-heavy convert blocks the thread. The progress note
+ *  updates per stage (M6·A) — `onProgress` yields to paint so each step shows
+ *  before the next blocks. A report already on the project is remembered so the
+ *  new one can celebrate what a re-import picked up. */
 async function importFromSource(getSource: () => Promise<MzFileSource>): Promise<void> {
+  const prevReport = (S.proj as any).importReport as ImportReportDoc | undefined;
+
+  const label = h("p", null, "Getting started…");
+  const barFill = h("div", {
+    style: "height:100%;width:0%;border-radius:6px;background:rgba(120,216,144,.85);transition:width .18s ease",
+  });
+  const bar = h("div", {
+    style: "height:8px;border-radius:6px;background:rgba(255,255,255,.08);margin:8px 0 4px;overflow:hidden",
+  }, barFill);
   const prog = modal({
     title: "Importing your game…",
     dismissable: false,
     buttons: [],
     content: h("div", { class: "helpbox" },
-      h("p", null, "Reading your RPG Maker project and converting it into RPGAtlas…"),
+      label, bar,
       h("p", { class: "dim" }, "This can take a moment for a big game.")),
   });
+
+  const onProgress: ImportProgressFn = async (p) => {
+    label.textContent = p.label;
+    (barFill as HTMLElement).style.width = Math.round((p.step / p.total) * 100) + "%";
+    // Yield a macrotask so the browser paints this stage before the next one
+    // (the convert stage) blocks the thread.
+    await new Promise((r) => setTimeout(r, 0));
+  };
+
   // Let the modal paint before the synchronous conversion work starts.
   await new Promise((r) => setTimeout(r, 20));
   try {
     const source = await getSource();
-    const outcome = await runRmImport(source, DataDefaults.newProject());
+    const outcome = await runRmImport(source, DataDefaults.newProject(), onProgress);
     await commit(outcome);
     prog.close();
-    showReport(outcome.report);
+    showReport(outcome.report, prevReport);
   } catch (e) {
     prog.close();
     showError(e);
@@ -130,13 +156,18 @@ function chip(label: string, n: number): HTMLElement {
 }
 
 /** Verdict → badge (icon + tint + short verdict word). Honest, not scary: even
- *  "Atlas doesn't do this" reassures that the game still plays (M5·A, D11). */
-const PLUGIN_BADGE: Record<ImportReportPlugin["verdict"], { icon: string; word: string; tint: string }> = {
-  builtin: { icon: "✅", word: "Atlas already does this", tint: "120,216,144" },
-  partial: { icon: "🔷", word: "Atlas has something close", tint: "120,180,240" },
-  none: { icon: "▫️", word: "Atlas doesn't do this — your game still plays", tint: "200,200,210" },
-  unknown: { icon: "❔", word: "Settings kept, but it won't run", tint: "230,196,120" },
+ *  "Atlas doesn't do this" reassures that the game still plays (M5·A, D11). Icon
+ *  + word come from the shared `PLUGIN_VERDICT_WORD` table (one source of truth
+ *  with the text export, M6·A); only the color tint is a UI concern here. */
+const PLUGIN_TINT: Record<ImportReportPlugin["verdict"], string> = {
+  builtin: "120,216,144", partial: "120,180,240", none: "200,200,210", unknown: "230,196,120",
 };
+const PLUGIN_BADGE: Record<ImportReportPlugin["verdict"], { icon: string; word: string; tint: string }> =
+  Object.fromEntries(
+    (Object.keys(PLUGIN_TINT) as ImportReportPlugin["verdict"][]).map((v) => [
+      v, { ...PLUGIN_VERDICT_WORD[v], tint: PLUGIN_TINT[v] },
+    ]),
+  ) as Record<ImportReportPlugin["verdict"], { icon: string; word: string; tint: string }>;
 
 /** Render the "Add-ons (plugins)" section: one card per plugin from
  *  js/plugins.js with its guidance badge, ON/OFF + settings note, and the
@@ -170,11 +201,51 @@ function renderPluginsSection(box: HTMLElement, plugins: ImportReportPlugin[] | 
   box.appendChild(list);
 }
 
+/** A filesystem-friendly name for the saved-as-text report. */
+function reportFileName(doc: ImportReportDoc): string {
+  const base = (doc.gameTitle || "rpg-maker").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return (base || "import") + "-import-report.txt";
+}
+
+/** Download the report as a plain-text file (M6·A) — the pure `reportDocToText`
+ *  is shared with the vitest spec so the wording can't drift. */
+function saveReportText(doc: ImportReportDoc): void {
+  downloadBlob(new Blob([reportDocToText(doc)], { type: "text/plain;charset=utf-8" }), reportFileName(doc));
+}
+
+/** Copy the text report to the clipboard, flashing the button label on success
+ *  (best-effort — a denied clipboard just leaves the label unchanged). */
+function copyReportText(doc: ImportReportDoc, btn: HTMLElement): void {
+  const nav: any = navigator;
+  if (!nav.clipboard || !nav.clipboard.writeText) return;
+  nav.clipboard.writeText(reportDocToText(doc)).then(() => {
+    const was = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = was; }, 1400);
+  }).catch(() => {});
+}
+
+/** Build the report modal's custom footer: Save-as-Text + Copy (M6·A, which
+ *  must NOT dismiss the modal, so they're their own buttons rather than the
+ *  standard button row) plus a primary close. The close handler is late-bound
+ *  via `setClose` because `modal()` returns it only after the footer is built.
+ *  `primaryLabel` differs post-import ("Start Editing") vs a reopen ("Close"). */
+function reportFooter(doc: ImportReportDoc, primaryLabel: string): { footer: HTMLElement; setClose: (c: () => void) => void } {
+  let close = (): void => {};
+  const copyBtn = h("button", { onclick() { copyReportText(doc, copyBtn); } }, "📋 Copy");
+  const footer = h("div", { class: "modal-btns" },
+    h("button", { onclick() { saveReportText(doc); } }, "💾 Save as Text…"),
+    copyBtn,
+    h("button", { class: "primary", onclick() { close(); } }, primaryLabel));
+  return { footer, setClose: (c) => { close = c; } };
+}
+
 /** Render the saved import report as kid-friendly HTML (locked decision 6):
  *  good news first, then honest notes on what changed / is coming / was left
  *  out, then next steps. Reused by the post-import modal and File ▸ Import
- *  Report. */
-export function renderReportDoc(doc: ImportReportDoc): HTMLElement {
+ *  Report. `prev` (the report the project already carried, if any) drives the
+ *  re-import "here's what's new" banner (M6·A). */
+export function renderReportDoc(doc: ImportReportDoc, prev?: ImportReportDoc): HTMLElement {
   const srcName = doc.source === "mz" ? "RPG Maker MZ" : "RPG Maker MV";
   const s = doc.summary;
   const chips = h("div", { style: "margin:6px 0 4px" });
@@ -184,7 +255,22 @@ export function renderReportDoc(doc: ImportReportDoc): HTMLElement {
   add("enemies", s.enemies); add("battle groups", s.troops);
   add("common events", s.commonEvents); add("switches", s.switches); add("variables", s.variables);
 
+  // Re-import banner (M6·A): only when a previous report existed and there's
+  // something worth saying — a green "look what's new" when Atlas has learned to
+  // convert more since last time, or a neutral "nothing new here yet".
+  const delta = reimportDelta(prev, doc);
+  const banner = delta.headline
+    ? h("div", {
+        style:
+          "margin:2px 0 8px;padding:8px 12px;border-radius:8px;font-size:13.5px;" +
+          (delta.improved
+            ? "border:1px solid rgba(120,216,144,.55);background:rgba(120,216,144,.12)"
+            : "border:1px solid rgba(200,200,210,.4);background:rgba(200,200,210,.08)"),
+      }, "🔁 " + delta.headline)
+    : null;
+
   const box = h("div", { class: "helpbox" },
+    banner,
     h("h3", null, `🎉 Your ${srcName} game is in RPGAtlas!`),
     doc.gameTitle ? h("p", null, h("b", null, doc.gameTitle)) : null,
     h("p", null, "Here's everything that came along:"),
@@ -226,13 +312,15 @@ export function renderReportDoc(doc: ImportReportDoc): HTMLElement {
   return box;
 }
 
-function showReport(doc: ImportReportDoc): void {
-  modal({
+function showReport(doc: ImportReportDoc, prev?: ImportReportDoc): void {
+  const { footer, setClose } = reportFooter(doc, "Start Editing");
+  const m = modal({
     title: "Import Report",
     wide: true,
-    content: renderReportDoc(doc),
-    buttons: [{ label: "Start Editing", primary: true }],
+    content: renderReportDoc(doc, prev),
+    footer,
   });
+  setClose(m.close);
 }
 
 // ---------------------------------------------------------------------------
@@ -246,11 +334,19 @@ export function openRmImportWizard(): void {
     const el = document.getElementById(id) as HTMLInputElement | null;
     if (el) el.click();
   };
+  const alreadyImported = hasImportReport();
   modal({
     title: "Import from RPG Maker MZ / MV",
     content: h("div", { class: "helpbox" },
       h("p", null, "Bring your own RPG Maker MV or MZ game into RPGAtlas. Pick the game's project " +
         "folder (the one with a ", h("b", null, "data"), " folder inside), or a ", h("b", null, ".zip"), " of it."),
+      // Re-import nudge (M6·A): a project that already came from an import can be
+      // re-run to pick up anything Atlas has newly learned to convert.
+      alreadyImported
+        ? h("p", null, "🔁 ", h("b", null, "Re-importing?"), " Pick the same folder again — RPGAtlas keeps " +
+          "learning to convert more, and a fresh import picks up whatever's newly supported. The report " +
+          "will tell you what's new.")
+        : null,
       h("p", { class: "dim" }, "Only your own project works — encrypted artwork is unlocked with the " +
         "project's own key. Your current project will be replaced, so use File ▸ Export first if you want to keep it.")),
     buttons: [
@@ -265,12 +361,14 @@ export function openRmImportWizard(): void {
 export function openSavedImportReport(): void {
   const doc = (S.proj as any).importReport as ImportReportDoc | undefined;
   if (!doc) return; // the action is disabled when there's no report
-  modal({
+  const { footer, setClose } = reportFooter(doc, "Close");
+  const m = modal({
     title: "Import Report",
     wide: true,
     content: renderReportDoc(doc),
-    buttons: [{ label: "Close", primary: true }],
+    footer,
   });
+  setClose(m.close);
 }
 
 /** True when the current project carries a saved import report. */

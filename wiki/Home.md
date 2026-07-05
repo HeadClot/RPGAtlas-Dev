@@ -20,6 +20,9 @@ you need from the sidebar.
    villager, a treasure chest, a battle, and a playable export. This is the best place to begin.
 3. **[The Editor Interface](The-Editor-Interface)** — a tour of every menu, tool, and shortcut.
 
+**Already made a game in RPG Maker MV or MZ?** Bring it straight in — see
+**[Coming from RPG Maker](Coming-from-RPG-Maker)**.
+
 ## Build your world
 
 - **[Maps & Tiles](Maps-and-Tiles)** — painting terrain, layers, passability, shadows, and HD-2D heights.

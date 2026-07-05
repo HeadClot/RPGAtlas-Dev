@@ -28,6 +28,27 @@ export interface RmImportOutcome {
   conversion: MzProjectResult;
 }
 
+/** One step of the import, reported to `onProgress` so the wizard can show a
+ *  live progress note instead of a frozen spinner (M6·A). `step`/`total` drive
+ *  a progress bar; `label` is the kid-friendly line to display. */
+export interface ImportProgress {
+  stage: "reading" | "assembling" | "report" | "done";
+  label: string;
+  step: number;
+  total: number;
+}
+
+/** A progress sink. Awaited between stages, so the browser wizard can yield to
+ *  paint the update; in Node/tests it's a plain recorder. */
+export type ImportProgressFn = (p: ImportProgress) => void | Promise<void>;
+
+const STAGES: { stage: ImportProgress["stage"]; label: string }[] = [
+  { stage: "reading", label: "Reading and converting your RPG Maker game…" },
+  { stage: "assembling", label: "Building your Atlas project…" },
+  { stage: "report", label: "Writing your import report…" },
+  { stage: "done", label: "Finishing up…" },
+];
+
 /** Count how many real records came in (dense Atlas arrays — no leading null). */
 function summarize(project: Project): ImportReportSummary {
   const len = (a: unknown): number => (Array.isArray(a) ? a.length : 0);
@@ -74,12 +95,26 @@ export function buildImportReportDoc(conv: MzProjectResult, project: Project): I
  * Run the full import over a file source and assemble it onto `base` (a fresh
  * `DataDefaults.newProject()`). Returns the ready-to-load project with its
  * import report attached. Pure data — no DOM, no editor state — so the wizard and
- * the unit test share one code path.
+ * the unit test share one code path. `onProgress` (M6·A) is awaited between the
+ * heavy stages so the wizard can repaint a live progress note; omit it for the
+ * silent test path.
  */
-export async function runRmImport(source: MzFileSource, base: Project): Promise<RmImportOutcome> {
+export async function runRmImport(
+  source: MzFileSource,
+  base: Project,
+  onProgress?: ImportProgressFn,
+): Promise<RmImportOutcome> {
+  const total = STAGES.length;
+  const tick = async (i: number): Promise<void> => {
+    if (onProgress) await onProgress({ ...STAGES[i], step: i + 1, total });
+  };
+  await tick(0);
   const conversion = await importMzProject(source);
+  await tick(1);
   const project = assembleProject(base, conversion);
+  await tick(2);
   const report = buildImportReportDoc(conversion, project);
   project.importReport = report;
+  await tick(3);
   return { project, format: conversion.format, report, conversion };
 }

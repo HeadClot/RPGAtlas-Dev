@@ -5,6 +5,19 @@
 export const PATCH_NOTES = [
   {
     date: "July 5, 2026",
+    title: "Smoother RPG Maker imports: live progress, re-import, and a savable report",
+    summary:
+      "Bringing an RPG Maker MV or MZ game into RPGAtlas got friendlier. The importer now shows a live progress bar as it reads and converts your game, so a big project no longer looks frozen. You can save the import report as a text file or copy it, to keep a checklist of anything to touch up. And you can re-import the same game any time: RPGAtlas keeps learning to convert more, so a fresh import picks up whatever's newly supported — the report has a banner that tells you exactly how many things that were “coming later” now come across. There's also a new wiki guide, “Coming from RPG Maker.”",
+    items: [
+      "The import wizard shows a live, stage-by-stage progress bar (reading → converting → building → done) instead of a frozen “please wait.”",
+      "Save your import report as a text file (“💾 Save as Text…”) or copy it (“📋 Copy”) — handy as a to-do list or to paste into a question.",
+      "Re-import the same game any time to pick up newly supported conversions; the report's 🔁 banner celebrates how many “saved for later” things now come across.",
+      "The Import from RPG Maker dialog nudges you toward re-importing when your project already came from an import.",
+      "New wiki page “Coming from RPG Maker” walks through the whole move, with a term-by-term cheat sheet (Actor → Hero, Troop → Battle group, and so on).",
+    ],
+  },
+  {
+    date: "July 5, 2026",
     title: "Simple RPG Maker scripts now run: switches, variables & party checks",
     summary:
       "Some RPG Maker events use little JavaScript snippets — a “Script” command, or a Conditional Branch that asks a question in code. Atlas now understands the most common ones: anything that just reads your switches, variables, or party (how much gold you have, who's in the group, whether an item is owned) is converted and runs for real, so those branches decide the right way in your game. Scripts that change game data, or reach for things Atlas doesn't have yet, are still listed honestly in the import report and left out — your game keeps playing either way. For safety, imported scripts only ever read game data; they can't change anything.",

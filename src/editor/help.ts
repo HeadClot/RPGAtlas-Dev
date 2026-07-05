@@ -9,7 +9,7 @@
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { PATCH_NOTES } from "../../js/patch-notes.js?v=55";
+import { PATCH_NOTES } from "../../js/patch-notes.js?v=56";
 import { editorI18n } from "./editor-state";
 import { $, h, field } from "./dom";
 import { modal } from "./modals";
@@ -134,7 +134,8 @@ export function openHelp() {
 <ul>
 <li><b>File ▸ Import from RPG Maker…</b> brings your own MV or MZ game in. Pick the game's project folder (the one with a <code>data</code> folder inside), or a <code>.zip</code> of it.</li>
 <li>Maps, the database (heroes, skills, items, enemies, battle groups), switches/variables, common events, and event pages all come across. Anything that can't convert yet is <b>kept, never dropped</b> — it shows up as a friendly “coming in a later update” note.</li>
-<li>When the import finishes you get a plain-language <b>report</b> of what came along, what changed, and what to do next. Reopen it any time from <b>File ▸ Import Report</b>.</li>
+<li>A live progress bar shows the import going, and when it finishes you get a plain-language <b>report</b> of what came along, what changed, and what to do next. Reopen it any time from <b>File ▸ Import Report</b>, or <b>Save as Text</b> / <b>Copy</b> it to keep a checklist.</li>
+<li><b>Re-importing</b>: run the import again on the same folder any time — Atlas keeps learning to convert more, and the report's 🔁 banner tells you how many things that were “coming later” now come across. See the wiki's <b>Coming from RPG Maker</b> guide.</li>
 <li><b>Add-ons (plugins)</b>: the report lists your game's RPG Maker plugins and tells you, in plain words, whether Atlas already does that (like quest journals), does something close, or doesn't — your settings are kept either way. Atlas never runs plugin code; it only reads the list.</li>
 <li><b>Script snippets</b>: little “Script” commands and code-based Conditional Branches that just <em>read</em> your switches, variables, or party (<code>$gameSwitches</code>, <code>$gameVariables</code>, <code>$gameParty</code>) now run in Atlas, so those branches decide the right way. Scripts that <em>change</em> game data, or read things Atlas doesn't have yet, are listed in the report and left out — for safety, imported scripts only ever read.</li>
 <li>Only your <b>own</b> project is supported — encrypted artwork is unlocked with the project's own key. To see your tile artwork, bring your tileset images in with the Asset Browser and Import Autotile Sheet.</li>

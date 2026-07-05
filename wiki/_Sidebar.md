@@ -5,6 +5,7 @@
 - [Installation & Setup](Installation-and-Setup)
 - [Make Your First Game](Your-First-Game)
 - [The Editor Interface](The-Editor-Interface)
+- [Coming from RPG Maker](Coming-from-RPG-Maker)
 
 **Building your world**
 - [Maps & Tiles](Maps-and-Tiles)
