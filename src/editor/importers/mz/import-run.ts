@@ -14,6 +14,7 @@
 
 import type { ImportReportDoc, ImportReportSummary, Project } from "../../../shared/schema";
 import { assembleProject, importMzProject, type MzFileSource, type MzProjectResult } from "./index";
+import { buildPluginReport } from "./plugin-guidance";
 
 export interface RmImportOutcome {
   /** The assembled Atlas project, with `importReport` already attached. */
@@ -49,6 +50,9 @@ function summarize(project: Project): ImportReportSummary {
  *  project. The converters already wrote each line in the "what it was → what
  *  happened" voice; the summary leads with the good news. */
 export function buildImportReportDoc(conv: MzProjectResult, project: Project): ImportReportDoc {
+  // M5·A: the add-ons section — parse js/plugins.js into honest guidance (never
+  // executed; the manifest was read as text in intake). Omitted when empty.
+  const plugins = buildPluginReport(conv.raw?.plugins);
   return {
     source: conv.format,
     when: Date.now(),
@@ -62,6 +66,7 @@ export function buildImportReportDoc(conv: MzProjectResult, project: Project): I
       ...(l.count != null ? { count: l.count } : {}),
       ...(l.code != null ? { code: l.code } : {}),
     })),
+    ...(plugins.length ? { plugins } : {}),
   };
 }
 

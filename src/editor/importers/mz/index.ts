@@ -220,3 +220,6 @@ export { assembleProject } from "./assemble";
 export { runRmImport, buildImportReportDoc } from "./import-run";
 export type { RmImportOutcome } from "./import-run";
 export { readZip } from "./zip-read";
+// M5·A — the plugin manifest guidance table.
+export { guidePlugin, buildPluginReport, normalizePluginName, GUIDANCE } from "./plugin-guidance";
+export type { PluginVerdict, PluginGuide } from "./plugin-guidance";

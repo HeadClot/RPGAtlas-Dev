@@ -1736,6 +1736,27 @@ export interface ImportReportSummary {
   variables: number;
 }
 
+/** One add-on (RPG Maker plugin) from `js/plugins.js`, with honest guidance
+ *  (Project Compass, M5·A). RPG Maker JS plugins can't auto-convert, so the
+ *  report names each one, keeps its settings, and says whether Atlas already
+ *  does that. The plugin `.js` is never executed — only the manifest is read. */
+export interface ImportReportPlugin {
+  /** The add-on's name as listed in plugins.js. */
+  name: string;
+  /** Was it switched ON in RPG Maker? */
+  on: boolean;
+  /** How many settings (parameters) it carried. */
+  paramCount: number;
+  /** How well Atlas covers what it did: `builtin` (already has it) · `partial`
+   *  (something close) · `none` (doesn't, game still plays) · `unknown` (kept
+   *  its settings, won't run). */
+  verdict: "builtin" | "partial" | "none" | "unknown";
+  /** One kid-friendly sentence: what it did → what Atlas offers. */
+  advice: string;
+  /** Where to look in Atlas ("Quests panel"), if any. */
+  pointer?: string;
+}
+
 /** The saved import report (Project Compass, M1·D). Stored on the project so
  *  it can be reopened any time from File ▸ Import Report. Additive + optional
  *  (FORMAT_VERSION stays 2); old projects simply have no `importReport`. */
@@ -1748,6 +1769,9 @@ export interface ImportReportDoc {
   gameTitle?: string;
   summary: ImportReportSummary;
   lines: ImportReportLine[];
+  /** Add-ons (plugins) found in js/plugins.js, with guidance (M5·A). Optional
+   *  + additive; absent on M1–M4 reports and projects with no plugins. */
+  plugins?: ImportReportPlugin[];
 }
 
 // ============================================================================
