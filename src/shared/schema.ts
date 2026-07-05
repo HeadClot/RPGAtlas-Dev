@@ -215,6 +215,10 @@ export interface Skill {
   /** Common event run after the skill resolves in battle (Phase 5) — the
    *  action-sequence escape hatch, graph-authorable. Absent/0 = none. */
   commonEventId?: number;
+  /** Revive: a heal-type skill that can target fallen (0 HP) allies and
+   *  brings them back to life (HP restored by the usual heal formula). Absent
+   *  = false — ordinary heals never touch the fallen. */
+  revive?: boolean;
 }
 
 export interface StateDef {
@@ -237,6 +241,10 @@ export interface Item {
   hp?: number;
   mp?: number;
   desc?: string;
+  /** Revive: an item that can only be used on a fallen (0 HP) ally, bringing
+   *  them back to life with `hp` HP restored. Absent = false — ordinary
+   *  restoratives never revive. */
+  revive?: boolean;
 }
 
 export interface Weapon {

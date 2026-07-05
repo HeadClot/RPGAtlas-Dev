@@ -9,7 +9,7 @@
    Copyright (C) 2026 RPGAtlas contributors — GPL-3.0-or-later (see LICENSE). */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { PATCH_NOTES } from "../../js/patch-notes.js?v=41";
+import { PATCH_NOTES } from "../../js/patch-notes.js?v=43";
 import { editorI18n } from "./editor-state";
 import { $, h, field } from "./dom";
 import { modal } from "./modals";
@@ -189,6 +189,7 @@ export function openKeyboardShortcuts() {
   section("Advanced Map Editor", [
     line(keys(aKey("panel-advanced")), aLabel("panel-advanced")),
     ...["adv-flip-h", "adv-flip-v", "adv-rotate"].map((id) => line(keys(aKey(id)), aLabel(id))),
+    h("li", { class: "dim" }, "The Advanced toolstrip has the same Shadow Pen 🌑 as the Standard editor: left-click paints a half-tile shadow quadrant, right-click erases it."),
     h("li", { class: "dim" }, "The brush transform keys work while the Advanced panel is focused; everything else (Terrain Studio, stamps, zones, Automap rules) lives on the Advanced menu and the command palette."),
   ]);
   section("Selection & events", [

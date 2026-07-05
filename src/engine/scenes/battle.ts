@@ -249,8 +249,17 @@ export const Battle: any = {
       );
       return i < 0 ? null : live[i];
     }
-    async function pickAlly(deadOk: any) {
-      const pool = deadOk ? G.party : livingP();
+    // mode: "living" (ordinary heals/items) · "dead" (revive — only the
+    // fallen are pickable) · "any". Empty pool returns null so the command
+    // menu simply falls back to the previous prompt.
+    async function pickAlly(mode: "living" | "dead" | "any" = "living") {
+      const pool =
+        mode === "any"
+          ? G.party
+          : mode === "dead"
+            ? G.party.filter((a: any) => a.hp <= 0)
+            : livingP();
+      if (!pool.length) return null;
       const i = await showList(
         pool.map((a: any) => ({ label: a.name + "  (HP " + a.hp + ")" })),
         { className: "targetwin" },
@@ -303,7 +312,7 @@ export const Battle: any = {
             const t = await pickTarget();
             if (t) return { type: "skill", skill: s, target: t };
           } else if (s.scope === "ally") {
-            const t = await pickAlly(false);
+            const t = await pickAlly(s.revive ? "dead" : "living");
             if (t) return { type: "skill", skill: s, target: t };
           } else {
             return { type: "skill", skill: s };
@@ -321,7 +330,7 @@ export const Battle: any = {
             { title: "Item", className: "cmdwin" },
           );
           if (ii < 0) continue;
-          const t = await pickAlly(false);
+          const t = await pickAlly(list[ii].revive ? "dead" : "living");
           if (t) return { type: "item", item: list[ii], target: t };
         } else if (i === 3) {
           return { type: "guard" };
@@ -615,8 +624,11 @@ export const Battle: any = {
             if (c.type === "item") {
               if (invCount("item", c.item.id) <= 0) return;
               actorStep(a);
-              useItemOn(c.item, c.target);
-              burst(actorElement(c.target), "item", { count: 13 });
+              const revived = c.item.revive && c.target.hp <= 0;
+              if (!useItemOn(c.item, c.target)) return;
+              burst(actorElement(c.target), revived ? "heal" : "item", {
+                count: revived ? 18 : 13,
+              });
               floatText(
                 actorElement(c.target),
                 c.item.hp ? "+" + c.item.hp : "+" + c.item.mp + " MP",
@@ -627,9 +639,9 @@ export const Battle: any = {
                 a.name +
                   " uses " +
                   c.item.name +
-                  " on " +
-                  c.target.name +
-                  "!",
+                  (revived
+                    ? " — " + c.target.name + " is revived!"
+                    : " on " + c.target.name + "!"),
               );
               return;
             }
@@ -723,8 +735,15 @@ export const Battle: any = {
               const cost = skillMpCost(a, c.skill);
               if (a.mp < cost) return;
               a.mp -= cost;
+              // Revive skills reach the fallen: a mass revive raises every
+              // downed member; ordinary group heals still touch the living
+              // only. Single-target already picked its ally in actorCommand.
               const targets =
-                c.skill.scope === "allies" ? livingP() : [c.target];
+                c.skill.scope === "allies"
+                  ? c.skill.revive
+                    ? G.party.filter((m: any) => m.hp <= 0)
+                    : livingP()
+                  : [c.target];
               const healAnim = animById(c.skill.animationId);
               if (!healAnim) Sfx.play("heal");
               actorStep(a);
@@ -736,6 +755,11 @@ export const Battle: any = {
                   targets.map((t: any) => actorElement(t)),
                 );
               for (const t of targets) {
+                const wasFallen = t.hp <= 0;
+                // Guard: an ordinary heal never revives, so skip any fallen
+                // ally that slipped into the list (target-picking already
+                // excludes them — only a revive skill reaches the fallen).
+                if (wasFallen && !c.skill.revive) continue;
                 const amount = variance(
                   (c.skill.power + param(a, "mat") * 1.2) *
                     skillPowerRate(a, c.skill),
@@ -743,7 +767,7 @@ export const Battle: any = {
                 t.hp = clamp(t.hp + amount, 0, param(t, "mhp"));
                 burst(actorElement(t), "heal", {
                   color: c.skill.color,
-                  count: 14,
+                  count: wasFallen ? 18 : 14,
                 });
                 floatText(actorElement(t), "+" + amount, "heal");
                 await say(
@@ -752,9 +776,9 @@ export const Battle: any = {
                     c.skill.name +
                     " — " +
                     t.name +
-                    " recovers " +
-                    amount +
-                    " HP!",
+                    (wasFallen
+                      ? " is revived with " + amount + " HP!"
+                      : " recovers " + amount + " HP!"),
                   550,
                 );
                 await applySkillState(c.skill, t);

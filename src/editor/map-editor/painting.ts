@@ -17,6 +17,7 @@ import { setStatus, flashStatus } from "./status";
 import {
   quickTransfer, quickSign, quickChest,
   quickVillager, quickShopkeeper, quickInnkeeper, quickLockedDoor,
+  quickDoor, quickSavePoint, quickHealingCrystal, quickMonster, quickGift, quickQuestGiver,
 } from "../event-editor/quick-events";
 import { openEventEditor } from "../event-editor/event-editor";
 import { setMode, refreshToolbar } from "../workspace";
@@ -230,6 +231,12 @@ import { tileId } from "../../shared/tile-flags";
           { label: "Shopkeeper", onClick: () => quickShopkeeper(cell) },
           { label: "Innkeeper", onClick: () => quickInnkeeper(cell) },
           { label: "Locked Door", onClick: () => quickLockedDoor(cell) },
+          { label: "Door", onClick: () => quickDoor(cell) },
+          { label: "Save Point", onClick: () => quickSavePoint(cell) },
+          { label: "Healing Crystal", onClick: () => quickHealingCrystal(cell) },
+          { label: "Monster", onClick: () => quickMonster(cell) },
+          { label: "Gift NPC", onClick: () => quickGift(cell) },
+          { label: "Quest Giver", onClick: () => quickQuestGiver(cell) },
         ] },
         { label: "Paste Event", key: "Ctrl+V", enabled: !!S.clipEvent,
           onClick: () => { S.pasteMode = "event"; stampPaste(cell); } },

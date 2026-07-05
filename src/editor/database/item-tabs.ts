@@ -8,7 +8,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { RA, editorState as S } from "../editor-state";
-import { h, tIn, nIn, sel, field, row, dbOpts, switchOpts, typeSelOpts } from "../dom";
+import { h, tIn, nIn, sel, chk, field, row, dbOpts, switchOpts, typeSelOpts } from "../dom";
 import { touch } from "../persistence";
 import { cmdListWidget } from "../event-editor/command-list";
 import { PARAM_KEYS, listFormTab, nameRefresher, iconPickerField, subTabs } from "./shared";
@@ -19,8 +19,10 @@ export const itemsTab = () => listFormTab({
   blank: () => ({ id: 0, name: "Item", icon: 24, price: 50, hp: 50, mp: 0, desc: "" }),
   form(e: any, box: any, redrawList: any) {
     box.appendChild(row(field("Name", nameRefresher(e, redrawList)), iconPickerField(e, redrawList), field("Price", nIn(e, "price", 0))));
-    box.appendChild(row(field("Restores HP", nIn(e, "hp", 0, 9999)), field("Restores MP", nIn(e, "mp", 0, 9999))));
+    box.appendChild(row(field("Restores HP", nIn(e, "hp", 0, 9999)), field("Restores MP", nIn(e, "mp", 0, 9999)),
+      field("Revives fallen ally", chk(e, "revive"))));
     box.appendChild(field("Description", tIn(e, "desc")));
+    box.appendChild(h("div", { class: "dim" }, "Revive: this item works only on a fallen (0 HP) ally, bringing them back with the “Restores HP” amount. Non-revive items can't be used on the fallen."));
   },
 });
 

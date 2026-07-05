@@ -20,7 +20,7 @@ import type { AdvLayer, Stamp, ZoneShape } from "../../shared/schema";
 import { classicStack, repairLayersAdv, nextLayerId, type CoreRole } from "../../shared/layer-view";
 import type { TileFlags } from "../../shared/tile-flags";
 
-export type AdvTool = "pen" | "erase" | "fill" | "rect";
+export type AdvTool = "pen" | "erase" | "fill" | "rect" | "shadow";
 /** Which right-rail tab the Advanced panel shows. */
 export type AdvRailTab = "tiles" | "stamps";
 /** Left/mode rail: paint the tile stack, or place/edit gameplay zones. */
@@ -35,8 +35,13 @@ export const advState = {
   tool: "pen" as AdvTool,
   activeLayerId: null as number | null,
   hoverCell: null as { x: number; y: number } | null,
+  /** Shadow-pen quadrant bit under the cursor (TL=1 TR=2 BL=4 BR=8), 0 = none.
+   *  Drives the quadrant hover preview on the Advanced canvas. */
+  hoverQuad: 0,
   rectStart: null as { x: number; y: number } | null,
   painting: false,
+  /** Shadow Pen: the current stroke adds (left button) or erases (right). */
+  shadowSet: true,
   /** Brush transform (Stage E): flip/rotate applied to plain tiles as painted.
    *  Reused by both editors' Advanced-panel brush; autotile ids ignore it. */
   brushFlags: { h: false, v: false, r: false } as TileFlags,

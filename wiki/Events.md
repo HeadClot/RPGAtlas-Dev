@@ -41,6 +41,12 @@ pick a template. Each one asks two or three plain questions and places a finishe
 | **Shopkeeper** | A look, a greeting, the goods | An NPC whose shop opens stocked with your wares |
 | **Innkeeper** | A look and the price per night | Pays gold → screen fades to black → party wakes fully rested; refuses politely if you're short |
 | **Locked Door** | The key item, the destination, whether the key is used up | Blocks the way and says it's locked until the player has the key — then it's a normal door forever |
+| **Door** | The destination (with a map picker) | A press-to-open door that plays the door sound, then takes the player across |
+| **Save Point** | Whether it also heals | A glowing save point — press it to open the Save screen (optionally waking fully restored) |
+| **Healing Crystal** | The message shown | A glowing crystal that fully restores the party's HP and MP each time it's touched |
+| **Monster** | A look, the enemy troop, an optional gold reward | Blocks the way and fights (no escape); once beaten it hands over the reward and vanishes for good |
+| **Gift NPC** | A look, the gift (item/weapon/armor/gold), the lines | Hands over the gift once, then only repeats the afterward line (self-switch A) |
+| **Quest Giver** | A look, the quest to start, the lines | Speaks and starts the quest, then only repeats the afterward line (self-switch A) |
 
 Quick Events are ordinary events — open one in the event editor afterwards to see exactly how its
 pages, conditions, and commands fit together. They're the fastest way to *learn* eventing, not just

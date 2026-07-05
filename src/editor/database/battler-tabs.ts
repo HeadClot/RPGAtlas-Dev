@@ -241,9 +241,11 @@ export const skillsTab = () => listFormTab({
         field("Type", sel(e, "type", skillTypeSelOpts())),
         field("Element", sel(e, "element", elementSelOpts())),
         field("Power", nIn(e, "power", 0, 9999)), field("MP cost", nIn(e, "mp", 0, 999))));
-      p.appendChild(field("Scope", sel(e, "scope", [
+      p.appendChild(row(field("Scope", sel(e, "scope", [
         { v: "enemy", l: "One enemy" }, { v: "enemies", l: "All enemies" },
-        { v: "ally", l: "One ally" }, { v: "allies", l: "All allies" }])));
+        { v: "ally", l: "One ally" }, { v: "allies", l: "All allies" }])),
+        field("Revives fallen ally", chk(e, "revive"))));
+      p.appendChild(h("div", { class: "dim" }, "Revive: a heal-type ally/allies skill that targets fallen (0 HP) party members and brings them back to life with its healed amount. Ordinary heals never touch the fallen."));
       // Battle animation + multi-hit + action-sequence hook (Phase 5).
       // Animation "(default FX)" keeps the legacy castFx/travel/burst effects;
       // the common event runs after the skill resolves in battle.

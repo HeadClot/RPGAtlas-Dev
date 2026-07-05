@@ -523,11 +523,30 @@ async function menuItems(): Promise<void> {
     useItemOn(it, target);
   }
 }
-export function useItemOn(it: any, target: any): void {
-  if (it.hp) target.hp = clamp(target.hp + it.hp, 0, param(target, "mhp"));
-  if (it.mp) target.mp = clamp(target.mp + it.mp, 0, param(target, "mmp"));
+/** Apply an item to a target. Returns false (with a buzzer) when the item
+ *  can't act on that target — a revive item on a living ally, or an ordinary
+ *  restorative on a fallen one — so callers can skip the "used it" flourish. */
+export function useItemOn(it: any, target: any): boolean {
+  const fallen = target.hp <= 0;
+  if (it.revive) {
+    if (!fallen) {
+      sysSe("buzzer");
+      return false;
+    }
+    // Bring the fallen ally back with `hp` HP (at least 1); MP tops up too.
+    target.hp = clamp(Math.max(1, it.hp || 1), 1, param(target, "mhp"));
+    if (it.mp) target.mp = clamp(target.mp + it.mp, 0, param(target, "mmp"));
+  } else {
+    if (fallen) {
+      sysSe("buzzer");
+      return false;
+    }
+    if (it.hp) target.hp = clamp(target.hp + it.hp, 0, param(target, "mhp"));
+    if (it.mp) target.mp = clamp(target.mp + it.mp, 0, param(target, "mmp"));
+  }
   sysSe("heal");
   addInv("item", it.id, -1);
+  return true;
 }
 
 async function menuSkills(): Promise<void> {

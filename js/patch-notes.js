@@ -5,6 +5,32 @@
 export const PATCH_NOTES = [
   {
     date: "July 4, 2026",
+    title: "Bring fallen heroes back: a Revive mechanic, the Phoenix Feather & four new states",
+    summary:
+      "When a party member's HP hits 0 they're out of the fight — and now you can bring them back. New projects start with a Revive skill and a Phoenix Feather item that raise a fallen ally, plus four fresh status effects to spice up battles. Ordinary Potions and heals still can't touch the fallen, so reviving means something.",
+    items: [
+      "Revive skill: a heal skill that targets a fallen ally and restores them to life (the Cleric and Sage learn it). Tick the new “Revives fallen ally” box on any heal skill in the Skills tab to make your own.",
+      "Phoenix Feather item: sold at the village merchant, it revives one fallen ally with 80 HP and does nothing on the living. The Items tab has a matching “Revives fallen ally” box.",
+      "Only revive items and revive skills can select a fallen ally — regular restoratives are refused, so the mechanic actually matters.",
+      "Four new states: Burn and Bleed deal damage each round, Sleep makes a battler skip its turns, and Blessing steadily heals. They're wired into existing skills — Flame Slash/Inferno burn, Bone Crush bleeds, Moonbeam sleeps, and Sanctuary grants Blessing.",
+    ],
+  },
+  {
+    date: "July 4, 2026",
+    title: "Six more Quick Events: Door, Save Point, Healing Crystal, Monster, Gift NPC & Quest Giver",
+    summary:
+      "The New Quick Event menu keeps growing. Right-click an empty tile in Event mode and six more RPG staples are one dialog away — answer a couple of plain questions and the finished, playable event drops onto the map. As always, open one afterwards in the event editor to see exactly how its pages and commands fit together.",
+    items: [
+      "Door: a press-to-open door — pick where it leads and it plays the door sound, then transfers the player (great alongside the walk-on Transfer).",
+      "Save Point: a glowing crystal that opens the Save screen, and can fully heal the party first.",
+      "Healing Crystal: touch it to restore the whole party's HP and MP, with your own message.",
+      "Monster: a guardian that blocks the way and fights (no escape); beat it and it hands over an optional gold reward and vanishes for good.",
+      "Gift NPC: hands the player an item, weapon, armor, or gold once — then only repeats its farewell line.",
+      "Quest Giver: speaks, starts a quest you pick, and afterwards just repeats its follow-up line.",
+    ],
+  },
+  {
+    date: "July 4, 2026",
     title: "Four new Quick Events: Villager, Shopkeeper, Innkeeper & Locked Door",
     summary:
       "Right-click the map in Event mode and the New Quick Event menu now builds four more classics for you — answer two or three plain questions and the finished event appears, ready to play. Open it afterwards in the event editor to see exactly how it works: every template is made of ordinary pages and commands, so they double as little lessons.",

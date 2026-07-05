@@ -20,7 +20,7 @@ import { composeAdvBuffers, recomposeLowerCell } from "../../shared/layer-compos
 import { tileId } from "../../shared/tile-flags.js";
 import { syncAutotileRegistry } from "../../shared/autotile-load.js";
 import { scanAnimatedCells, redrawAnimatedCells, frameAtTick } from "../../shared/autotile-anim.js";
-import { anyAutotileAnimated } from "../../shared/autotile-registry.js";
+import { anyAutotileAnimated, isAutotileId, autotilePassable } from "../../shared/autotile-registry.js";
 import { clamp, rnd, compareVariable, sysSe } from "../util.js";
 import { ctx, fns } from "../state/engine-context.js";
 import { G, Quests, objectiveDone, onEnemyKilled, param } from "../state/game-state.js";
@@ -66,12 +66,19 @@ export function tilePassable(x: any, y: any): boolean {
   // Mask the Stage-E transform-flag bits off the raw id before the tile-def
   // lookup: a flipped/rotated floor is as passable as its unflipped self.
   const d2 = tileId(tileAt("decor2", x, y));
-  if (d2 !== 0) return Assets.tiles[d2] ? Assets.tiles[d2].pass : false;
+  if (d2 !== 0) return tileDefPass(d2);
   const d = tileId(tileAt("decor", x, y));
-  if (d !== 0) return Assets.tiles[d] ? Assets.tiles[d].pass : false;
+  if (d !== 0) return tileDefPass(d);
   const g = tileId(tileAt("ground", x, y));
   if (g === 0) return false;
-  return Assets.tiles[g] ? Assets.tiles[g].pass : false;
+  return tileDefPass(g);
+}
+/** Passability of a single (already flag-masked) tile id. Autotile terrain ids
+ *  live above the Assets.tiles array, so their walkability comes from the
+ *  project's autotile group `pass` flag rather than a tile def. */
+function tileDefPass(id: any): boolean {
+  if (isAutotileId(id)) return autotilePassable(ctx.proj && ctx.proj.autotiles, id);
+  return Assets.tiles[id] ? Assets.tiles[id].pass : false;
 }
 /** The clock's band: morning 5–10, day 10–17, evening 17–21, night 21–5. */
 export function timeBandOf(hour: any): string {

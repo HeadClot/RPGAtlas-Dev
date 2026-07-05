@@ -10,7 +10,7 @@
 
 import { Assets, TILE, LAYER_ORDER, editorState as S, curMap } from "../editor-state";
 import { drawLayerCell } from "../../shared/autotile-draw";
-import { isAutotileId, anyAutotileAnimated } from "../../shared/autotile-registry";
+import { isAutotileId, anyAutotileAnimated, autotilePassable } from "../../shared/autotile-registry";
 import { frameAt } from "../../shared/autotile-anim";
 import { tileId } from "../../shared/tile-flags";
 import { layerView, shadowIndex, entryArray, BLEND_COMPOSITE } from "../../shared/layer-view";
@@ -117,12 +117,17 @@ import { drawEntryTiles } from "../../shared/layer-composite";
     if (ov === 2) return false;
     // Mask Stage-E transform-flag bits before the tile-def lookup so a flipped/
     // rotated floor keeps its base tile's passability (matches engine tilePassable).
+    // Autotile terrain ids resolve from the project's group `pass` flag — they
+    // sit above the Assets.tiles array so a plain lookup would always miss.
+    const passOf = (id: number) => isAutotileId(id)
+      ? autotilePassable(S.proj.autotiles as any, id)
+      : (Assets.tiles[id] ? Assets.tiles[id].pass : false);
     for (const ln of ["decor2", "decor"]) {
       const t = tileId(m.layers[ln][i]);
-      if (t) return Assets.tiles[t] ? Assets.tiles[t].pass : false;
+      if (t) return passOf(t);
     }
     const t = tileId(m.layers.ground[i]);
-    return t && Assets.tiles[t] ? Assets.tiles[t].pass : false;
+    return !!t && passOf(t);
   }
   export function effectivePass(x: any, y: any) {
     return effectivePassOn(curMap(), x, y);

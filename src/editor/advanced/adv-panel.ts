@@ -268,7 +268,7 @@ function advView(): MapView {
   const m = curMap();
   return {
     zoom: advState.zoom, mode: "map", layer: "auto", tool: advState.tool,
-    selection: null, hoverCell: advState.hoverCell, hoverQuad: 0,
+    selection: null, hoverCell: advState.hoverCell, hoverQuad: advState.hoverQuad,
     rectStart: advState.rectStart, painting: advState.painting,
     pasteMode: null, clipTiles: null, selectedEvent: null,
     system: S.proj.system,
@@ -306,6 +306,9 @@ function stepZoom(dir: number) {
 function setTool(tool: AdvTool) {
   advState.tool = tool;
   for (const [k, b] of Object.entries(toolBtns)) b.classList.toggle("sel", k === tool);
+  // Leaving the Shadow Pen must clear any lingering quadrant hover preview.
+  if (tool !== "shadow") advState.hoverQuad = 0;
+  renderAdvCanvas();
 }
 
 // ============================ mount ============================
@@ -337,6 +340,7 @@ export function mountAdvanced(): HTMLElement {
   const tools: [AdvTool, string, string][] = [
     ["pen", "✏", t("Pen")], ["erase", "⌫", t("Eraser")],
     ["fill", "🪣", t("Fill")], ["rect", "▭", t("Rectangle")],
+    ["shadow", "🌑", t("Shadow Pen") + " — " + t("left paints a shadow quadrant, right erases")],
   ];
   toolBtns = {};
   const xfmBtn = (icon: string, title: string, onclick: () => void) =>

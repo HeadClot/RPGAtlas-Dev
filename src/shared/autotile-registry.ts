@@ -44,6 +44,23 @@ export function tileIdOf(groupId: number): number { return AUTOTILE_BASE + group
 /** Group id from a reserved tile id. Masks transform-flag bits first. */
 export function groupIdOf(tileId: number): number { return (tileId & TILE_ID_MASK) - AUTOTILE_BASE; }
 
+/** Resolve the gameplay passability of an autotile reserved id from the project's
+ *  autotile groups. Autotile ids live far above the `Assets.tiles` array, so the
+ *  normal `Assets.tiles[id].pass` lookup a plain tile uses always misses for a
+ *  terrain brush — passability has to come from `proj.autotiles[i].pass` instead
+ *  (this registry deliberately holds only render metadata, not gameplay flags).
+ *  A group's `pass` defaults to true (terrain floors are walkable); an id that
+ *  names no known group returns false, matching how a missing plain-tile def is
+ *  treated as blocked. Pure — the caller passes the group list. */
+export function autotilePassable(
+  autotiles: ReadonlyArray<{ id: number; pass?: boolean }> | undefined,
+  id: number,
+): boolean {
+  const gid = groupIdOf(id);
+  const g = autotiles && autotiles.find((a) => a.id === gid);
+  return g ? g.pass !== false : false;
+}
+
 /** Per-kind / anim / variant metadata registered alongside a source block. All
  *  optional; the defaults reproduce the classic blob47 A2 group exactly. */
 export interface AutotileMeta {
