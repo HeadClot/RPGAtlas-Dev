@@ -84,7 +84,7 @@ export async function render(): Promise<void> {
   // Phase 5: parked vehicles + party followers (followers hide while riding)
   if (ctx.scene === "map") {
     for (const v of vehicleDrawables()) drawables.push(v);
-    if (ctx.proj.system.followers && !G.vehicle) {
+    if (ctx.proj.system.followers && !G.vehicle && !G.followersHidden) {
       for (const f of G.followers || []) {
         if (f.charsetIdx >= 0) drawables.push(f);
       }

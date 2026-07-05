@@ -10,6 +10,8 @@ import { registerStateCommands } from "./state.js";
 import { registerPresentationCommands } from "./presentation.js";
 import { registerWorldCommands } from "./world.js";
 import { registerCombatCommands } from "./combat.js";
+import { registerActorCommands } from "./actors.js";
+import { registerSystemCommands } from "./system.js";
 
 export function registerBuiltinCommands(): void {
   registerFlowCommands();
@@ -17,4 +19,6 @@ export function registerBuiltinCommands(): void {
   registerPresentationCommands();
   registerWorldCommands();
   registerCombatCommands();
+  registerActorCommands();
+  registerSystemCommands();
 }

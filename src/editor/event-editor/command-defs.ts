@@ -25,6 +25,17 @@ import { openLocationPicker } from "./location-picker";
   const BALLOON_OPTS = Array.from({ length: 15 }, (_, i) => ({ v: i + 1, l: (i + 1) + ": " + (BALLOON_NAMES[i + 1] || "Balloon " + (i + 1)) }));
   const BLEND_OPTS = [{ v: 0, l: "Normal" }, { v: 1, l: "Add" }, { v: 2, l: "Multiply" }, { v: 3, l: "Screen" }];
   const ORIGIN_OPTS = [{ v: 0, l: "Upper-left" }, { v: 1, l: "Center" }];
+  // Change-actor-data family (Project Compass M2·C): the base parameters Atlas
+  // models (RM's `luk` has no Atlas home), and the actor dropdowns. The
+  // exp/level/param/skill/state commands offer "Entire Party" (id 0).
+  const PARAM_OPTS = [
+    { v: "mhp", l: "Max HP" }, { v: "mmp", l: "Max MP" }, { v: "atk", l: "Attack" },
+    { v: "def", l: "Defense" }, { v: "mat", l: "M.Attack" }, { v: "mdf", l: "M.Defense" }, { v: "agi", l: "Agility" },
+  ];
+  const PARAM_LABEL: Record<string, string> = { mhp: "Max HP", mmp: "Max MP", atk: "Attack", def: "Defense", mat: "M.Attack", mdf: "M.Defense", agi: "Agility" };
+  const actorOnlyOpts = () => S.proj.actors.map((a: any) => ({ v: a.id, l: a.name }));
+  const actorPartyOpts = () => [{ v: 0, l: "Entire Party" }, ...actorOnlyOpts()];
+  const actorLabel = (id: any) => (Number(id) === 0 ? "Entire Party" : (RA.byId(S.proj.actors, id) || { name: "#" + id }).name);
   // Screen/picture colour tone presets ([r,g,b,gray]) offered in the tint forms.
   const TONE_PRESETS: { l: string; tone: [number, number, number, number] }[] = [
     { l: "Normal", tone: [0, 0, 0, 0] },
@@ -118,6 +129,27 @@ import { openLocationPicker } from "./location-picker";
       case "inputNumber": return "Input Number → Variable " + varName(c.varId) + " (" + (c.digits || 1) + " digit" + ((c.digits || 1) === 1 ? "" : "s") + ")";
       case "selectItem": return "Select Item → Variable " + varName(c.varId);
       case "nameInput": return "Name Input: " + dbName(S.proj.actors, c.actorId) + " (max " + (c.maxChars || 8) + ")";
+      // --- Actor-data family + flow labels + system toggles (M2·C) ---
+      case "label": return "◆ Label: " + (c.name || "");
+      case "jump": return "→ Jump to Label: " + (c.name || "");
+      case "changeExp": return "Change EXP: " + actorLabel(c.actorId) + " " + (c.op === "sub" ? "−" : "+") + (c.value || 0);
+      case "changeLevel": return "Change Level: " + actorLabel(c.actorId) + " " + (c.op === "sub" ? "−" : "+") + (c.value || 0);
+      case "changeParam": return "Change " + (PARAM_LABEL[c.param] || c.param) + ": " + actorLabel(c.actorId) + " " + (c.op === "sub" ? "−" : "+") + (c.value || 0);
+      case "changeSkill": return (c.op === "forget" ? "Forget" : "Learn") + " Skill: " + actorLabel(c.actorId) + " — " + dbName(S.proj.skills, c.skillId);
+      case "changeEquip": return "Change Equipment: " + actorLabel(c.actorId) + " " + (c.slot === "armor" ? "armor" : "weapon") + " = " + (c.itemId ? dbName(c.slot === "armor" ? S.proj.armors : S.proj.weapons, c.itemId) : "(none)");
+      case "changeName": return "Change Name: " + actorLabel(c.actorId) + " → " + (c.name || "");
+      case "changeClass": return "Change Class: " + actorLabel(c.actorId) + " → " + dbName(S.proj.classes, c.classId);
+      case "changeActorImage": return "Change Actor Image: " + actorLabel(c.actorId) + " → " + (c.charset || "(none)");
+      case "changeNickname": return "Change Nickname: " + actorLabel(c.actorId) + " → " + (c.nickname || "");
+      case "changeProfile": return "Change Profile: " + actorLabel(c.actorId);
+      case "changeState": return (c.op === "remove" ? "Remove" : "Add") + " State: " + actorLabel(c.actorId) + " — " + dbName(S.proj.states, c.stateId);
+      case "access": {
+        const label = c.kind === "save" ? "Save" : c.kind === "encounter" ? "Encounters" : c.kind === "formation" ? "Formation" : "Menu";
+        return "Change " + label + " Access: " + (c.enabled === false ? "Disable" : "Enable");
+      }
+      case "followers": return "Change Followers: " + (c.show === false ? "Hide" : "Show");
+      case "windowTone": return "Change Window Color [" + (c.tone || []).join(", ") + "]";
+      case "getLocationInfo": return "Get Location Info → Variable " + varName(c.varId) + " (" + (c.infoType || "region") + " @ " + (c.x || 0) + "," + (c.y || 0) + ")";
       case "erase": return "Erase This Event";
       case "save": return "Open Save Screen";
       case "gameover": return "Game Over";
@@ -693,6 +725,154 @@ import { openLocationPicker } from "./location-picker";
         box.appendChild(row(field("Hero", sel(w, "actorId", dbOpts(S.proj.actors))), field("Max letters (1–16)", nIn(w, "maxChars", 1, 16))));
         box.appendChild(h("div", { class: "dim" }, "Opens an on-screen keyboard so the player can rename this hero."));
         return () => { c.actorId = Number(w.actorId); c.maxChars = Number(w.maxChars); };
+      } },
+    // --- Flow labels (Project Compass M2·C) ---
+    { t: "label", label: "Label", make: () => ({ t: "label", name: "Start" }),
+      form(c: any, box: any) {
+        const w = { name: c.name || "" };
+        box.appendChild(field("Label name", tIn(w, "name")));
+        box.appendChild(h("div", { class: "dim" }, "A named spot in this command list that a Jump to Label can leap to."));
+        return () => { c.name = w.name; };
+      } },
+    { t: "jump", label: "Jump to Label", make: () => ({ t: "jump", name: "Start" }),
+      form(c: any, box: any) {
+        const w = { name: c.name || "" };
+        box.appendChild(field("Label name", tIn(w, "name")));
+        box.appendChild(h("div", { class: "dim" }, "Jumps to the matching Label in this same command list (looks in enclosing lists if it isn't here). Handy for making your own loops."));
+        return () => { c.name = w.name; };
+      } },
+    // --- Change-actor-data family (Project Compass M2·C) ---
+    { t: "changeExp", label: "Change EXP", make: () => ({ t: "changeExp", actorId: 0, op: "add", value: 100 }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId == null ? 0 : c.actorId, op: c.op || "add", value: c.value == null ? 100 : c.value };
+        box.appendChild(row(field("Hero", sel(w, "actorId", actorPartyOpts())),
+          field("Op", sel(w, "op", [{ v: "add", l: "Increase" }, { v: "sub", l: "Decrease" }])),
+          field("Amount", nIn(w, "value", 0))));
+        box.appendChild(h("div", { class: "dim" }, "Levels rise as EXP crosses each threshold (and class skills are learned along the way)."));
+        return () => { c.actorId = Number(w.actorId); c.op = w.op; c.value = Number(w.value); };
+      } },
+    { t: "changeLevel", label: "Change Level", make: () => ({ t: "changeLevel", actorId: 0, op: "add", value: 1 }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId == null ? 0 : c.actorId, op: c.op || "add", value: c.value == null ? 1 : c.value };
+        box.appendChild(row(field("Hero", sel(w, "actorId", actorPartyOpts())),
+          field("Op", sel(w, "op", [{ v: "add", l: "Increase" }, { v: "sub", l: "Decrease" }])),
+          field("Levels", nIn(w, "value", 0, 99))));
+        return () => { c.actorId = Number(w.actorId); c.op = w.op; c.value = Number(w.value); };
+      } },
+    { t: "changeParam", label: "Change Parameters", make: () => ({ t: "changeParam", actorId: 0, param: "atk", op: "add", value: 1 }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId == null ? 0 : c.actorId, param: c.param || "atk", op: c.op || "add", value: c.value == null ? 1 : c.value };
+        box.appendChild(row(field("Hero", sel(w, "actorId", actorPartyOpts())),
+          field("Parameter", sel(w, "param", PARAM_OPTS))));
+        box.appendChild(row(field("Op", sel(w, "op", [{ v: "add", l: "Increase" }, { v: "sub", l: "Decrease" }])),
+          field("Amount", nIn(w, "value", 0))));
+        box.appendChild(h("div", { class: "dim" }, "Adds a permanent bonus to a base stat (on top of class growth and equipment)."));
+        return () => { c.actorId = Number(w.actorId); c.param = w.param; c.op = w.op; c.value = Number(w.value); };
+      } },
+    { t: "changeSkill", label: "Change Skills", make: () => ({ t: "changeSkill", actorId: 0, op: "learn", skillId: S.proj.skills[0] ? S.proj.skills[0].id : 1 }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId == null ? 0 : c.actorId, op: c.op || "learn", skillId: c.skillId || (S.proj.skills[0] ? S.proj.skills[0].id : 1) };
+        box.appendChild(row(field("Hero", sel(w, "actorId", actorPartyOpts())),
+          field("Op", sel(w, "op", [{ v: "learn", l: "Learn" }, { v: "forget", l: "Forget" }])),
+          field("Skill", sel(w, "skillId", dbOpts(S.proj.skills)))));
+        return () => { c.actorId = Number(w.actorId); c.op = w.op; c.skillId = Number(w.skillId); };
+      } },
+    { t: "changeEquip", label: "Change Equipment", make: () => ({ t: "changeEquip", actorId: S.proj.actors[0] ? S.proj.actors[0].id : 1, slot: "weapon", itemId: 0 }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId || (S.proj.actors[0] ? S.proj.actors[0].id : 1), slot: c.slot || "weapon", itemId: c.itemId || 0 };
+        const entry = h("span");
+        function redraw() {
+          const arr = w.slot === "armor" ? S.proj.armors : S.proj.weapons;
+          entry.innerHTML = "";
+          entry.appendChild(sel(w, "itemId", dbOpts(arr, "(none / unequip)")));
+        }
+        box.appendChild(row(field("Hero", sel(w, "actorId", dbOpts(S.proj.actors))),
+          field("Slot", sel(w, "slot", [{ v: "weapon", l: "Weapon" }, { v: "armor", l: "Armor" }], redraw)),
+          field("Equip", entry)));
+        redraw();
+        return () => { c.actorId = Number(w.actorId); c.slot = w.slot; c.itemId = Number(w.itemId) || 0; };
+      } },
+    { t: "changeName", label: "Change Name", make: () => ({ t: "changeName", actorId: S.proj.actors[0] ? S.proj.actors[0].id : 1, name: "" }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId || (S.proj.actors[0] ? S.proj.actors[0].id : 1), name: c.name || "" };
+        box.appendChild(row(field("Hero", sel(w, "actorId", dbOpts(S.proj.actors))), field("New name", tIn(w, "name"))));
+        return () => { c.actorId = Number(w.actorId); c.name = w.name; };
+      } },
+    { t: "changeClass", label: "Change Class", make: () => ({ t: "changeClass", actorId: S.proj.actors[0] ? S.proj.actors[0].id : 1, classId: S.proj.classes[0] ? S.proj.classes[0].id : 1 }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId || (S.proj.actors[0] ? S.proj.actors[0].id : 1), classId: c.classId || (S.proj.classes[0] ? S.proj.classes[0].id : 1) };
+        box.appendChild(row(field("Hero", sel(w, "actorId", dbOpts(S.proj.actors))), field("New class", sel(w, "classId", dbOpts(S.proj.classes)))));
+        box.appendChild(h("div", { class: "dim" }, "The hero keeps their level; their stats and learnable skills follow the new class."));
+        return () => { c.actorId = Number(w.actorId); c.classId = Number(w.classId); };
+      } },
+    { t: "changeActorImage", label: "Change Actor Image", make: () => ({ t: "changeActorImage", actorId: S.proj.actors[0] ? S.proj.actors[0].id : 1, charset: "" }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId || (S.proj.actors[0] ? S.proj.actors[0].id : 1), charset: c.charset || "" };
+        box.appendChild(row(field("Hero", sel(w, "actorId", dbOpts(S.proj.actors))), field("Charset (map sprite + face)", sel(w, "charset", charsetOpts(true)))));
+        box.appendChild(h("div", { class: "dim" }, "Atlas uses one image for a hero's map sprite and menu face."));
+        return () => { c.actorId = Number(w.actorId); c.charset = w.charset; };
+      } },
+    { t: "changeNickname", label: "Change Nickname", make: () => ({ t: "changeNickname", actorId: S.proj.actors[0] ? S.proj.actors[0].id : 1, nickname: "" }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId || (S.proj.actors[0] ? S.proj.actors[0].id : 1), nickname: c.nickname || "" };
+        box.appendChild(row(field("Hero", sel(w, "actorId", dbOpts(S.proj.actors))), field("Nickname", tIn(w, "nickname"))));
+        return () => { c.actorId = Number(w.actorId); c.nickname = w.nickname; };
+      } },
+    { t: "changeProfile", label: "Change Profile", make: () => ({ t: "changeProfile", actorId: S.proj.actors[0] ? S.proj.actors[0].id : 1, profile: "" }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId || (S.proj.actors[0] ? S.proj.actors[0].id : 1) };
+        const ta = h("textarea", { rows: 3 }, c.profile || "");
+        box.appendChild(field("Hero", sel(w, "actorId", dbOpts(S.proj.actors))));
+        box.appendChild(field("Profile", ta));
+        return () => { c.actorId = Number(w.actorId); c.profile = ta.value; };
+      } },
+    { t: "changeState", label: "Change State", make: () => ({ t: "changeState", actorId: 0, op: "add", stateId: S.proj.states[0] ? S.proj.states[0].id : 1 }),
+      form(c: any, box: any) {
+        const w = { actorId: c.actorId == null ? 0 : c.actorId, op: c.op || "add", stateId: c.stateId || (S.proj.states[0] ? S.proj.states[0].id : 1) };
+        box.appendChild(row(field("Hero", sel(w, "actorId", actorPartyOpts())),
+          field("Op", sel(w, "op", [{ v: "add", l: "Add" }, { v: "remove", l: "Remove" }])),
+          field("State", sel(w, "stateId", dbOpts(S.proj.states)))));
+        return () => { c.actorId = Number(w.actorId); c.op = w.op; c.stateId = Number(w.stateId); };
+      } },
+    // --- System toggles (Project Compass M2·C) ---
+    { t: "access", label: "Change Access (Menu/Save/…)", make: () => ({ t: "access", kind: "menu", enabled: true }),
+      form(c: any, box: any) {
+        const w = { kind: c.kind || "menu", enabled: String(c.enabled !== false) };
+        box.appendChild(row(field("Access", sel(w, "kind", [
+          { v: "menu", l: "Menu" }, { v: "save", l: "Save" }, { v: "encounter", l: "Encounters" }, { v: "formation", l: "Formation" },
+        ])), field("Set", sel(w, "enabled", [{ v: "true", l: "Enable" }, { v: "false", l: "Disable" }]))));
+        box.appendChild(h("div", { class: "dim" }, "Locks part of the game: the pause menu, its Save or Formation option, or random encounters. Remembered in the save file."));
+        return () => { c.kind = w.kind; c.enabled = w.enabled === "true"; };
+      } },
+    { t: "followers", label: "Change Followers", make: () => ({ t: "followers", show: true }),
+      form(c: any, box: any) {
+        const w = { show: String(c.show !== false) };
+        box.appendChild(field("Follower trail", sel(w, "show", [{ v: "true", l: "Show" }, { v: "false", l: "Hide" }])));
+        box.appendChild(h("div", { class: "dim" }, "Hides or shows the party members that trail behind the leader (needs Followers turned on in Database ▸ System)."));
+        return () => { c.show = w.show === "true"; };
+      } },
+    { t: "windowTone", label: "Change Window Color", make: () => ({ t: "windowTone", tone: [18, 24, 46] }),
+      form(c: any, box: any) {
+        const tone = Array.isArray(c.tone) ? c.tone.slice() : [18, 24, 46];
+        const toHex = (n: number) => ("0" + Math.max(0, Math.min(255, Math.round(n || 0))).toString(16)).slice(-2);
+        const w = { hex: "#" + toHex(tone[0]) + toHex(tone[1]) + toHex(tone[2]) };
+        const colorIn = h("input", { type: "color", value: w.hex, oninput(e: any) { w.hex = e.target.value; } });
+        box.appendChild(row(field("Window color", colorIn)));
+        box.appendChild(h("div", { class: "dim" }, "Recolors the message and menu windows for the rest of the game (saved with your game)."));
+        return () => {
+          const m = /^#?([0-9a-f]{6})$/i.exec(w.hex || "");
+          const hx = m ? m[1] : "12182e";
+          c.tone = [parseInt(hx.slice(0, 2), 16), parseInt(hx.slice(2, 4), 16), parseInt(hx.slice(4, 6), 16)];
+        };
+      } },
+    { t: "getLocationInfo", label: "Get Location Info", make: () => ({ t: "getLocationInfo", varId: 1, infoType: "region", x: 0, y: 0 }),
+      form(c: any, box: any) {
+        const w = { varId: c.varId || 1, infoType: c.infoType || "region", x: c.x || 0, y: c.y || 0 };
+        box.appendChild(row(field("Store in Variable", sel(w, "varId", varOpts())),
+          field("Read", sel(w, "infoType", [{ v: "region", l: "Region id" }, { v: "eventId", l: "Event id" }, { v: "tileId", l: "Tile id" }, { v: "terrain", l: "Terrain tag" }]))));
+        box.appendChild(row(field("Tile X", nIn(w, "x", 0, 500)), field("Tile Y", nIn(w, "y", 0, 500))));
+        box.appendChild(h("div", { class: "dim" }, "Reads info about a map tile into a variable. (Atlas has no terrain tags, so Terrain tag reads 0.)"));
+        return () => { c.varId = Number(w.varId); c.infoType = w.infoType; c.x = Number(w.x); c.y = Number(w.y); };
       } },
     { t: "erase", label: "Erase This Event", make: () => ({ t: "erase" }), form: () => () => {} },
     { t: "save", label: "Open Save Screen", make: () => ({ t: "save" }), form: () => () => {} },

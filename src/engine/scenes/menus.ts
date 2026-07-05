@@ -155,6 +155,8 @@ async function menuFormation(): Promise<void> {
 
 export async function openMenu(): Promise<void> {
   if (ctx.menuOpen || ctx.blockingRun) return;
+  // Change Menu Access (M2·C) locks the pause menu entirely.
+  if (G.menuDisabled) return;
   ctx.menuOpen = true;
   sysSe("ok");
   const panel = el("div", "win menupanel");
@@ -184,10 +186,11 @@ export async function openMenu(): Promise<void> {
                 "menu-icon",
               ) + "Status",
           },
-          { html: Assets.iconHtml(20, "menu-icon") + "Formation" },
+          // Change Formation / Save Access (M2·C) grey these out when locked.
+          { html: Assets.iconHtml(20, "menu-icon") + "Formation", disabled: !!G.formationDisabled },
           { html: Assets.iconHtml(16, "menu-icon") + "Journal" },
           { html: Assets.iconHtml(46, "menu-icon") + "Options" },
-          { html: Assets.iconHtml(44, "menu-icon") + "Save" },
+          { html: Assets.iconHtml(44, "menu-icon") + "Save", disabled: !!G.saveDisabled },
           { html: Assets.iconHtml(45, "menu-icon") + "Load" },
           { html: Assets.iconHtml(47, "menu-icon") + "To Title" },
         ],

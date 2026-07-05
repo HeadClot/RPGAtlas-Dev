@@ -59,12 +59,28 @@ export function registerFlowCommands(): void {
         interp.breakLoop = false;
         return;
       }
+      // A jump seeking a label outside this loop unwound runList — stop looping
+      // and let the enclosing list resolve it (Project Compass M2·C).
+      if (interp.jumpLabel != null) return;
       if (++spins % 1000 === 0) await services.waitFrames(1);
     }
   });
 
   registerCommand("breakLoop", (_c: any, { interp }: InterpContext) => {
     interp.breakLoop = true;
+  });
+
+  // ---- Jump labels (Project Compass M2·C, RM 118/119) ----
+  // `label` is a passive marker; `jump` sets interp.jumpLabel and runList
+  // (interp.ts) seeks the matching label in the current list, unwinding to an
+  // enclosing list when it isn't found locally. The spin yield mirrors `loop`
+  // so a wait-less backward jump can never freeze the tab.
+  registerCommand("label", () => {});
+
+  registerCommand("jump", async (c: any, { interp, services }: InterpContext) => {
+    interp.jumpLabel = String(c.name == null ? "" : c.name);
+    interp.jumpSpins = (interp.jumpSpins || 0) + 1;
+    if (interp.jumpSpins % 1000 === 0) await services.waitFrames(1);
   });
 
   registerCommand("commonEvent", async (c: any, { interp }: InterpContext) => {

@@ -476,7 +476,7 @@ export interface Quest {
 }
 
 // ============================================================================
-// Event commands — the AnyCommand discriminated union (43 types + mzTodo)
+// Event commands — the AnyCommand discriminated union (66 types + mzTodo)
 // ============================================================================
 
 /** Conditional-branch condition (the `if` command / quest requirements). */
@@ -848,6 +848,58 @@ export interface CmdNameInput {
   maxChars: number;
 }
 
+// --- Actor/party data, flow labels, system toggles (Project Compass, M2·C) ---
+// The "change actor data" family, jump labels, and the map-system access
+// toggles RM offers. All additive / optional (FORMAT_VERSION stays 2) — old
+// projects never see them. `actorId` 0 means "the whole party" (RM's "Entire
+// Party" option) for the commands that support it (exp/level/param/skill/state);
+// name/class/nickname/profile/image/equip always target one actor.
+
+/** A named jump target (RM Label). A no-op on its own — `jump` seeks it. */
+export interface CmdLabel { t: "label"; name: string; }
+/** Jump to the matching `label` in the same command list (RM Jump to Label). */
+export interface CmdJump { t: "jump"; name: string; }
+
+/** Add/subtract experience (RM Change EXP). Levels rise as EXP crosses each
+ *  curve threshold, learning class skills along the way. */
+export interface CmdChangeExp { t: "changeExp"; actorId: number; op: "add" | "sub"; value: number; }
+/** Add/subtract levels (RM Change Level). EXP snaps to the new level's floor. */
+export interface CmdChangeLevel { t: "changeLevel"; actorId: number; op: "add" | "sub"; value: number; }
+/** Add/subtract a permanent bonus to one base parameter (RM Change Parameters).
+ *  `param` is an Atlas param key (mhp/mmp/atk/def/mat/mdf/agi). */
+export interface CmdChangeParam { t: "changeParam"; actorId: number; param: string; op: "add" | "sub"; value: number; }
+/** Teach or remove a skill (RM Change Skills). Stored as an extra learned skill
+ *  (learn) or a suppression of an otherwise-known one (forget). */
+export interface CmdChangeSkill { t: "changeSkill"; actorId: number; op: "learn" | "forget"; skillId: number; }
+/** Force-equip a weapon or armor (RM Change Equipment). itemId 0 unequips. */
+export interface CmdChangeEquip { t: "changeEquip"; actorId: number; slot: "weapon" | "armor"; itemId: number; }
+/** Rename an actor (RM Change Name). */
+export interface CmdChangeName { t: "changeName"; actorId: number; name: string; }
+/** Change an actor's class (RM Change Class); HP/MP are re-clamped after. */
+export interface CmdChangeClass { t: "changeClass"; actorId: number; classId: number; }
+/** Swap an actor's map/face charset (RM Change Actor Images; Atlas faces derive
+ *  from the charset). */
+export interface CmdChangeActorImage { t: "changeActorImage"; actorId: number; charset: string; }
+/** Set an actor's nickname (RM Change Nickname). Stored on the party member. */
+export interface CmdChangeNickname { t: "changeNickname"; actorId: number; nickname: string; }
+/** Set an actor's profile text (RM Change Profile). Stored on the party member. */
+export interface CmdChangeProfile { t: "changeProfile"; actorId: number; profile: string; }
+/** Add or remove a state outside battle (RM Change State). */
+export interface CmdChangeState { t: "changeState"; actorId: number; op: "add" | "remove"; stateId: number; }
+
+/** Toggle a map-system access flag (RM Change Menu/Save/Encounter/Formation
+ *  Access). `enabled` false locks the menu, its save/formation entry, or the
+ *  random-encounter roll respectively. Round-trips through saves. */
+export interface CmdAccess { t: "access"; kind: "menu" | "save" | "encounter" | "formation"; enabled: boolean; }
+/** Show or hide the follower trail (RM Change Player Followers). */
+export interface CmdFollowers { t: "followers"; show: boolean; }
+/** Recolour the message/menu windows live (RM Change Window Color). `tone` is
+ *  an [r,g,b] 0–255 base colour; round-trips through saves. */
+export interface CmdWindowTone { t: "windowTone"; tone: [number, number, number]; }
+/** Read map info at a tile into a variable (RM Get Location Info). `infoType`:
+ *  region / terrain tag / event id at the tile / tile id (best-effort). */
+export interface CmdGetLocationInfo { t: "getLocationInfo"; varId: number; infoType: "terrain" | "eventId" | "tileId" | "region"; x: number; y: number; }
+
 /** Every built-in event command, discriminated on `t`. Plugin commands add
  *  further `t` values at runtime via the interpreter registry; those aren't in
  *  this union, so widen with `AnyCommand | { t: string; [k: string]: any }` at
@@ -902,6 +954,23 @@ export type AnyCommand =
   | CmdInputNumber
   | CmdSelectItem
   | CmdNameInput
+  | CmdLabel
+  | CmdJump
+  | CmdChangeExp
+  | CmdChangeLevel
+  | CmdChangeParam
+  | CmdChangeSkill
+  | CmdChangeEquip
+  | CmdChangeName
+  | CmdChangeClass
+  | CmdChangeActorImage
+  | CmdChangeNickname
+  | CmdChangeProfile
+  | CmdChangeState
+  | CmdAccess
+  | CmdFollowers
+  | CmdWindowTone
+  | CmdGetLocationInfo
   | CmdMzTodo;
 
 /** The `t` discriminant of any built-in command. */

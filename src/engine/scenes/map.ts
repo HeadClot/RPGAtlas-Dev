@@ -341,9 +341,10 @@ function onPlayerStep(): void {
       return;
     }
   }
-  // random encounters (airships fly above them; regions can swap the pool)
+  // random encounters (airships fly above them; regions can swap the pool).
+  // Change Encounter Access (M2·C) suppresses the roll while disabled.
   const enc = ctx.map.encounters;
-  if (enc && enc.rate > 0 && enc.troops.length && !ctx.blockingRun && G.vehicle !== "airship") {
+  if (enc && enc.rate > 0 && enc.troops.length && !ctx.blockingRun && !G.encounterDisabled && G.vehicle !== "airship") {
     G.encSteps++;
     const forced = consumeForcedEncounter();
     if (forced || G.encSteps >= enc.rate * (0.7 + rndf() * 0.6)) {

@@ -15,6 +15,7 @@ import { ctx } from "./engine-context.js";
 import { G, sanitizeEquipment, param } from "./game-state.js";
 import { loadMap, initPlayer, syncFollowers } from "../scenes/map-runtime.js";
 import { serializePresentation, restorePresentation } from "../scenes/presentation-runtime.js";
+import { applyWindowTone } from "./window-tone.js";
 import { browserSaveRepository as saves } from "../../platform/browser/save-repository.js";
 
 export function slotInfo(slot: any): any {
@@ -67,6 +68,16 @@ export async function saveLoadMenu(mode: any): Promise<boolean> {
         vehicle: G.vehicle,
         // Presentation layer (Project Compass M2·A): pictures, screen tint, timer.
         presentation: serializePresentation(),
+        // System toggles (Project Compass M2·C): menu/save/encounter/formation
+        // access, follower visibility, and the live window-colour override.
+        sysFlags: {
+          menuDisabled: !!G.menuDisabled,
+          saveDisabled: !!G.saveDisabled,
+          encounterDisabled: !!G.encounterDisabled,
+          formationDisabled: !!G.formationDisabled,
+          followersHidden: !!G.followersHidden,
+          windowTone: G.windowTone || null,
+        },
         mapId: G.mapId,
         player: {
           x: G.player.x,
@@ -118,6 +129,16 @@ async function applySave(d: any): Promise<void> {
   // Presentation layer (Project Compass M2·A): old saves lack the field →
   // restorePresentation(undefined) resets to a clean screen.
   restorePresentation(d.presentation);
+  // System toggles (Project Compass M2·C): old saves lack sysFlags → all enabled,
+  // no window override. Re-apply the saved window colour immediately.
+  const sf = d.sysFlags || {};
+  G.menuDisabled = !!sf.menuDisabled;
+  G.saveDisabled = !!sf.saveDisabled;
+  G.encounterDisabled = !!sf.encounterDisabled;
+  G.formationDisabled = !!sf.formationDisabled;
+  G.followersHidden = !!sf.followersHidden;
+  G.windowTone = sf.windowTone || null;
+  applyWindowTone(G.windowTone);
   const p = d.player || {};
   initPlayer(p.x || 0, p.y || 0, p.dir);
   G.player.transparent = !!p.transparent;

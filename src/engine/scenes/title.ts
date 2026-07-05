@@ -15,6 +15,7 @@ import { UIStack, removeUI, showList } from "../ui-stack.js";
 import { ctx, fns } from "../state/engine-context.js";
 import { G, makeActor } from "../state/game-state.js";
 import { slotInfo, saveLoadMenu } from "../state/save.js";
+import { applyWindowTone } from "../state/window-tone.js";
 import { loadMap, initPlayer, syncFollowers } from "./map-runtime.js";
 import { resetPresentation } from "./presentation-runtime.js";
 import { optionsMenu } from "./menus.js";
@@ -43,6 +44,15 @@ export async function newGame(start?: { mapId: number; x: number; y: number }): 
   G.vehicle = null;
   ctx.cameraZoom = 1;
   resetPresentation(); // clear pictures/tint/timer/scroll (Project Compass M2·A)
+  // System toggles (Project Compass M2·C): fresh game re-enables everything and
+  // clears any window-colour override back to the project default.
+  G.menuDisabled = false;
+  G.saveDisabled = false;
+  G.encounterDisabled = false;
+  G.formationDisabled = false;
+  G.followersHidden = false;
+  G.windowTone = null;
+  applyWindowTone(null);
   initPlayer(
     start ? start.x : ctx.proj.system.startX,
     start ? start.y : ctx.proj.system.startY,

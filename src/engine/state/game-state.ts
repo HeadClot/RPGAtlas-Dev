@@ -75,6 +75,9 @@ export function param(a: any, stat: any): number {
   let v = Math.floor(
     (c.base[stat] || 0) + (c.growth[stat] || 0) * (a.level - 1),
   );
+  // Permanent per-actor bonus from the Change Parameters command (Project
+  // Compass M2·C). Absent on every actor that never ran it → identical value.
+  if (a.paramPlus) v += a.paramPlus[stat] || 0;
   const w = RA.byId(ctx.proj.weapons, a.weaponId),
     ar = RA.byId(ctx.proj.armors, a.armorId);
   if (w && w.params) v += w.params[stat] || 0;
@@ -84,9 +87,17 @@ export function param(a: any, stat: any): number {
 }
 export function learnedSkills(a: any): any[] {
   const c = actorClass(a);
-  return (c.learnings || [])
+  // Class learnings by level, plus any skill taught via Change Skills, minus
+  // any suppressed via forget (Project Compass M2·C). Both lists are absent on
+  // untouched actors → the exact class-learning set as before.
+  const ids: number[] = (c.learnings || [])
     .filter((l: any) => l.level <= a.level)
-    .map((l: any) => RA.byId(ctx.proj.skills, l.skillId))
+    .map((l: any) => l.skillId);
+  if (a.skills) for (const id of a.skills) if (!ids.includes(id)) ids.push(id);
+  const forgot = a.forgot;
+  return ids
+    .filter((id: number) => !(forgot && forgot.includes(id)))
+    .map((id: number) => RA.byId(ctx.proj.skills, id))
     .filter(Boolean);
 }
 export function makeActor(actorId: any): any {

@@ -746,6 +746,22 @@ export function regionAt(x: any, y: any): number {
   return m.regions[y * m.width + x] || 0;
 }
 
+/** Read map info at a tile for the Get Location Info command (Project Compass
+ *  M2·C, RM 285). Atlas has no terrain-tag concept, so "terrain" reads 0 (an
+ *  honest no-op); region / event id / ground tile id map cleanly. */
+export function locationInfo(x: any, y: any, infoType: any): number {
+  if (infoType === "region") return regionAt(x, y);
+  if (infoType === "eventId") {
+    const rt = entityAt(x, y).find((e: any) => e && e.ev);
+    return rt ? rt.ev.id : 0;
+  }
+  if (infoType === "tileId") {
+    if (!ctx.map || x < 0 || y < 0 || x >= ctx.map.width || y >= ctx.map.height) return 0;
+    return tileId(tileAt("ground", x, y)) || 0;
+  }
+  return 0; // "terrain" tag — no Atlas equivalent
+}
+
 function groundKeyAt(x: any, y: any): string {
   if (x < 0 || y < 0 || x >= ctx.map.width || y >= ctx.map.height) return "";
   const t = Assets.tiles[tileId(tileAt("ground", x, y))]; // mask Stage-E flags
