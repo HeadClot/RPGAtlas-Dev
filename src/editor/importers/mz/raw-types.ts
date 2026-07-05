@@ -50,6 +50,78 @@ export interface RmCommand {
   parameters: unknown[];
 }
 
+/** One move-route step (`Set Movement Route` code 205 / autonomous route).
+ *  Move-route commands carry no `indent` (they are a flat route list). */
+export interface RmMoveCommand {
+  code: number;
+  parameters?: unknown[];
+}
+
+/** A `Game_Character` move route (`{list,repeat,skippable,wait}`, matrix §9). */
+export interface RmMoveRoute {
+  list?: RmMoveCommand[];
+  repeat?: boolean;
+  skippable?: boolean;
+  wait?: boolean;
+}
+
+/** An event page's graphic (`image`) — charset name+index, tile-image id, and
+ *  facing/pattern (matrix §2 event-page image row). */
+export interface RmEventImage {
+  tileId?: number;
+  characterName?: string;
+  characterIndex?: number;
+  /** RM facing: 2 down · 4 left · 6 right · 8 up. */
+  direction?: number;
+  pattern?: number;
+}
+
+/** An event page's appearance conditions (RM's flat valid+id shape, matrix §2). */
+export interface RmEventPageConditions {
+  actorId?: number;
+  actorValid?: boolean;
+  itemId?: number;
+  itemValid?: boolean;
+  selfSwitchCh?: string;
+  selfSwitchValid?: boolean;
+  switch1Id?: number;
+  switch1Valid?: boolean;
+  switch2Id?: number;
+  switch2Valid?: boolean;
+  variableId?: number;
+  variableValid?: boolean;
+  variableValue?: number;
+}
+
+/** One event page (matrix §2 `events[].pages[]`). */
+export interface RmEventPage {
+  conditions?: RmEventPageConditions;
+  image?: RmEventImage;
+  /** 0 fixed · 1 random · 2 approach · 3 custom. */
+  moveType?: number;
+  moveSpeed?: number;
+  moveFrequency?: number;
+  moveRoute?: RmMoveRoute;
+  walkAnime?: boolean;
+  stepAnime?: boolean;
+  directionFix?: boolean;
+  through?: boolean;
+  /** 0 below · 1 same · 2 above. */
+  priorityType?: number;
+  /** 0 action · 1 touch(player) · 2 touch(event) · 3 autorun · 4 parallel. */
+  trigger?: number;
+  list?: RmCommand[];
+}
+
+/** One map event (`Map###.json events[]`, matrix §2/§8/§9). */
+export interface RmEvent {
+  id: number;
+  name?: string;
+  x: number;
+  y: number;
+  pages?: RmEventPage[];
+}
+
 export interface RmVehicle {
   characterName: string;
   characterIndex: number;
@@ -367,7 +439,8 @@ export interface RmMap {
   battleback1Name?: string;
   battleback2Name?: string;
   disableDashing?: boolean;
-  events?: unknown[];
+  /** `events[]` (1-based, leading null). Converted in M1·C. */
+  events?: RmList<RmEvent>;
   [k: string]: unknown;
 }
 

@@ -17,6 +17,8 @@
 import type { GameMap, MapEncounters, MapFolder, MapLayers } from "../../../shared/schema";
 import type { ImportReport } from "./report";
 import type { RmList, RmMap, RmMapInfo } from "./raw-types";
+import type { CommandTranslator } from "./convert-events";
+import { convertMapEvents } from "./convert-map-events";
 import { decodeRmTileId } from "./tile-ids";
 import type { TilesetUsage, TilesetsConversion } from "./convert-tilesets";
 
@@ -141,13 +143,15 @@ function convertEncounters(m: RmMap, report: ImportReport): MapEncounters | unde
 }
 
 /** Convert one RM map's geometry + metadata into a `GameMap`. Its `name` comes
- *  from MapInfos (RM Map### files carry no name); events are M1·C (left empty). */
+ *  from MapInfos (RM Map### files carry no name); `events[]` run through the
+ *  M1·C command translator (`translate`). */
 export function convertMap(
   id: number,
   name: string,
   m: RmMap,
   ts: TilesetsConversion,
   report: ImportReport,
+  translate: CommandTranslator,
 ): GameMap {
   const md = convertMapData(m, ts, report);
   const map: GameMap = {
@@ -157,7 +161,7 @@ export function convertMap(
     height: m.height,
     tilesetId: m.tilesetId || 1,
     layers: md.layers,
-    events: [],
+    events: convertMapEvents(m.events, translate, report),
   };
   if (md.shadows) map.shadows = md.shadows;
   if (md.regions) map.regions = md.regions;
@@ -205,6 +209,7 @@ export function convertMaps(
   rawMaps: Map<number, RmMap>,
   ts: TilesetsConversion,
   report: ImportReport,
+  translate: CommandTranslator,
 ): { maps: GameMap[]; folders: MapFolder[] } {
   const infos = (mapInfos || []).filter(notNull);
   const byId = new Map<number, RmMapInfo>();
@@ -231,7 +236,7 @@ export function convertMaps(
   for (const info of [...infos].sort((a, b) => (a.order || 0) - (b.order || 0))) {
     const raw = rawMaps.get(info.id);
     if (!raw) continue; // MapInfos entry with no Map### file → nothing to convert
-    const map = convertMap(info.id, info.name || "Map " + info.id, raw, ts, report);
+    const map = convertMap(info.id, info.name || "Map " + info.id, raw, ts, report, translate);
     const fid = folderFor(info);
     if (fid != null) map.folderId = fid;
     maps.push(map);

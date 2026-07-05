@@ -162,7 +162,7 @@ describe("map layer rebucket (§2 Map###)", () => {
     expect(harbor.encounters).toEqual({ troops: [1], rate: 30 });
     expect(harbor.music).toBe("asset:audio/Harbor");
     expect(harbor.notes).toBe("<Region1: safe zone>");
-    expect(harbor.events).toEqual([]); // events are M1·C
+    expect(harbor.events.map((e) => e.id)).toEqual([1, 2, 3, 4, 5, 6]); // events fill in M1·C
     expect(has(mz, "encounters tied to map regions")).toBe(true); // regionSet
   });
 
@@ -182,9 +182,13 @@ describe("MapInfos → folders (decision D8)", () => {
   });
 });
 
-describe("MV ≡ MZ map conversion (§0 delta is DB/animations, not maps)", () => {
-  it("both formats convert to byte-identical maps + autotiles + tile ids", () => {
-    expect(mv.maps).toEqual(mz.maps);
+describe("MV vs MZ map conversion (§0 delta: geometry identical, events differ)", () => {
+  it("map geometry / autotiles / tile ids / folders are byte-identical", () => {
+    // Events now translate (M1·C) and legitimately differ between formats — the
+    // §0 deltas (MZ Show-Text speaker name, plugin command 356↔357) live in the
+    // event command lists. Everything else about the maps is identical.
+    const noEvents = (maps: typeof mv.maps) => maps.map((m) => ({ ...m, events: undefined }));
+    expect(noEvents(mv.maps)).toEqual(noEvents(mz.maps));
     expect(mv.autotiles).toEqual(mz.autotiles);
     expect(mv.assetTiles).toEqual(mz.assetTiles);
     expect(mv.mapFolders).toEqual(mz.mapFolders);

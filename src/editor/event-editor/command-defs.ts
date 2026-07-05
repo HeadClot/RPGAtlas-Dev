@@ -73,6 +73,7 @@ import { openLocationPicker } from "./location-picker";
       case "gameover": return "Game Over";
       case "totitle": return "Return to Title";
       case "script": return "Script: " + (c.code || "").split("\n")[0].slice(0, 42);
+      case "mzTodo": return "📌 " + (c.label || "Imported command (coming in a later update)");
       default: return c.t;
     }
   }
@@ -521,6 +522,18 @@ import { openLocationPicker } from "./location-picker";
         box.appendChild(field("JS — api: game.setSwitch(id,v) getSwitch setVar getVar addGold(n) callCommonEvent(id) party() quest(id) questStatus startQuest advanceQuestObjective setQuestObjective completeQuest failQuest abandonQuest state()", ta));
         return () => { c.code = ta.value; };
       } },
+    // MZ/MV import placeholder (Project Compass M1·C). Not offered in the Add
+    // Command picker (`hidden`), but editable-without-crashing when an imported
+    // event contains one; a no-op in the engine. See docs/mig-1-spec.md.
+    { t: "mzTodo", label: "Imported (coming in a later update)", hidden: true,
+      make: () => ({ t: "mzTodo", code: 0, params: [], label: "" }),
+      form(c: any, box: any) {
+        box.appendChild(h("div", { class: "dim" },
+          "📌 " + (c.label || "An imported RPG Maker command.")));
+        box.appendChild(h("div", { class: "dim" },
+          "This came from an RPG Maker import and isn't available in Atlas yet. It's kept safe here and will start working after a future update — you don't need to do anything. Re-importing the project once that update ships turns it on automatically."));
+        return () => {};
+      } },
   ];
   export const cmdDef = (t: any) => CMD_DEFS.find((d) => d.t === t);
 
@@ -598,7 +611,7 @@ import { openLocationPicker } from "./location-picker";
     }
 
     function items() {
-      return (CMD_DEFS.map((def) => ({ kind: "builtin", def })) as any[])
+      return (CMD_DEFS.filter((def) => !def.hidden).map((def) => ({ kind: "builtin", def })) as any[])
         .concat(S.proj.commandPresets.map((preset: any) => ({ kind: "preset", preset })))
         .concat({ kind: "add" });
     }
