@@ -14,7 +14,10 @@ import { renderMap, renderPalette, normRect } from "./map-render";
 import { pushUndo } from "./history";
 import { stampPaste, cancelPaste, copySelection } from "./clipboard";
 import { setStatus, flashStatus } from "./status";
-import { quickTransfer, quickSign, quickChest } from "../event-editor/quick-events";
+import {
+  quickTransfer, quickSign, quickChest,
+  quickVillager, quickShopkeeper, quickInnkeeper, quickLockedDoor,
+} from "../event-editor/quick-events";
 import { openEventEditor } from "../event-editor/event-editor";
 import { setMode, refreshToolbar } from "../workspace";
 import { isAutotileId } from "../../shared/autotile-registry";
@@ -223,6 +226,10 @@ import { tileId } from "../../shared/tile-flags";
           { label: "Transfer", onClick: () => quickTransfer(cell) },
           { label: "Sign", onClick: () => quickSign(cell) },
           { label: "Chest", onClick: () => quickChest(cell) },
+          { label: "Villager", onClick: () => quickVillager(cell) },
+          { label: "Shopkeeper", onClick: () => quickShopkeeper(cell) },
+          { label: "Innkeeper", onClick: () => quickInnkeeper(cell) },
+          { label: "Locked Door", onClick: () => quickLockedDoor(cell) },
         ] },
         { label: "Paste Event", key: "Ctrl+V", enabled: !!S.clipEvent,
           onClick: () => { S.pasteMode = "event"; stampPaste(cell); } },

@@ -27,6 +27,27 @@ Each **page** has:
 
 ---
 
+## Quick Events — ready-made templates
+
+Don't want to build it by hand? **Right-click an empty tile in Event mode ▸ New Quick Event** and
+pick a template. Each one asks two or three plain questions and places a finished, working event:
+
+| Template | What it asks | What you get |
+|---|---|---|
+| **Sign** | The text | An action-triggered sign that shows your message |
+| **Chest** | What's inside (item/weapon/armor/gold) | A one-time chest that opens, gives the loot, and stays open (self-switch A) |
+| **Transfer** | The destination (with a map picker) | A walk-on doorway that moves the player there |
+| **Villager** | A look, what they say, whether they wander | A talking NPC with their own face in the message |
+| **Shopkeeper** | A look, a greeting, the goods | An NPC whose shop opens stocked with your wares |
+| **Innkeeper** | A look and the price per night | Pays gold → screen fades to black → party wakes fully rested; refuses politely if you're short |
+| **Locked Door** | The key item, the destination, whether the key is used up | Blocks the way and says it's locked until the player has the key — then it's a normal door forever |
+
+Quick Events are ordinary events — open one in the event editor afterwards to see exactly how its
+pages, conditions, and commands fit together. They're the fastest way to *learn* eventing, not just
+skip it.
+
+---
+
 ## Pages and conditions
 
 An event can have several pages, but only **one is active at a time**. The engine checks pages

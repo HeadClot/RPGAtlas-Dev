@@ -5,6 +5,19 @@
 export const PATCH_NOTES = [
   {
     date: "July 4, 2026",
+    title: "Four new Quick Events: Villager, Shopkeeper, Innkeeper & Locked Door",
+    summary:
+      "Right-click the map in Event mode and the New Quick Event menu now builds four more classics for you — answer two or three plain questions and the finished event appears, ready to play. Open it afterwards in the event editor to see exactly how it works: every template is made of ordinary pages and commands, so they double as little lessons.",
+    items: [
+      "Villager: pick a look, type what they say, and choose whether they wander — done.",
+      "Shopkeeper: pick a look, a greeting, and the goods; talking to them opens a shop stocked with your wares.",
+      "Innkeeper: set the price per night — they take the gold, the screen fades to black, and the party wakes up fully rested (and they politely turn you away if you can't afford it).",
+      "Locked Door: choose the key item and the destination; the door blocks the way and says it's locked until the player has the key, then works like a normal door forever after. Optionally the key is used up.",
+      "The Villager, Shopkeeper, and Innkeeper dialogs show a live preview of the chosen look, and their spoken lines automatically use that face.",
+    ],
+  },
+  {
+    date: "July 4, 2026",
     title: "Advanced Map Editor — polish, docs & a showcase village",
     summary:
       "The Advanced Map Editor is finished! A new Advanced menu on the menu bar gathers everything in one place, the sample game ships a showcase map built with the new tools, and the wiki has a full guide. The bundled sample game also got a repair: a recent update accidentally overwrote it — your adventure starts in Meridian Village again, and Driftwood Shore is back on the map.",
