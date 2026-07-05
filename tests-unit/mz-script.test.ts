@@ -54,6 +54,18 @@ describe("analyzeMzScript — the import-time gate (D5 read-only subset)", () =>
     }
   });
 
+  it("rejects template literals — a ${…} interpolation would execute unvouched code", () => {
+    for (const bad of [
+      "$gameSwitches.value(`${$gameMap.regionId(0, 0)}`)",
+      "$gameVariables.value(`${SceneManager.exit()}`) > 0",
+      "$gameParty.hasItem(`3`)",
+    ]) {
+      const v = analyzeMzScript(bad);
+      expect(v.ok, bad).toBe(false);
+      expect(v.reason).toMatch(/backticks/);
+    }
+  });
+
   it("rejects bare identifiers, control flow, and other globals (new Function escape)", () => {
     for (const bad of [
       "if (a) { b(); }",

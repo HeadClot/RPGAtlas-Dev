@@ -5,6 +5,18 @@
 export const PATCH_NOTES = [
   {
     date: "July 5, 2026",
+    title: "Polish pass: sturdier imports and a tidier editor",
+    summary:
+      "A bug-hunting sweep right after 1.1. Clicking an imported read-only Script command in the event editor now opens a friendly read-only view instead of breaking the panel — and no command type, however unusual, can crash the inspector anymore. Importing a project folder that's missing its map files now lands you on a fresh starter map with an honest report line instead of failing halfway. And the import safety check got even stricter about which script snippets it vouches for.",
+    items: [
+      "Fixed: selecting or editing an imported “Script (from RPG Maker)” command could break the event editor — it now shows the script read-only, with advice on replacing it.",
+      "Fixed: importing an RPG Maker folder with no readable map files now keeps a starter map and says so in the report, instead of failing after replacing your project.",
+      "Imported script snippets using backtick text are now politely declined and listed in the report — Atlas only runs code it can fully check.",
+      "Internal tidy-up: the last few code-style warnings are gone, so contributor builds are fully clean.",
+    ],
+  },
+  {
+    date: "July 5, 2026",
     title: "RPGAtlas 1.1 — the RPG Maker import update is complete",
     summary:
       "Project Compass has landed. Since 1.0, RPGAtlas learned to import RPG Maker MV and MZ games — and grew every engine feature those games actually use: pictures and screen effects, the full message toolkit, the whole trait book, real damage formulas, boss-fight battle events, living map tiles, jingles and background sounds, honest add-on guidance, and read-only script snippets that really run. Import your game, read the friendly report, press Playtest. Everything is additive: projects made in RPGAtlas 1.0 open and play exactly as before.",

@@ -217,6 +217,25 @@ describe("readZip → the wizard's .zip intake", () => {
     expect(new TextDecoder().decode(out[name])).toContain("Deflate Test");
   });
 
+  it("keeps the base starter map when the source has no readable Map files", async () => {
+    // A data-only zip (System/MapInfos but no Map###.json) must not produce an
+    // empty maps[] — the wizard commits maps[0] and the engine boots maps[0].
+    const map: Record<string, string> = {};
+    for (const rel of walk(root("mz-project"), root("mz-project"))) {
+      if (/\.(json|js)$/i.test(rel) || /^Game\./i.test(rel)) map[rel] = readFileSync(join(root("mz-project"), rel), "utf8");
+    }
+    for (const key of Object.keys(map)) {
+      if (/^data\/Map0*\d+\.json$/i.test(key)) delete map[key];
+    }
+    const outcome = await runRmImport(objectSource(map), freshBase());
+    expect(outcome.project.maps.length).toBeGreaterThan(0);
+    expect(outcome.project.maps[0].id).toBeTruthy();
+    validateProject(outcome.project, "import"); // must not throw
+    const line = outcome.report.lines.find((l) => l.what === "your game's maps");
+    expect(line).toBeTruthy();
+    expect(line!.kind).toBe("partial");
+  });
+
   it("feeds objectSource so a zip source imports like a folder", async () => {
     // A real zip of the MZ fixture would strip its top folder; prove the
     // objectSource path (no top folder) converts too.

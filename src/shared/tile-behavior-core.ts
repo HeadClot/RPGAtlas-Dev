@@ -14,6 +14,7 @@
 
 import { tileId } from "./tile-flags";
 import { tileIdOf } from "./autotile-registry";
+import type { TypedProps } from "./schema";
 
 /** Behavior flag bits — the Database ▸ Tilesets `tileProps.flag` convention. */
 export const BEHAV = { BUSH: 1, LADDER: 2, COUNTER: 4, DAMAGE: 8 } as const;
@@ -31,8 +32,8 @@ export interface BehaviorMaps {
  * the asset key tileProps is keyed by).
  */
 export function buildBehaviorMaps(
-  tileset: { tileProps?: Record<string, any> } | null | undefined,
-  autotiles: any[] | null | undefined,
+  tileset: { tileProps?: Record<string, TypedProps | undefined> } | null | undefined,
+  autotiles: readonly ({ id: number; props?: TypedProps } | null | undefined)[] | null | undefined,
   tiles: ({ key?: string } | null | undefined)[],
 ): BehaviorMaps {
   const flagById = new Map<number, number>();
@@ -42,16 +43,16 @@ export function buildBehaviorMaps(
     tiles.forEach((t, i) => {
       const props = t && t.key != null && tp[t.key];
       if (!props) return;
-      if (props.flag) flagById.set(i, props.flag | 0);
-      if (props.terrain) terrainById.set(i, props.terrain | 0);
+      if (props.flag) flagById.set(i, Number(props.flag) | 0);
+      if (props.terrain) terrainById.set(i, Number(props.terrain) | 0);
     });
   }
   for (const g of autotiles || []) {
     const p = g && g.props;
     if (!p) continue;
     const id = tileIdOf(g.id);
-    if (p.flag) flagById.set(id, p.flag | 0);
-    if (p.terrainTag) terrainById.set(id, p.terrainTag | 0);
+    if (p.flag) flagById.set(id, Number(p.flag) | 0);
+    if (p.terrainTag) terrainById.set(id, Number(p.terrainTag) | 0);
   }
   return { flagById, terrainById };
 }

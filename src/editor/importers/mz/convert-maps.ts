@@ -132,7 +132,7 @@ function convertEncounters(m: RmMap, report: ImportReport): MapEncounters | unde
   let weighted = false;
   for (const e of list) {
     if (!e || !e.troopId) continue;
-    const regions = Array.isArray(e.regionSet) ? e.regionSet.filter((r: any) => r > 0) : [];
+    const regions = Array.isArray(e.regionSet) ? e.regionSet.filter((r) => r > 0) : [];
     if (regions.length) {
       for (const r of regions) {
         const rr = Math.min(Math.floor(r), MAX_REGION); // Atlas regions clamp at 63
