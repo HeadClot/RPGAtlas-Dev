@@ -147,11 +147,14 @@ export function convertSystem(sys: RmSystem, report: ImportReport): SystemConver
     if (airship) patch.vehicles.airship = airship;
   }
 
-  // Title/battle BGM → asset keys (audio files convert later); ME + SE array
-  // stay on Atlas defaults with one report line each.
+  // Title/battle BGM + the victory/defeat/gameover jingles (M4·B) → asset
+  // keys; the menu SE array stays on Atlas defaults with one report line.
   const music: Record<string, string> = {};
   if (sys.titleBgm && sys.titleBgm.name) music.title = "asset:audio/" + sys.titleBgm.name;
   if (sys.battleBgm && sys.battleBgm.name) music.battle = "asset:audio/" + sys.battleBgm.name;
+  if (sys.victoryMe && sys.victoryMe.name) music.victory = "asset:audio/" + sys.victoryMe.name;
+  if (sys.defeatMe && sys.defeatMe.name) music.defeat = "asset:audio/" + sys.defeatMe.name;
+  if (sys.gameoverMe && sys.gameoverMe.name) music.gameover = "asset:audio/" + sys.gameoverMe.name;
   if (Object.keys(music).length) patch.music = music;
 
   if (Array.isArray(sys.sounds) && sys.sounds.some((s) => s && s.name)) {

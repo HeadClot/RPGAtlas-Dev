@@ -111,11 +111,12 @@ const Sfx = (() => {
     }
     if (fx[name]) fx[name]();
   }
-  // Positional variant (Phase 6): pan -1..1, vol 0..1. Procedural SEs have no
-  // per-note pan path, so they play centered at full volume as before.
-  function playAt(name, pan, vol) {
+  // Positional/tuned variant (Phase 6; rate added in Project Compass M4·B):
+  // pan -1..1, vol 0..1, rate 1 = normal (RM pitch/100). Procedural SEs have
+  // no per-note pan/pitch path, so they play centered at full volume as before.
+  function playAt(name, pan, vol, rate) {
     if (typeof name === "string" && name.startsWith("asset:")) {
-      if (window.AtlasAudioDeck) window.AtlasAudioDeck.playSound(name, { pan, vol });
+      if (window.AtlasAudioDeck) window.AtlasAudioDeck.playSound(name, { pan, vol, rate });
       return;
     }
     if (fx[name]) fx[name]();
@@ -171,16 +172,18 @@ const Sfx = (() => {
   const Music = {
     enabled: true,
     current: null,
-    play(name, fadeMs) {
+    play(name, fadeMs, opts) {
       if (!this.enabled) { this.current = name; return; }
       // Streamed asset BGM (Phase 6): the deck owns playback; the chiptune
-      // timer stops so there is exactly one BGM owner at a time.
+      // timer stops so there is exactly one BGM owner at a time. `opts`
+      // (Project Compass M4·B: vol/pitch/pan/seek) reach the deck, which
+      // retunes a replayed same-key BGM in place instead of restarting it.
       const deck = window.AtlasAudioDeck;
       if (typeof name === "string" && name.startsWith("asset:")) {
-        if (name === this.current && !musicTimer) return;
+        if (name === this.current && !musicTimer && !opts) return;
         if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
         this.current = name;
-        if (deck) deck.playBgm(name, { fadeMs });
+        if (deck) deck.playBgm(name, Object.assign({ fadeMs: fadeMs }, opts || {}));
         return;
       }
       if (name === this.current && musicTimer) return;

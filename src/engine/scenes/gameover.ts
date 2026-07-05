@@ -12,12 +12,17 @@ import { Music } from "../../shared/deps.js";
 import { el, sysSe } from "../util.js";
 import { pushUI, removeUI } from "../ui-stack.js";
 import { ctx, fns } from "../state/engine-context.js";
+import { playMe } from "../../shared/audio-deck.js";
 import { toTitle } from "./title.js";
 
 export async function gameOver(): Promise<void> {
   ctx.scene = "gameover";
   Music.stop();
-  sysSe("gameover");
+  // An imported game-over jingle (M4·B, system.music.gameover) plays instead
+  // of the procedural sting; absent = the exact pre-M4·B call.
+  const jingle = (ctx.proj && ctx.proj.system && ctx.proj.system.music && ctx.proj.system.music.gameover) || "";
+  if (jingle) void playMe(jingle);
+  else sysSe("gameover");
   const gw = el(
     "div",
     "gameoverwin",

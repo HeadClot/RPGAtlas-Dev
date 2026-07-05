@@ -10,24 +10,48 @@ import { isAssetKey } from "./asset-library";
 export interface AmbienceLayer {
   key: string;
   vol?: number;
+  /** Playback rate (1 = normal) and stereo pan (−1…1), applied when the layer
+   *  starts (M4·B — no retune-on-pitch). */
+  pitch?: number;
+  pan?: number;
 }
 
-/** Diff the running ambience layers against a map's wanted list. */
+/** Merge the command-owned BGS layer (M4·B, RM 245) onto a map's ambience
+ *  list. The command layer loses to a same-key map layer (the map's own volume
+ *  wins); a null/keyless command layer merges nothing. */
+export function mergeCommandBgs(
+  base: AmbienceLayer[] | undefined,
+  commandBgs: AmbienceLayer | null | undefined,
+): AmbienceLayer[] {
+  const list = Array.isArray(base) ? base : [];
+  if (!commandBgs || !commandBgs.key) return list;
+  if (list.some((l) => l && l.key === commandBgs.key)) return list;
+  return [...list, commandBgs];
+}
+
+/** Diff the running ambience layers against a map's wanted list. Start
+ *  entries carry the layer's pitch/pan (applied at start only, M4·B). */
 export function ambienceDiff(
   current: { key: string; vol: number }[],
   wanted: AmbienceLayer[],
-): { start: { key: string; vol: number }[]; stop: string[]; retune: { key: string; vol: number }[] } {
-  const want = new Map<string, number>();
+): { start: { key: string; vol: number; pitch?: number; pan?: number }[]; stop: string[]; retune: { key: string; vol: number }[] } {
+  const want = new Map<string, { vol: number; pitch?: number; pan?: number }>();
   for (const l of wanted || []) {
-    if (l && isAssetKey(l.key)) want.set(l.key, l.vol == null ? 1 : Math.max(0, Math.min(1, l.vol)));
+    if (l && isAssetKey(l.key)) {
+      want.set(l.key, {
+        vol: l.vol == null ? 1 : Math.max(0, Math.min(1, l.vol)),
+        ...(l.pitch != null ? { pitch: l.pitch } : {}),
+        ...(l.pan != null ? { pan: l.pan } : {}),
+      });
+    }
   }
   const have = new Map(current.map((l) => [l.key, l.vol]));
-  const start: { key: string; vol: number }[] = [];
+  const start: { key: string; vol: number; pitch?: number; pan?: number }[] = [];
   const retune: { key: string; vol: number }[] = [];
   const stop: string[] = [];
-  for (const [key, vol] of want) {
-    if (!have.has(key)) start.push({ key, vol });
-    else if (have.get(key) !== vol) retune.push({ key, vol });
+  for (const [key, w] of want) {
+    if (!have.has(key)) start.push({ key, ...w });
+    else if (have.get(key) !== w.vol) retune.push({ key, vol: w.vol });
   }
   for (const key of have.keys()) if (!want.has(key)) stop.push(key);
   return { start, stop, retune };

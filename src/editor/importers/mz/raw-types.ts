@@ -398,6 +398,49 @@ export interface RmTileset {
   flags?: number[];
 }
 
+/** One MV animation-sheet timing row (flash and/or SE at a 15-fps frame). */
+export interface RmMvAnimTiming {
+  frame: number;
+  se?: RmAudio | null;
+  /** 0 none · 1 target · 2 screen · 3 hide target. */
+  flashScope?: number;
+  /** [r,g,b,strength 0–255]. */
+  flashColor?: number[];
+  /** In animation frames (1/15 s). */
+  flashDuration?: number;
+}
+
+/** MZ Effekseer timing rows (`flashTimings`/`soundTimings`). */
+export interface RmMzAnimTiming {
+  frame: number;
+  duration?: number;
+  color?: number[];
+  se?: RmAudio | null;
+}
+
+/** `data/Animations.json` entry — MV sheet-based (frames/timings) or MZ
+ *  Effekseer (`effectName` + flash/sound timings); matrix §10. A cell row is
+ *  `[pattern, x, y, scale, rotation, mirror, opacity, blendMode]`. */
+export interface RmAnimation {
+  id: number;
+  name: string;
+  // -- MV (sheet) --
+  animation1Name?: string;
+  animation1Hue?: number;
+  animation2Name?: string;
+  animation2Hue?: number;
+  /** 0 head · 1 center · 2 feet · 3 screen. */
+  position?: number;
+  frames?: number[][][];
+  timings?: RmMvAnimTiming[];
+  // -- MZ (Effekseer) --
+  effectName?: string;
+  flashTimings?: RmMzAnimTiming[];
+  soundTimings?: RmMzAnimTiming[];
+  quakePower?: number;
+  [k: string]: unknown;
+}
+
 /** `data/MapInfos.json` entry — the map tree (matrix §MapInfos / decision D8). */
 export interface RmMapInfo {
   id: number;
@@ -473,6 +516,9 @@ export interface MzRawData {
   mapInfos?: RmList<RmMapInfo>;
   /** Loaded `Map###.json` bodies, each with its filename-derived `id`. */
   maps?: RmMap[];
+  /** Parsed `data/Animations.json` (read at intake for sniffing since M1·A;
+   *  stored for the M4·B converter). */
+  animations?: RmList<RmAnimation>;
   /** Present for reporting/plugins in later steps; unused by M1·A conversion. */
   plugins?: RmPlugin[];
   /** Relative asset paths discovered under img/ + audio/ (for M1·B/M4·B). */

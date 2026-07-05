@@ -12,7 +12,7 @@
 
 import type { ImportReport } from "./report";
 import { sniffFormat } from "./sniff";
-import type { MzRawData, RmList, RmMap, RmMapInfo, RmPlugin, RmSystem, RmTileset } from "./raw-types";
+import type { MzRawData, RmAnimation, RmList, RmMap, RmMapInfo, RmPlugin, RmSystem, RmTileset } from "./raw-types";
 
 /** A read-only view of an intaken project tree, keyed by project-root-relative
  *  POSIX paths ("data/System.json", "img/pictures/Sign.png_"). */
@@ -196,13 +196,14 @@ export async function readRawProject(
   if (!system) {
     throw new Error("This doesn't look like an RPG Maker project — data/System.json is missing.");
   }
-  const animations = await readJson<any[]>(source, findData(paths, "Animations"), report, "Animations.json");
+  const animations = await readJson<RmList<RmAnimation>>(source, findData(paths, "Animations"), report, "Animations.json");
 
   const sniff = sniffFormat({ paths, system, animations });
 
   const raw: MzRawData = {
     format: sniff.format,
     system,
+    animations: Array.isArray(animations) ? animations : [],
     actors: [],
     classes: [],
     skills: [],

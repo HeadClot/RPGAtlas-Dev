@@ -1,6 +1,6 @@
 {
   "autoplayBgm": true,
-  "autoplayBgs": false,
+  "autoplayBgs": true,
   "battleback1Name": "Cave",
   "battleback2Name": "",
   "bgm": {
@@ -10,10 +10,10 @@
     "volume": 90
   },
   "bgs": {
-    "name": "",
-    "pan": 0,
+    "name": "Drips",
+    "volume": 80,
     "pitch": 100,
-    "volume": 90
+    "pan": 0
   },
   "disableDashing": false,
   "displayName": "Sea Cave",

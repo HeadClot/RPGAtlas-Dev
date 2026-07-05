@@ -23,14 +23,78 @@ export function registerPresentationCommands(): void {
     const player = state && state.player;
     if (c.at === "event" && interp && interp.evRT && player && services.Sfx.playAt) {
       const { pan, vol } = panGainForTile(interp.evRT.x - player.x, interp.evRT.y - player.y);
-      services.Sfx.playAt(c.name, pan, vol);
+      services.Sfx.playAt(c.name, pan, vol, c.pitch);
+      return;
+    }
+    // Tuned playback (M4·B, RM 250 options): vol/pitch/pan reach the deck;
+    // commands without them take the exact pre-M4·B path.
+    if ((c.vol != null || c.pitch != null || c.pan != null) && services.Sfx.playAt) {
+      services.Sfx.playAt(c.name, c.pan || 0, c.vol == null ? 1 : c.vol, c.pitch);
       return;
     }
     services.Sfx.play(c.name);
   });
 
   registerCommand("music", (c: any, { services }: InterpContext) => {
-    services.Music.play(c.theme, c.fadeMs);
+    // M4·B: vol/pitch/pan options ride along; absent = the exact old call
+    // (same-key replays stay no-ops instead of retunes).
+    const opts =
+      c.vol != null || c.pitch != null || c.pan != null
+        ? { vol: c.vol, pitch: c.pitch, pan: c.pan }
+        : undefined;
+    services.Music.play(c.theme, c.fadeMs, opts);
+  });
+
+  // ---- streamed-audio channels (Project Compass M4·B) ----
+  // BGS (RM 245/246): one command-owned ambience layer, merged onto the map's
+  // list. ME (249): a jingle that pauses the streamed BGM and resumes it.
+  // Save/Resume BGM (243/244); Stop SE (251); victory/defeat jingle override
+  // (133/139). All reach the deck through services.AudioDeck (assembled in
+  // boot.ts) and no-op safely when it's absent (node interpreter test).
+  registerCommand("bgs", (c: any, { state, services }: InterpContext) => {
+    state.bgs = c.key
+      ? {
+          key: String(c.key),
+          ...(c.vol != null ? { vol: c.vol } : {}),
+          ...(c.pitch != null ? { pitch: c.pitch } : {}),
+          ...(c.pan != null ? { pan: c.pan } : {}),
+        }
+      : null;
+    const deck = services.AudioDeck;
+    if (deck && deck.applyAmbience) deck.applyAmbience(c.fadeMs);
+  });
+
+  registerCommand("me", (c: any, { services }: InterpContext) => {
+    const deck = services.AudioDeck;
+    if (deck && deck.playMe && c.key) {
+      deck.playMe(c.key, { interrupt: true, vol: c.vol, pitch: c.pitch, pan: c.pan });
+    }
+  });
+
+  registerCommand("saveBgm", (_c: any, { state, services }: InterpContext) => {
+    const deck = services.AudioDeck;
+    const streamed = deck && deck.bgmPosition ? deck.bgmPosition() : null;
+    const theme = (services.Music && services.Music.current) || (streamed && streamed.key) || null;
+    // Procedural themes save name-only and resume from the top (generative
+    // music has no meaningful seek position).
+    state.savedBgm = theme ? { theme, ...(streamed && streamed.key === theme ? { pos: streamed.pos } : {}) } : null;
+  });
+
+  registerCommand("resumeBgm", (_c: any, { state, services }: InterpContext) => {
+    const saved = state.savedBgm;
+    if (!saved || !saved.theme) return;
+    services.Music.play(saved.theme, undefined, saved.pos != null ? { seek: saved.pos } : undefined);
+  });
+
+  registerCommand("stopSe", (_c: any, { services }: InterpContext) => {
+    const deck = services.AudioDeck;
+    if (deck && deck.stopSe) deck.stopSe();
+  });
+
+  registerCommand("jingle", (c: any, { state }: InterpContext) => {
+    if (c.channel !== "victory" && c.channel !== "defeat") return;
+    state.jingles = state.jingles || {};
+    state.jingles[c.channel] = String(c.key || "");
   });
 
   registerCommand("cameraZoom", async (c: any, { services }: InterpContext) => {

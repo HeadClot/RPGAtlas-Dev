@@ -345,6 +345,7 @@ test.describe("audio v2 (phase 6)", () => {
     // may hold actual playback until a gesture; ownership is the signal.)
     await expect.poll(async () => page.evaluate(() => window.AtlasAudioDeck.deckState())).toEqual({
       bgmKey: "asset:audio/test-bgm",
+      meKey: null, // M4·B: the ME channel reports through deckState too
       ambience: [{ key: "asset:audio/test-rain", vol: 0.5 }],
     });
 

@@ -26,6 +26,7 @@ import { ctx, fns } from "../state/engine-context.js";
 import { G, Quests, objectiveDone, onEnemyKilled, param } from "../state/game-state.js";
 import { Plugins } from "../plugin-runtime.js";
 import { setAmbience } from "../../shared/audio-deck.js";
+import { mergeCommandBgs } from "../../shared/audio-math.js";
 import { resetZoneState, zonePassAt, mapHasZones } from "./zone-runtime.js";
 import { rebuildTileBehaviors, ladderAt, terrainTagAt, wrapX, wrapY } from "./tile-behavior.js";
 import { resolvePictureSrc } from "./presentation-runtime.js";
@@ -368,8 +369,11 @@ export async function loadMap(mapId: any): Promise<void> {
   await prerenderMap();
   Music.play(ctx.map.music || "none");
   // Ambience layers (Phase 6): diffed against the previous map's, so shared
-  // layers keep looping seamlessly across a transfer.
-  setAmbience(ctx.map.ambience || []);
+  // layers keep looping seamlessly across a transfer. A command-owned BGS
+  // (M4·B, RM 245) rides along until a map with its own ambience autoplays
+  // (the MZ replace rule); maps without one take the exact old list.
+  if (G.bgs && Array.isArray(ctx.map.ambience) && ctx.map.ambience.length) G.bgs = null;
+  setAmbience(mergeCommandBgs(ctx.map.ambience || [], G.bgs));
   Plugins.fire("mapLoad", ctx.map);
   // Gameplay zones (Phase 8): bake collision/nav into the pass overlay and reset
   // presence tracking. Runs AFTER mapLoad so the weather baseline captures the

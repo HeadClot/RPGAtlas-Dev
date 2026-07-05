@@ -4,7 +4,7 @@
    GPL-3.0-or-later (see LICENSE). */
 
 import { describe, expect, it } from "vitest";
-import { ambienceDiff, panGainForTile } from "../src/shared/audio-math";
+import { ambienceDiff, mergeCommandBgs, panGainForTile } from "../src/shared/audio-math";
 
 describe("ambienceDiff", () => {
   const rain = "asset:audio/rain";
@@ -33,6 +33,31 @@ describe("ambienceDiff", () => {
   it("is a no-op for identical lists", () => {
     const d = ambienceDiff([{ key: rain, vol: 0.5 }], [{ key: rain, vol: 0.5 }]);
     expect(d.start.length + d.stop.length + d.retune.length).toBe(0);
+  });
+  it("carries pitch/pan on start entries (M4·B, applied at start only)", () => {
+    const d = ambienceDiff([], [{ key: rain, vol: 0.6, pitch: 1.5, pan: -0.2 }]);
+    expect(d.start).toEqual([{ key: rain, vol: 0.6, pitch: 1.5, pan: -0.2 }]);
+  });
+});
+
+describe("mergeCommandBgs (M4·B, RM 245)", () => {
+  const rain = "asset:audio/rain";
+  const wind = "asset:audio/wind";
+
+  it("appends the command layer to the map's list", () => {
+    expect(mergeCommandBgs([{ key: rain }], { key: wind, vol: 0.6 }))
+      .toEqual([{ key: rain }, { key: wind, vol: 0.6 }]);
+  });
+  it("returns the exact base list when there is no command layer", () => {
+    const base = [{ key: rain, vol: 0.8 }];
+    expect(mergeCommandBgs(base, null)).toBe(base);
+    expect(mergeCommandBgs(base, undefined)).toBe(base);
+    expect(mergeCommandBgs(base, { key: "" })).toBe(base);
+    expect(mergeCommandBgs(undefined, null)).toEqual([]);
+  });
+  it("lets a same-key map layer win (the map's own mix)", () => {
+    const base = [{ key: rain, vol: 0.8 }];
+    expect(mergeCommandBgs(base, { key: rain, vol: 0.2 })).toBe(base);
   });
 });
 

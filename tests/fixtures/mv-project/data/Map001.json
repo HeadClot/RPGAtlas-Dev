@@ -633,6 +633,167 @@
           ]
         }
       ]
+    },
+    {
+      "id": 7,
+      "name": "Busker",
+      "x": 2,
+      "y": 9,
+      "pages": [
+        {
+          "conditions": {
+            "actorId": 1,
+            "actorValid": false,
+            "itemId": 1,
+            "itemValid": false,
+            "selfSwitchCh": "A",
+            "selfSwitchValid": false,
+            "switch1Id": 1,
+            "switch1Valid": false,
+            "switch2Id": 1,
+            "switch2Valid": false,
+            "variableId": 1,
+            "variableValid": false,
+            "variableValue": 0
+          },
+          "image": {
+            "tileId": 0,
+            "characterName": "People",
+            "characterIndex": 3,
+            "direction": 2,
+            "pattern": 1
+          },
+          "moveType": 0,
+          "moveSpeed": 3,
+          "moveFrequency": 3,
+          "moveRoute": {
+            "list": [
+              {
+                "code": 0,
+                "parameters": []
+              }
+            ],
+            "repeat": true,
+            "skippable": false,
+            "wait": false
+          },
+          "walkAnime": true,
+          "stepAnime": false,
+          "directionFix": false,
+          "through": false,
+          "priorityType": 1,
+          "trigger": 0,
+          "list": [
+            {
+              "code": 241,
+              "indent": 0,
+              "parameters": [
+                {
+                  "name": "Harbor",
+                  "volume": 80,
+                  "pitch": 120,
+                  "pan": -20
+                }
+              ]
+            },
+            {
+              "code": 243,
+              "indent": 0,
+              "parameters": []
+            },
+            {
+              "code": 249,
+              "indent": 0,
+              "parameters": [
+                {
+                  "name": "Victory",
+                  "volume": 90,
+                  "pitch": 100,
+                  "pan": 0
+                }
+              ]
+            },
+            {
+              "code": 244,
+              "indent": 0,
+              "parameters": []
+            },
+            {
+              "code": 245,
+              "indent": 0,
+              "parameters": [
+                {
+                  "name": "Waves",
+                  "volume": 60,
+                  "pitch": 100,
+                  "pan": 0
+                }
+              ]
+            },
+            {
+              "code": 230,
+              "indent": 0,
+              "parameters": [30]
+            },
+            {
+              "code": 246,
+              "indent": 0,
+              "parameters": [2]
+            },
+            {
+              "code": 250,
+              "indent": 0,
+              "parameters": [
+                {
+                  "name": "Cursor",
+                  "volume": 90,
+                  "pitch": 150,
+                  "pan": 40
+                }
+              ]
+            },
+            {
+              "code": 251,
+              "indent": 0,
+              "parameters": []
+            },
+            {
+              "code": 133,
+              "indent": 0,
+              "parameters": [
+                {
+                  "name": "Fanfare",
+                  "volume": 90,
+                  "pitch": 100,
+                  "pan": 0
+                }
+              ]
+            },
+            {
+              "code": 139,
+              "indent": 0,
+              "parameters": [
+                {
+                  "name": "",
+                  "volume": 90,
+                  "pitch": 100,
+                  "pan": 0
+                }
+              ]
+            },
+            {
+              "code": 242,
+              "indent": 0,
+              "parameters": [3]
+            },
+            {
+              "code": 0,
+              "indent": 0,
+              "parameters": []
+            }
+          ]
+        }
+      ]
     }
   ]
 }

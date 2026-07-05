@@ -32,6 +32,8 @@
 import { rasterizeZones } from "../../shared/zone-raster.js";
 import { zonesAtTile, distanceToZoneTile } from "../../shared/zone-geom.js";
 import { setAmbience } from "../../shared/audio-deck.js";
+import { mergeCommandBgs } from "../../shared/audio-math.js";
+import { G } from "../state/game-state.js";
 
 /** A transfer the runtime wants map.ts to fire (kept out of this module so the
  *  transfer routing stays in one place and there's no import cycle). */
@@ -132,7 +134,9 @@ export function zoneEncounterPool(map: any, x: number, y: number, fallback: numb
  *  the falloff curve matters for the vertex/point-zone case where the player
  *  can be at the edge). */
 function reconcileSound(map: any, x: number, y: number): void {
-  const base = Array.isArray(map.ambience) ? map.ambience.slice() : [];
+  // The command-owned BGS layer (M4·B, RM 245) survives zone reconciles; maps
+  // without one build the exact old base list.
+  const base = mergeCommandBgs(Array.isArray(map.ambience) ? map.ambience : [], G.bgs).slice();
   let any = false;
   if (map.zones) {
     const byKey = new Map<string, number>();

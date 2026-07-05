@@ -68,6 +68,12 @@ export async function saveLoadMenu(mode: any): Promise<boolean> {
         vehicle: G.vehicle,
         // Change Vehicle Image overrides (Project Compass M4·A, RM 323).
         vehicleImages: G.vehicleImages || null,
+        // Streamed-audio channel state (Project Compass M4·B): the command-
+        // owned BGS layer (245), the remembered BGM (243/244), and the
+        // victory/defeat jingle overrides (133/139).
+        bgs: G.bgs || null,
+        savedBgm: G.savedBgm || null,
+        jingles: G.jingles || null,
         // Presentation layer (Project Compass M2·A): pictures, screen tint, timer.
         presentation: serializePresentation(),
         // System toggles (Project Compass M2·C): menu/save/encounter/formation
@@ -128,6 +134,10 @@ async function applySave(d: any): Promise<void> {
   G.vehicles = d.vehicles || {};
   G.vehicle = d.vehicle || null;
   G.vehicleImages = d.vehicleImages || null; // M4·A (absent in old saves)
+  // M4·B audio channels (absent in old saves — all null = pre-M4·B behavior).
+  G.bgs = d.bgs || null;
+  G.savedBgm = d.savedBgm || null;
+  G.jingles = d.jingles || null;
   ctx.cameraZoom = clamp(Number(d.cameraZoom) || 1, 0.25, 4);
   // Presentation layer (Project Compass M2·A): old saves lack the field →
   // restorePresentation(undefined) resets to a clean screen.

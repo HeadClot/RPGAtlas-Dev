@@ -31,6 +31,7 @@ import {
   gainExp,
   expForLevel,
   sanitizeEquipment,
+  G,
 } from "./state/game-state.js";
 import { applyWindowTone } from "./state/window-tone.js";
 import {
@@ -77,6 +78,8 @@ import { createDefaultAssetStore } from "../platform/default-asset-store.js";
 // Side effect: registers window.AtlasAudioDeck, the seam js/sfx.js routes
 // "asset:" music/sound references through (Phase 6 audio v2).
 import "../shared/audio-deck.js";
+import { playMe, bgmPosition, stopSe, setAmbience } from "../shared/audio-deck.js";
+import { mergeCommandBgs } from "../shared/audio-math.js";
 
 const TILE = Assets.TILE;
 // defaults (overridden at boot from system.screenWidth/Height)
@@ -137,6 +140,18 @@ const EngineServices: any = {
   get battleEnemyOps() { return (fns as any).battleEnemyOps; },
   // battle animations on the map (Phase 5)
   playMapAnimation,
+  // streamed-audio channels (Project Compass M4·B): ME jingles, Save BGM
+  // position, Stop SE, and the merge-aware ambience refresh the `bgs` command
+  // calls after changing G.bgs.
+  AudioDeck: {
+    playMe,
+    bgmPosition,
+    stopSe,
+    applyAmbience(fadeMs?: number) {
+      const layers = mergeCommandBgs((ctx.map && ctx.map.ambience) || [], G.bgs);
+      void setAmbience(layers, fadeMs != null ? { fadeMs } : {});
+    },
+  },
 };
 initInterpServices(EngineServices);
 registerBuiltinCommands();

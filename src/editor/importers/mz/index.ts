@@ -10,6 +10,7 @@ import type {
   Actor,
   Armor,
   Autotile,
+  BattleAnimation,
   ClassDef,
   CommonEvent,
   Enemy,
@@ -29,6 +30,7 @@ import { convertSystem } from "./convert-system";
 import { convertActors, convertClasses, convertEnemies, convertStates, mergeEquipTraits } from "./convert-battlers";
 import { convertArmors, convertItems, convertSkills, convertWeapons } from "./convert-items";
 import { convertCommonEvents, convertTroops, type CommandTranslator } from "./convert-events";
+import { convertAnimations, type AnimationFallback } from "./convert-animations";
 import { makeTranslator } from "./translate-commands";
 import { collectTilesetUsage, convertMaps } from "./convert-maps";
 import { convertTilesets } from "./convert-tilesets";
@@ -49,6 +51,9 @@ export interface MzDatabase {
   states: StateDef[];
   troops: Troop[];
   commonEvents: CommonEvent[];
+  /** Converted battle animations (M4·B) — MV for real, MZ via the D4 fallback.
+   *  Empty = keep the base project's defaults. */
+  animations: BattleAnimation[];
 }
 
 export interface DatabaseConversion {
@@ -58,6 +63,9 @@ export interface DatabaseConversion {
   /** Index→key maps threaded to M1·B/M1·C (tile terrain tags, command operands). */
   elementKeyByIndex: string[];
   skillTypeKeyByIndex: string[];
+  /** MZ Effekseer entries awaiting their visual fallback (resolved against the
+   *  base project's animations in assembleProject — M4·B, D4). */
+  animationFallbacks: AnimationFallback[];
 }
 
 /** Convert parsed RM data into Atlas DB records. `translate` fills command
@@ -85,13 +93,17 @@ export function convertDatabase(
   const states = convertStates(raw.states, report, sys.elementKeyByIndex, sys.skillTypeKeyByIndex);
   const commonEvents = convertCommonEvents(raw.commonEvents, report, doTranslate);
   const troops = convertTroops(raw.troops, report, doTranslate);
+  // M4·B: animations — MV sheets convert for real, MZ entries carry their
+  // timings + a fallback marker (resolved in assembleProject, D4).
+  const anims = convertAnimations(raw, report);
 
   return {
     format: raw.format,
-    db: { system: sys.system, actors, classes, skills, items, weapons, armors, enemies, states, troops, commonEvents },
+    db: { system: sys.system, actors, classes, skills, items, weapons, armors, enemies, states, troops, commonEvents, animations: anims.animations },
     report,
     elementKeyByIndex: sys.elementKeyByIndex,
     skillTypeKeyByIndex: sys.skillTypeKeyByIndex,
+    animationFallbacks: anims.fallbacks,
   };
 }
 
@@ -198,6 +210,8 @@ export {
   familyOfKind,
   TID,
 } from "./tile-ids";
+export { convertAnimations, resolveAnimationFallbacks, animBucketOf } from "./convert-animations";
+export type { AnimationFallback, AnimationsConversion } from "./convert-animations";
 export { convertTilesets, IMPORT_TILE_BASE } from "./convert-tilesets";
 export type { TilesetsConversion, TilesetUsage } from "./convert-tilesets";
 export { collectTilesetUsage, convertMap, convertMapData, convertMaps, MAX_REGION } from "./convert-maps";

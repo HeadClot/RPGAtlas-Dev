@@ -37,16 +37,8 @@ import type { RmCommand, RmMoveRoute } from "./raw-types";
 interface TodoInfo { what: string; detail: string; }
 const TODO: Record<number, TodoInfo> = {
   132: { what: "changing the battle music", detail: "swapping the battle music from an event arrives in a later update" },
-  133: { what: "changing the victory music", detail: "swapping the victory jingle arrives in a later update (M4·B)" },
-  139: { what: "changing the defeat music", detail: "swapping the defeat jingle arrives in a later update (M4·B)" },
   140: { what: "changing a vehicle's music", detail: "swapping a vehicle's music arrives in a later update" },
   203: { what: "moving another event", detail: "teleporting an event to a spot arrives in a later update" },
-  243: { what: "remembering the music", detail: "save/resume-music arrives in a later update (M4·B)" },
-  244: { what: "bringing the music back", detail: "save/resume-music arrives in a later update (M4·B)" },
-  245: { what: "playing a background sound", detail: "looping background sounds arrive in a later update (M4·B)" },
-  246: { what: "fading out a background sound", detail: "looping background sounds arrive in a later update (M4·B)" },
-  249: { what: "playing a musical effect", detail: "one-shot musical effects (ME) arrive in a later update (M4·B)" },
-  251: { what: "stopping a sound", detail: "stopping a looping sound arrives in a later update (M4·B)" },
   356: { what: "a plugin command", detail: "plugin commands are listed in the import report, not run (M5·A)" },
   357: { what: "a plugin command", detail: "plugin commands are listed in the import report, not run (M5·A)" },
 };
@@ -90,6 +82,23 @@ const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
 const hex2 = (n: number): string => ("0" + Math.max(0, Math.min(255, Math.round(n || 0))).toString(16)).slice(-2);
 const rgbHex = (c: any): string => `#${hex2(c?.[0])}${hex2(c?.[1])}${hex2(c?.[2])}`;
 const audioKey = (a: any): string => (a && a.name ? "asset:audio/" + a.name : "");
+/** RM audio-object volume/pitch/pan → Atlas playback options (M4·B). Defaults
+ *  (volume 100 / pitch 100 / pan 0) stay absent so untouched commands keep the
+ *  exact pre-M4·B shape; RM's editor defaults (BGM 90, SE 90, BGS 80) come
+ *  across as the honest mix. */
+const audioOpts = (a: any): { vol?: number; pitch?: number; pan?: number } => {
+  const out: { vol?: number; pitch?: number; pan?: number } = {};
+  if (a && a.volume != null && num(a.volume) !== 100) {
+    out.vol = Math.round(Math.max(0, Math.min(100, num(a.volume)))) / 100;
+  }
+  if (a && a.pitch != null && num(a.pitch) !== 100 && num(a.pitch) > 0) {
+    out.pitch = Math.round(num(a.pitch)) / 100;
+  }
+  if (a && a.pan) {
+    out.pan = Math.round(Math.max(-100, Math.min(100, num(a.pan)))) / 100;
+  }
+  return out;
+};
 
 // ---------------------------------------------------------------------------
 // The cursor-based recursive translator. One instance per top-level list.
@@ -165,6 +174,9 @@ class Translator {
       case 129: out.push({ t: "party", op: p[1] === 0 ? "add" : "remove", actorId: num(p[0]) }); return;
       // ---- §8.4 system settings (access toggles + window color) ----
       // RM's access dialogs list "Enable" first (index 0); param 0 = enabled.
+      // 133/139 Change Victory/Defeat ME (M4·B): a keyless ME = silence it.
+      case 133: out.push({ t: "jingle", channel: "victory", key: audioKey(p[0]) }); return;
+      case 139: out.push({ t: "jingle", channel: "defeat", key: audioKey(p[0]) }); return;
       case 134: out.push({ t: "access", kind: "save", enabled: num(p[0]) === 0 }); return;
       case 135: out.push({ t: "access", kind: "menu", enabled: num(p[0]) === 0 }); return;
       case 136: out.push({ t: "access", kind: "encounter", enabled: num(p[0]) === 0 }); return;
@@ -210,10 +222,16 @@ class Translator {
       case 235: out.push({ t: "erasePic", id: num(p[0]) || 1 }); return;
       // ---- §8.7 timing ----
       case 230: out.push({ t: "wait", frames: num(p[0]) || 1 }); return;
-      // ---- §8.9 audio & video ----
-      case 241: out.push({ t: "music", theme: audioKey(p[0]) || "none" }); return;
+      // ---- §8.9 audio & video (options + BGS/ME channels: M4·B) ----
+      case 241: out.push({ t: "music", theme: audioKey(p[0]) || "none", ...audioOpts(p[0]) }); return;
       case 242: out.push({ t: "music", theme: "none", fadeMs: (num(p[0]) || 0) * 1000 }); return;
-      case 250: { const k = audioKey(p[0]); if (k) out.push({ t: "se", name: k }); return; }
+      case 243: out.push({ t: "saveBgm" }); return;
+      case 244: out.push({ t: "resumeBgm" }); return;
+      case 245: { const k = audioKey(p[0]); if (k) out.push({ t: "bgs", key: k, ...audioOpts(p[0]) }); return; }
+      case 246: out.push({ t: "bgs", key: "", fadeMs: (num(p[0]) || 0) * 1000 }); return;
+      case 249: { const k = audioKey(p[0]); if (k) out.push({ t: "me", key: k, ...audioOpts(p[0]) }); return; }
+      case 250: { const k = audioKey(p[0]); if (k) out.push({ t: "se", name: k, ...audioOpts(p[0]) }); return; }
+      case 251: out.push({ t: "stopSe" }); return;
       // ---- §8.10 scene control ----
       case 301: this.battle(c, out, indent); return;
       case 302: out.push(this.shop(c, indent)); return;

@@ -166,8 +166,13 @@ describe("map layer rebucket (§2 Map###)", () => {
     expect(harbor.encounters).toEqual({ troops: [], rate: 30, byRegion: { 1: [1], 5: [1] } });
     expect(harbor.music).toBe("asset:audio/Harbor");
     expect(harbor.notes).toBe("<Region1: safe zone>");
-    expect(harbor.events.map((e) => e.id)).toEqual([1, 2, 3, 4, 5, 6]); // events fill in M1·C
+    expect(harbor.events.map((e) => e.id)).toEqual([1, 2, 3, 4, 5, 6, 7]); // events fill in M1·C
     expect(has(mz, "encounters tied to map regions")).toBe(false); // real since M4·A
+    // M4·B: the cave's autoplay BGS becomes an ambience layer at the RM mix
+    // (volume 80 ⇒ 0.8); the harbor (autoplayBgs false) has none.
+    const cave = byId(mz.maps, 2);
+    expect(cave.ambience).toEqual([{ key: "asset:audio/Drips", vol: 0.8 }]);
+    expect(harbor.ambience).toBeUndefined();
   });
 
   it("converts parallax / looping / battlebacks (M4·A) — banner stays a skip", () => {

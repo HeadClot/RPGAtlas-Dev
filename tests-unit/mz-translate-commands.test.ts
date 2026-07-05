@@ -74,13 +74,13 @@ const SPEC: Row[] = [
   { code: 129, name: "Change Party Member", list: [c(129, [1, 0, 0])], expect: { first: "party" } },
   // §8.4 system settings → all M2·C / M4·B / report placeholders
   { code: 132, name: "Change Battle BGM", list: [c(132, [{ name: "B" }])], expect: { todo: 132 } },
-  { code: 133, name: "Change Victory ME", list: [c(133, [{ name: "V" }])], expect: { todo: 133 } },
+  { code: 133, name: "Change Victory ME", list: [c(133, [{ name: "V" }])], expect: { first: "jingle" } }, // M4·B
   { code: 134, name: "Change Save Access", list: [c(134, [0])], expect: { first: "access" } },
   { code: 135, name: "Change Menu Access", list: [c(135, [0])], expect: { first: "access" } },
   { code: 136, name: "Change Encounter", list: [c(136, [0])], expect: { first: "access" } },
   { code: 137, name: "Change Formation Access", list: [c(137, [0])], expect: { first: "access" } },
   { code: 138, name: "Change Window Color", list: [c(138, [[0, 0, 0]])], expect: { first: "windowTone" } },
-  { code: 139, name: "Change Defeat ME", list: [c(139, [{ name: "D" }])], expect: { todo: 139 } },
+  { code: 139, name: "Change Defeat ME", list: [c(139, [{ name: "D" }])], expect: { first: "jingle" } }, // M4·B
   { code: 140, name: "Change Vehicle BGM", list: [c(140, [0, { name: "V" }])], expect: { todo: 140 } },
   // §8.5 movement & map
   { code: 201, name: "Transfer Player", list: [c(201, [0, 2, 4, 4, 2, 0])], expect: { first: "transfer" } },
@@ -118,13 +118,13 @@ const SPEC: Row[] = [
   // §8.9 audio & video
   { code: 241, name: "Play BGM", list: [c(241, [{ name: "Town" }])], expect: { first: "music" } },
   { code: 242, name: "Fadeout BGM", list: [c(242, [2])], expect: { first: "music" } },
-  { code: 243, name: "Save BGM", list: [c(243)], expect: { todo: 243 } },
-  { code: 244, name: "Resume BGM", list: [c(244)], expect: { todo: 244 } },
-  { code: 245, name: "Play BGS", list: [c(245, [{ name: "S" }])], expect: { todo: 245 } },
-  { code: 246, name: "Fadeout BGS", list: [c(246, [2])], expect: { todo: 246 } },
-  { code: 249, name: "Play ME", list: [c(249, [{ name: "M" }])], expect: { todo: 249 } },
+  { code: 243, name: "Save BGM", list: [c(243)], expect: { first: "saveBgm" } }, // M4·B
+  { code: 244, name: "Resume BGM", list: [c(244)], expect: { first: "resumeBgm" } }, // M4·B
+  { code: 245, name: "Play BGS", list: [c(245, [{ name: "S" }])], expect: { first: "bgs" } }, // M4·B
+  { code: 246, name: "Fadeout BGS", list: [c(246, [2])], expect: { first: "bgs" } }, // M4·B
+  { code: 249, name: "Play ME", list: [c(249, [{ name: "M" }])], expect: { first: "me" } }, // M4·B
   { code: 250, name: "Play SE", list: [c(250, [{ name: "Cursor" }])], expect: { first: "se" } },
-  { code: 251, name: "Stop SE", list: [c(251)], expect: { todo: 251 } },
+  { code: 251, name: "Stop SE", list: [c(251)], expect: { first: "stopSe" } }, // M4·B
   { code: 261, name: "Play Movie", list: [c(261, ["m"])], expect: { drop: true } },
   // §8.10 scene control
   { code: 301, name: "Battle Processing", list: [c(301, [0, 1, true, true])], expect: { first: "battle" } },
@@ -495,10 +495,12 @@ describe("mzTodo placeholder shape (D3)", () => {
     expect(cmd.label.length).toBeGreaterThan(0);
   });
   it("aggregates repeats into one report line (D11) with the raw code", () => {
-    const { report } = tr([c(203, []), c(203, []), c(243, [])]);
+    // 243 flipped to a real command in M4·B; 140 (Change Vehicle BGM) is
+    // still a todo row, so it stands in as the second placeholder.
+    const { report } = tr([c(203, []), c(203, []), c(140, [0, { name: "V" }])]);
     const state = report.lines.find((l) => l.code === 203);
     expect(state?.count).toBe(2);
-    expect(report.lines.find((l) => l.code === 243)?.count).toBe(1);
+    expect(report.lines.find((l) => l.code === 140)?.count).toBe(1);
   });
 });
 
@@ -534,6 +536,43 @@ describe("M4·A map-feature commands", () => {
     expect(cmds.length).toBe(0);
     const line = report.lines.find((l) => l.code === 282);
     expect(line?.kind).toBe("skipped");
+  });
+});
+
+// ============================================================================
+// M4·B audio-channel command flips (matrix §8.9 + 133/139).
+// ============================================================================
+describe("M4·B audio-channel commands", () => {
+  it("241 carries volume/pitch/pan (RM /100); editor defaults stay absent", () => {
+    expect(t0([c(241, [{ name: "Town", volume: 80, pitch: 120, pan: -20 }])])).toEqual(
+      { t: "music", theme: "asset:audio/Town", vol: 0.8, pitch: 1.2, pan: -0.2 });
+    expect(t0([c(241, [{ name: "Town", volume: 100, pitch: 100, pan: 0 }])])).toEqual(
+      { t: "music", theme: "asset:audio/Town" });
+  });
+  it("243/244 → saveBgm / resumeBgm", () => {
+    expect(t0([c(243, [])])).toEqual({ t: "saveBgm" });
+    expect(t0([c(244, [])])).toEqual({ t: "resumeBgm" });
+  });
+  it("245 → bgs with options; 246 → bgs stop with a timed fade", () => {
+    expect(t0([c(245, [{ name: "Rain", volume: 60, pitch: 100, pan: 0 }])])).toEqual(
+      { t: "bgs", key: "asset:audio/Rain", vol: 0.6 });
+    expect(t0([c(246, [2])])).toEqual({ t: "bgs", key: "", fadeMs: 2000 });
+  });
+  it("249 → me; a keyless ME drops silently like a keyless SE", () => {
+    expect(t0([c(249, [{ name: "Fanfare", volume: 90 }])])).toEqual(
+      { t: "me", key: "asset:audio/Fanfare", vol: 0.9 });
+    const { cmds } = tr([c(249, [{ name: "" }])]);
+    expect(cmds.length).toBe(0);
+  });
+  it("250 carries options; 251 → stopSe", () => {
+    expect(t0([c(250, [{ name: "Cursor", volume: 90, pitch: 150, pan: 40 }])])).toEqual(
+      { t: "se", name: "asset:audio/Cursor", vol: 0.9, pitch: 1.5, pan: 0.4 });
+    expect(t0([c(251, [])])).toEqual({ t: "stopSe" });
+  });
+  it("133/139 → jingle overrides; a keyless ME silences the channel", () => {
+    expect(t0([c(133, [{ name: "Fanfare" }])])).toEqual(
+      { t: "jingle", channel: "victory", key: "asset:audio/Fanfare" });
+    expect(t0([c(139, [{ name: "" }])])).toEqual({ t: "jingle", channel: "defeat", key: "" });
   });
 });
 

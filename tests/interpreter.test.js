@@ -70,7 +70,9 @@ async function loadRegistry() {
     "changeNickname", "changeProfile", "changeState",
     // M3·B: the TP pair.
     "changeTp", "changeEnemyTp",
-    "access", "followers", "windowTone", "getLocationInfo"]) {
+    "access", "followers", "windowTone", "getLocationInfo",
+    // M4·B: the streamed-audio channels.
+    "bgs", "me", "saveBgm", "resumeBgm", "stopSe", "jingle"]) {
     assert.equal(
       typeof getCommand(type),
       "function",
@@ -92,6 +94,13 @@ async function loadRegistry() {
       { t: "tint", tone: [-68, -68, -68, 0], frames: 0 },
       { t: "timer", op: "start", seconds: 5 },
       { t: "timer", op: "stop" },
+      // M4·B audio handlers: no-op safely when services.AudioDeck is absent.
+      { t: "bgs", key: "asset:audio/waves", vol: 0.6 },
+      { t: "bgs", key: "" },
+      { t: "saveBgm" },
+      { t: "resumeBgm" },
+      { t: "stopSe" },
+      { t: "jingle", channel: "victory", key: "asset:audio/fanfare" },
     ]) {
       await getCommand(cmd.t)(cmd, { interp: { evRT: null }, state: pstate, services: psvc });
     }
