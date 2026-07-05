@@ -72,7 +72,9 @@ async function loadRegistry() {
     "changeTp", "changeEnemyTp",
     "access", "followers", "windowTone", "getLocationInfo",
     // M4·B: the streamed-audio channels.
-    "bgs", "me", "saveBgm", "resumeBgm", "stopSe", "jingle"]) {
+    "bgs", "me", "saveBgm", "resumeBgm", "stopSe", "jingle",
+    // M5·B: the read-only RPG Maker Script-command adapter.
+    "mzScript"]) {
     assert.equal(
       typeof getCommand(type),
       "function",
@@ -231,6 +233,26 @@ async function loadRegistry() {
     ]);
     assert.equal(jstate.vars[1], 1, "jump skips the commands between it and the target label");
     assert.equal(jstate.vars[2], 2, "execution resumes just after the target label");
+  }
+
+  // ---- M5·B: the read-only Script-command adapter runs under the shim ----
+  // The mzScript command builds the $game* shim from the passed state and runs
+  // the (importer-gated) snippet under the same new Function sandbox as
+  // `script`. Read-only by design: it must not throw and must not mutate state.
+  {
+    const sstate = { switches: { 2: true }, vars: { 1: 42 }, party: [{ actorId: 1 }], gold: 100, inv: { item: {}, weapon: {}, armor: {} } };
+    const before = JSON.stringify(sstate);
+    await getCommand("mzScript")(
+      { t: "mzScript", code: "$gameSwitches.value(2) && $gameVariables.value(1) > 0 && $gameParty.size()" },
+      { interp: {}, state: sstate, services: {} },
+    );
+    assert.equal(JSON.stringify(sstate), before, "mzScript reads state but the shim exposes no setter, so nothing changes");
+    // A snippet that tries to write is a swallowed TypeError (no such setter).
+    await getCommand("mzScript")(
+      { t: "mzScript", code: "$gameVariables.setValue(1, 0)" },
+      { interp: {}, state: sstate, services: {} },
+    );
+    assert.equal(sstate.vars[1], 42, "a write attempt through the shim is a no-op, not a crash");
   }
 
   // Unknown command types resolve to undefined — the interpreter's silent-skip

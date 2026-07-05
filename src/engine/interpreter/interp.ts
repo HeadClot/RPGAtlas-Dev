@@ -17,6 +17,7 @@ import { getCommand } from "./registry.js";
 import { ctx } from "../state/engine-context.js";
 import { G, Quests, invCount } from "../state/game-state.js";
 import { compareVariable } from "../util.js";
+import { evalMzScript, mzGlobalsFromState } from "../../shared/mz-script.js";
 
 let EngineServices: any = null;
 /** Install the engine service surface command handlers receive (ctx.services). */
@@ -125,6 +126,11 @@ export class Interp {
         if (from === to) return true; // degenerate window = whole day
         return from < to ? h >= from && h < to : h >= from || h < to;
       }
+      case "mzScript":
+        // A read-only RPG Maker Conditional-Branch "Script" expression (M5·B):
+        // evaluate it through the same $game* compat shim as the mzScript
+        // command. Any error reads as "not met" (evalMzScript returns false).
+        return evalMzScript(cond.code, mzGlobalsFromState(G));
       case "actor": {
         const actor = G.party.find((a: any) => a.actorId === cond.actorId);
         if (!actor) return false;

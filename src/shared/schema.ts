@@ -626,8 +626,15 @@ export interface Condition {
     | "item"
     | "gold"
     | "actor"
+    | "mzScript"
     | string;
   id?: number;
+  /** kind "mzScript" (Project Compass M5·B): a read-only RPG Maker
+   *  Conditional-Branch "Script" expression, evaluated through the same
+   *  `$game*` compatibility shim as the `mzScript` command
+   *  (src/shared/mz-script.ts). Only set when the importer verified the
+   *  expression against the D5 read-only subset. */
+  code?: string;
   val?: boolean | number;
   cmp?: string;
   key?: string; // selfsw
@@ -880,6 +887,17 @@ export interface CmdToTitle {
 }
 export interface CmdScript {
   t: "script";
+  code: string;
+}
+/** A read-only RPG Maker Script command the importer verified against the
+ *  M5·B compatibility subset (Project Compass, mig-0 D5): it reads only
+ *  `$gameSwitches`/`$gameVariables`/`$gameParty` and runs under the same
+ *  sandbox as `script`, through the `$game*` shim (src/shared/mz-script.ts).
+ *  Scripts that write game state or reach other `$game*`/globals never become
+ *  this — they stay `mzTodo` + a report line. Additive/optional
+ *  (FORMAT_VERSION stays 2). */
+export interface CmdMzScript {
+  t: "mzScript";
   code: string;
 }
 /** Repeats `body` until a breakLoop command unwinds it (Phase 4). The
@@ -1216,6 +1234,7 @@ export type AnyCommand =
   | CmdGameover
   | CmdToTitle
   | CmdScript
+  | CmdMzScript
   | CmdLoop
   | CmdBreakLoop
   | CmdPlayAnim
