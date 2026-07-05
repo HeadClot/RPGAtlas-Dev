@@ -5,6 +5,19 @@
 export const PATCH_NOTES = [
   {
     date: "July 5, 2026",
+    title: "Simple RPG Maker scripts now run: switches, variables & party checks",
+    summary:
+      "Some RPG Maker events use little JavaScript snippets — a “Script” command, or a Conditional Branch that asks a question in code. Atlas now understands the most common ones: anything that just reads your switches, variables, or party (how much gold you have, who's in the group, whether an item is owned) is converted and runs for real, so those branches decide the right way in your game. Scripts that change game data, or reach for things Atlas doesn't have yet, are still listed honestly in the import report and left out — your game keeps playing either way. For safety, imported scripts only ever read game data; they can't change anything.",
+    items: [
+      "Read-only “Script” commands and Conditional-Branch “Script” conditions that use $gameSwitches, $gameVariables, or $gameParty now convert and run in Atlas.",
+      "Supported reads: $gameSwitches.value(n), $gameVariables.value(n), and $gameParty.size() / .gold() / .members() / .hasItem(id).",
+      "A conditional branch that asks a code question (like “is switch 3 on and variable 1 above 5?”) now picks the correct path when you play.",
+      "Scripts that write game data (setValue, gainGold…) or read other data ($gameActors, $gameMap…) are listed in the import report and don't run — nothing is silently dropped, and your game still plays.",
+      "Your safety comes first: imported scripts run read-only — they can't change your game's data.",
+    ],
+  },
+  {
+    date: "July 5, 2026",
     title: "Import report now explains your RPG Maker add-ons (plugins)",
     summary:
       "RPG Maker games often use add-ons (plugins) — little programs Atlas can't run. When you import a game, the report now has an “Add-ons” section that names every plugin from your project, remembers whether it was on or off and how many settings it had, and tells you in plain words whether Atlas already does that thing, does something close, or doesn't do it — with a pointer to where to look. Popular add-ons like quest journals, message boxes, and battle systems are recognized by name; anything we don't know is kept safely with an honest note. No plugin code is ever run — Atlas only reads the list.",

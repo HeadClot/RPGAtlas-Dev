@@ -7,6 +7,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { registerCommand, type InterpContext } from "../registry.js";
+import { runMzScript, mzGlobalsFromState } from "../../../shared/mz-script.js";
 
 export function registerFlowCommands(): void {
   registerCommand("text", async (c: any, { services }: InterpContext) => {
@@ -101,5 +102,15 @@ export function registerFlowCommands(): void {
       console.error("Script command error:", e);
     }
     services.refreshAllPages();
+  });
+
+  // A read-only RPG Maker Script command the importer verified against the
+  // M5·B subset (mig-0 D5): run it through the $game* compat shim under the
+  // same new Function sandbox as `script`. The shim exposes no setters, so it
+  // can only read $gameSwitches/$gameVariables/$gameParty; errors are swallowed
+  // like the `script` command's. Reads have no observable effect — the branch
+  // condition (interp.testCond "mzScript") is where the shim earns its keep.
+  registerCommand("mzScript", async (c: any, { state }: InterpContext) => {
+    runMzScript(c.code, mzGlobalsFromState(state));
   });
 }

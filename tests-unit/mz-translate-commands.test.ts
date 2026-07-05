@@ -163,7 +163,9 @@ const SPEC: Row[] = [
   { code: 340, name: "Abort Battle", list: [c(340)], expect: { first: "abortBattle" } },
   { code: 342, name: "Change Enemy TP", list: [c(342, [0, 0, 0, 10])], expect: { first: "changeEnemyTp" } },
   // §8.13 script / plugin
-  { code: 355, name: "Script", list: [c(355, ["$gameSwitches.value(1)"])], expect: { todo: 355 } },
+  // §8.13: a read-only $game* script converts to a runnable mzScript (M5·B);
+  // writes/other data stay mzTodo (the dedicated M5·B tests below cover both).
+  { code: 355, name: "Script", list: [c(355, ["$gameSwitches.value(1)"])], expect: { first: "mzScript" } },
   { code: 356, name: "Plugin Command (MV)", list: [c(356, ["Foo bar"])], expect: { todo: 356 } },
   { code: 357, name: "Plugin Command (MZ)", list: [c(357, ["Foo", "bar", "bar", {}])], expect: { todo: 357 } },
 ];
@@ -316,11 +318,54 @@ describe("real translations carry their fields (matrix §8)", () => {
     expect(t0([c(312, [0, 0, 0, 0, 20])])).toMatchObject({ t: "heal", mp: 20 });
     expect((t0([c(311, [0, 3, 0, 0, 50, false])]) as any).t).toBe("mzTodo"); // single actor
   });
-  it("355 Script folds 655 lines into one preserved placeholder", () => {
+  it("355 Script folds 655 lines into one preserved placeholder (out-of-scope stays mzTodo)", () => {
     const { cmds } = tr([c(355, ["if (a) {"]), c(655, ["  b();"]), c(655, ["}"])]);
     expect(cmds).toHaveLength(1);
     expect((cmds[0] as any).code).toBe(355);
     expect((cmds[0] as any).params[0]).toBe("if (a) {\n  b();\n}");
+  });
+
+  // ---- M5·B: read-only Script-command adapter (mig-0 D5) ----
+  describe("M5·B Script adapter (read-only $game* subset, D5)", () => {
+    it("a read-only $game* Script command converts to a runnable mzScript", () => {
+      const { cmds, report } = tr([c(355, ["$gameVariables.value(1) + $gameSwitches.value(2)"])]);
+      expect(cmds).toHaveLength(1);
+      expect(cmds[0]).toEqual({ t: "mzScript", code: "$gameVariables.value(1) + $gameSwitches.value(2)" });
+      expect(report.lines.some((l) => l.kind === "converted" && /reads game data/.test(l.what))).toBe(true);
+    });
+    it("folds its 655 continuation lines into the converted snippet", () => {
+      const { cmds } = tr([c(355, ["$gameParty.gold() >= 100"]), c(655, ["  && $gameParty.size() > 1"])]);
+      expect((cmds[0] as any).t).toBe("mzScript");
+      expect((cmds[0] as any).code).toBe("$gameParty.gold() >= 100\n  && $gameParty.size() > 1");
+    });
+    it("a WRITE ($gameVariables.setValue) stays mzTodo + report (writes never convert)", () => {
+      const { cmds, report } = tr([c(355, ["$gameVariables.setValue(1, 999)"])]);
+      expect((cmds[0] as any).t).toBe("mzTodo");
+      expect((cmds[0] as any).code).toBe(355);
+      expect(report.lines.some((l) => l.kind === "todo" && l.what === "a script snippet")).toBe(true);
+    });
+    it("a snippet reaching another $game* ($gameActors) stays mzTodo", () => {
+      expect((t0([c(355, ["$gameActors.actor(1).level"])]) as any).t).toBe("mzTodo");
+    });
+    it("111 Conditional-Branch Script (read-only) becomes a real mzScript branch", () => {
+      const { cmds } = tr([
+        c(111, [12, "$gameSwitches.value(3)"]),
+        c(125, [0, 0, 5], 1), // then: gain gold
+        c(411),
+        c(125, [1, 0, 5], 1), // else: lose gold
+        c(412),
+      ]);
+      expect((cmds[0] as any).t).toBe("if");
+      expect((cmds[0] as any).cond).toEqual({ kind: "mzScript", code: "$gameSwitches.value(3)" });
+      expect((cmds[0] as any).then[0]).toMatchObject({ t: "gold", op: "add" });
+      expect((cmds[0] as any).else[0]).toMatchObject({ t: "gold", op: "sub" });
+    });
+    it("111 Conditional-Branch Script that writes stays mzTodo + drops bodies", () => {
+      const { cmds } = tr([c(111, [12, "$gameVariables.setValue(1, 2)"]), c(125, [0, 0, 9], 1), c(412)]);
+      expect((cmds[0] as any).t).toBe("mzTodo");
+      expect((cmds[0] as any).code).toBe(111);
+      expect(cmds).toHaveLength(1);
+    });
   });
 
   // ---- M2·A presentation flips (matrix §8.6/§8.8, §16) ----

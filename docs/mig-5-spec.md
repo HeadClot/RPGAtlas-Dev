@@ -1,7 +1,7 @@
 # Phase M5 Spec — Plugins, scripts & the honest no-list ("Project Compass")
 
-**Status:** M5·A ✅ COMPLETE (branch `mig-5a`, merged to `main`). M5·B next
-(tags `mig-5` on phase exit). Phase M5 owns the two things a JS-plugin
+**Status:** M5·A ✅ COMPLETE (branch `mig-5a`) · M5·B ✅ COMPLETE (branch
+`mig-5b`) — **phase M5 exit, tag `mig-5`**. Phase M5 owns the two things a JS-plugin
 game brings that **cannot auto-convert**: the `js/plugins.js` add-on list (M5·A)
 and the most common Script-command snippets (M5·B). The promise is **clarity, not
 magic** (phase M5 intro): every add-on is named, its settings are kept, and the
@@ -139,3 +139,72 @@ patch-notes `?v=54`.
 
 **Next:** M5·B — the minimal read-only Script-command adapter
 (`$gameSwitches`/`$gameVariables`/`$gameParty`), then tag `mig-5`.
+
+### M5·B — Script-command adapter — ✅ 2026-07-05 (branch `mig-5b`, phase exit)
+
+**Objective:** make the *most common* imported Script snippets actually run —
+exactly the read-only subset locked in mig-0 **D5**: `$gameSwitches.value(n)`,
+`$gameVariables.value(n)`, and the `$gameParty` basics
+`size()/gold()/members()/hasItem(item)`. Everything else stays `mzTodo` + one
+honest report line (nothing dropped — D6/D11). No write surface exists (D5:
+read-only *by design*; no writes without a new gate decision).
+
+**Delivered:**
+1. **`src/shared/mz-script.ts`** — the one pure module (no engine/DOM imports,
+   so the vitest node env and the engine share a single definition of "the
+   supported subset" — the src/shared pure-core trap):
+   - **`analyzeMzScript(code)`** — the import-time gate. A snippet is `ok` only
+     when (a) every identifier token is one of the three globals, their allowed
+     members (`value/size/gold/members/hasItem`), or a JS literal
+     (`true/false/null/undefined`) — this alone rejects bare vars, control-flow
+     keywords (`if`/`for`), `Math`, `require`, and any other `$game*`/`$data*`;
+     (b) at least one supported global is read; and (c) each global is reached
+     through an allowed member — which is what rejects **writes** (`setValue`,
+     `gainGold`) and bare assignment (`$gameSwitches = …`). String/line/block
+     comments are stripped first so a comment can't trip the gate.
+   - **`mzGlobalsFromState(state)`** — builds the three read-only `$game*` shim
+     objects from a plain game-state shape (never the state object itself, so
+     no setter is reachable). `hasItem` reads item/weapon/armor bags by id.
+   - **`runMzScript` / `evalMzScript`** — run a gated snippet under the SAME
+     `new Function` sandbox as the Atlas `script` command
+     (`flow.ts`): command → statements (read-only, so no observable effect);
+     condition → `return (expr)` → boolean, any error ⇒ `false`.
+2. **`src/shared/schema.ts`** — additive `CmdMzScript { t:"mzScript"; code }` in
+   the `AnyCommand` union, and `Condition.kind` gains `"mzScript"` + a `code?`
+   field. FORMAT_VERSION stays 2 (D4).
+3. **`translate-commands.ts`** — `script()` (355/655) now gates the folded
+   snippet: read-only ⇒ `{t:"mzScript"}` + a `converted` report line; else the
+   prior `mzTodo` + honest `todo` line (copy updated — no more "runs in a later
+   update" promise). `convertCond` case **12** (Conditional-Branch Script): a
+   read-only expression ⇒ `{kind:"mzScript",code}`; else `null` (mzTodo + bodies
+   drop, like any unmappable check).
+4. **Engine** — `flow.ts` registers the `mzScript` command (builds the shim from
+   the passed `state`, runs it — no `audio-deck`/singleton import, so the node
+   interpreter bundle still stubs cleanly); `interp.ts` `testCond` gains
+   `case "mzScript"` → `evalMzScript(cond.code, mzGlobalsFromState(G))`.
+5. **Editor** — `command-defs.ts` renders the `mzScript` command ("Script (from
+   RPG Maker): …") and the `mzScript` branch condition ("Script: …").
+6. **Tests** — `tests-unit/mz-script.test.ts` (12: gate verdicts incl. the
+   fixtures' `setValue` write → out of scope, other `$game*` rejected, comment
+   safety; shim reads; `evalMzScript` boolean + never-throws; read-only
+   no-mutation proof). `mz-translate-commands.test.ts`: 355 SPEC row flips to
+   `mzScript`, + a M5·B block (read→`mzScript`, 655 fold, write→`mzTodo`,
+   `$gameActors`→`mzTodo`, 111/12 read→real branch, 111/12 write→`mzTodo`+drop).
+   `tests/interpreter.test.js`: `mzScript` registered + a runtime read/no-mutate
+   + swallowed-write check.
+7. **Patch notes** entry + help.ts "Coming from RPG Maker" Script bullet; `?v=`
+   bump 54→55 (help.ts import + shims.d.ts).
+
+**Guardrails held:** read-only by design (the shim has no setter — a write can't
+be spelled, D5); the fixtures' deliberate writes (`CommonEvents[2]`,
+`Map002 Ambush`) still land as `mzTodo` + report, proving the "beyond scope"
+path (D5 note); same sandbox as the Atlas `script` command; nothing silently
+dropped (D6). No FORMAT_VERSION bump (D4).
+
+**Gates green:** `tsc --noEmit` clean · vitest **849** (was 831, +18) · node
+`--test tests/` **18** · Playwright **70/70** · eslint clean on all changed
+files (main's 3 pre-existing errors untouched — lint is not a phase gate).
+patch-notes `?v=55`.
+
+**Phase M5 COMPLETE — tag `mig-5`. Next:** M6·A — wizard UX polish + the
+"Coming from RPG Maker MZ/MV" documentation.

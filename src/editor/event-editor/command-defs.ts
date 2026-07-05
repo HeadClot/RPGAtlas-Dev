@@ -98,6 +98,7 @@ import { openLocationPicker } from "./location-picker";
           : k === "item" ? "Has " + dbName(c.cond.itemKind === "weapon" ? S.proj.weapons : c.cond.itemKind === "armor" ? S.proj.armors : S.proj.items, c.cond.id)
           : k === "region" ? "Player in region " + (c.cond.id || 0)
           : k === "time" ? "Clock is " + (c.cond.from || 0) + ":00–" + (c.cond.to || 0) + ":00"
+          : k === "mzScript" ? "Script: " + (c.cond.code || "").split("\n")[0].slice(0, 38)
           : "Gold " + (c.cond.cmp || ">=") + " " + c.cond.val;
         return "If " + d;
       }
@@ -186,6 +187,7 @@ import { openLocationPicker } from "./location-picker";
       case "gameover": return "Game Over";
       case "totitle": return "Return to Title";
       case "script": return "Script: " + (c.code || "").split("\n")[0].slice(0, 42);
+      case "mzScript": return "Script (from RPG Maker): " + (c.code || "").split("\n")[0].slice(0, 30);
       case "mzTodo": return "📌 " + (c.label || "Imported command (coming in a later update)");
       default: return c.t;
     }

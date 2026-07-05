@@ -21,6 +21,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { AnyCommand, Condition } from "../../../shared/schema";
+import { analyzeMzScript } from "../../../shared/mz-script";
 import { assetKeyOf, slugName } from "../../../shared/asset-library";
 import { slugKey, paramKey } from "./slug";
 import type { CommandTranslator } from "./convert-events";
@@ -382,7 +383,18 @@ class Translator {
       case 8: return { kind: "item", itemKind: "item", id: num(p[1]) };
       case 9: return { kind: "item", itemKind: "weapon", id: num(p[1]) };
       case 10: return { kind: "item", itemKind: "armor", id: num(p[1]) };
-      default: return null; // 3 timer · 5 enemy · 6 character · 11 button · 12 script · 13 vehicle
+      case 12: {
+        // Script condition (M5·B, D5): a read-only $game* expression becomes a
+        // real branch that evaluates through the compat shim. Writes/other data
+        // → null (mzTodo + the branch bodies drop, like any unmappable check).
+        const expr = String(p[1] ?? "");
+        if (analyzeMzScript(expr).ok) {
+          this.bump("cond-script-ok", "converted", "a script condition that reads game data", "conditional-branch scripts that read your switches, variables, or party now decide the branch in Atlas");
+          return { kind: "mzScript", code: expr };
+        }
+        return null;
+      }
+      default: return null; // 3 timer · 5 enemy · 6 character · 11 button · 13 vehicle
     }
   }
 
@@ -596,11 +608,22 @@ class Translator {
   }
 
   // -- §8.13 script (355 + 655 lines) --------------------------------------
+  /** A Script command folds its 655 continuation lines into one snippet. If it
+   *  reads only `$gameSwitches`/`$gameVariables`/`$gameParty` (M5·B read-only
+   *  subset, D5) it becomes a runnable `mzScript` that plays under the compat
+   *  shim; anything that writes game state or reaches other data stays an
+   *  `mzTodo` placeholder + one honest report line (nothing is dropped). */
   private script(c: RmCommand, out: AnyCommand[]): void {
     const lines = [String(((c.parameters as any[]) || [])[0] ?? "")];
     while (this.at(655, c.indent)) lines.push(String(((this.list[this.i++].parameters as any[]) || [])[0] ?? ""));
-    this.bump("cmd-script", "todo", "a script snippet", "small RPG Maker scripts that read game data run in a later update (M5·B); the rest are listed in the import report");
-    out.push({ t: "mzTodo", code: 355, params: [lines.join("\n")], label: "A script snippet — coming in a later update" });
+    const code = lines.join("\n");
+    if (analyzeMzScript(code).ok) {
+      this.bump("cmd-script-ok", "converted", "a script that reads game data", "small scripts that read your switches, variables, or party now run in Atlas");
+      out.push({ t: "mzScript", code } as AnyCommand);
+      return;
+    }
+    this.bump("cmd-script", "todo", "a script snippet", "scripts that change game data (or read things Atlas doesn't have yet) are listed here and don't run — your game still plays");
+    out.push({ t: "mzTodo", code: 355, params: [code], label: "A script snippet — coming in a later update" });
   }
 
   // -- §8.1 Show Scrolling Text (105 + 405 lines) --------------------------
