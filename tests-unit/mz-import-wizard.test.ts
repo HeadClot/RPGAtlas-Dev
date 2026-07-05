@@ -1,0 +1,202 @@
+/* RPGAtlas — tests-unit/mz-import-wizard.test.ts
+   Project Compass M1·D: the DOM-free import-wizard core. `runRmImport` folds the
+   full intake → convert → assemble pipeline onto a fresh base and attaches the
+   reopenable report; this spec proves it over both hand-authored fixtures (the
+   assembled project is bootable-clean, the report leads with the right counts and
+   carries the honest "coming later" / "left out" caveats), and that the zip reader
+   round-trips STORE + DEFLATE archives so the wizard's ".zip" intake matches a
+   picked folder. GPL-3.0-or-later (see LICENSE). */
+
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+import { beforeAll, describe, expect, it } from "vitest";
+import {
+  fsSource,
+  objectSource,
+  readZip,
+  runRmImport,
+  type FsReadFns,
+  type RmImportOutcome,
+} from "../src/editor/importers/mz";
+import { buildZip } from "../src/editor/export-web";
+import { isProjectLike, validateProject, type Project } from "../src/shared/schema";
+
+const root = (name: string): string =>
+  fileURLToPath(new URL("../tests/fixtures/" + name, import.meta.url));
+
+function walk(dir: string, base: string): string[] {
+  const out: string[] = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const abs = join(dir, e.name);
+    if (e.isDirectory()) out.push(...walk(abs, base));
+    else out.push(relative(base, abs).replace(/\\/g, "/"));
+  }
+  return out;
+}
+
+const nodeFns: FsReadFns = {
+  async listFiles(r) { return walk(r, r); },
+  async readText(abs) { return readFileSync(abs, "utf8"); },
+  async readBytes(abs) { return new Uint8Array(readFileSync(abs)); },
+  join: (r, rel) => join(r, rel),
+};
+
+// The shipped sample donates a real newProject()-shaped base in Node (the
+// wizard uses DataDefaults.newProject() in the browser).
+const freshBase = (): Project =>
+  JSON.parse(readFileSync(fileURLToPath(new URL("../Atlas_Quest.json", import.meta.url)), "utf8")) as Project;
+
+const enc = new TextEncoder();
+
+describe("runRmImport → a ready-to-load project + saved report", () => {
+  let mv: RmImportOutcome;
+  let mz: RmImportOutcome;
+
+  beforeAll(async () => {
+    mv = await runRmImport(fsSource(root("mv-project"), nodeFns), freshBase());
+    mz = await runRmImport(fsSource(root("mz-project"), nodeFns), freshBase());
+  });
+
+  it("assembles a bootable-clean project from the MZ fixture", () => {
+    const p = mz.project;
+    expect(isProjectLike(p)).toBe(true);
+    validateProject(p, "import"); // must not throw
+    expect(mz.format).toBe("mz");
+    expect(p.system.title).toBe("Cove Test");
+    expect(p.maps.map((m) => m.name)).toEqual(["Harbor", "Cave"]);
+    expect((p.meta as { formatVersion?: number }).formatVersion).toBe(2);
+  });
+
+  it("sniffs the MV fixture as MV and converts the same game", () => {
+    expect(mv.format).toBe("mv");
+    expect(mv.project.system.title).toBe("Cove Test");
+    expect(mv.project.maps.map((m) => m.name)).toEqual(["Harbor", "Cave"]);
+  });
+
+  it("attaches a report whose summary leads with what came along", () => {
+    const doc = mz.project.importReport;
+    expect(doc).toBeTruthy();
+    expect(doc).toBe(mz.report); // same object attached to the project
+    expect(doc!.source).toBe("mz");
+    expect(doc!.gameTitle).toBe("Cove Test");
+    const s = doc!.summary;
+    expect(s.maps).toBe(2);
+    expect(s.actors).toBe(2);
+    expect(s.enemies).toBe(2);
+    expect(s.troops).toBe(1);
+    expect(s.commonEvents).toBe(2);
+    expect(s.switches).toBe(3);
+    expect(s.variables).toBe(3);
+    expect(s.skills).toBeGreaterThanOrEqual(4);
+  });
+
+  it("keeps every honest caveat line (nothing dropped silently)", () => {
+    const kinds = new Set(mz.report.lines.map((l) => l.kind));
+    // The fixture deliberately exercises all three "not a clean 1:1" buckets.
+    expect(kinds.has("todo")).toBe(true); // e.g. damage formulas, terrain tags
+    expect(kinds.has("skipped")).toBe(true); // e.g. the Rusty Key key-item
+    // Copy is kid-friendly: no stack-trace / code noise in the detail text.
+    for (const l of mz.report.lines) {
+      if (l.detail) expect(l.detail).not.toMatch(/undefined|NaN|\bError\b|\.ts:/);
+    }
+    // The Luck stat is a locked skip and aggregates to one counted line.
+    const luk = mz.report.lines.find((l) => /luck/i.test(l.what));
+    expect(luk).toBeTruthy();
+    expect(luk!.count).toBeGreaterThan(0);
+  });
+
+  it("every imported map event page carries a cond object (engine invariant)", () => {
+    // map-runtime.ts pageActive() reads page.cond.* unguarded; editor-authored
+    // pages always have one, so imported pages must too or map load throws.
+    for (const map of mz.project.maps) {
+      for (const ev of map.events || []) {
+        for (const page of ev.pages) {
+          expect(page.cond, `${map.name} / ${ev.name}`).toBeTruthy();
+          expect(typeof page.cond).toBe("object");
+        }
+      }
+    }
+  });
+
+  it("MV and MZ import to the same map/database shape (format delta aside)", () => {
+    expect(mv.project.maps.length).toBe(mz.project.maps.length);
+    expect(mv.project.actors.length).toBe(mz.project.actors.length);
+    expect(mv.project.enemies.length).toBe(mz.project.enemies.length);
+  });
+});
+
+describe("readZip → the wizard's .zip intake", () => {
+  it("round-trips a STORE-method archive (the export-web writer's output)", async () => {
+    const files = {
+      "MyGame/data/System.json": '{"gameTitle":"Zip Test"}',
+      "MyGame/data/Actors.json": "[null,{}]",
+      "MyGame/img/pic.bin": new Uint8Array([1, 2, 3, 250, 0, 99]),
+    };
+    const zip = buildZip(Object.entries(files).map(([name, data]) => ({
+      name,
+      data: typeof data === "string" ? enc.encode(data) : data,
+    })));
+    const out = await readZip(zip);
+    expect(Object.keys(out).sort()).toEqual(Object.keys(files).sort());
+    expect(new TextDecoder().decode(out["MyGame/data/System.json"])).toContain("Zip Test");
+    expect(Array.from(out["MyGame/img/pic.bin"])).toEqual([1, 2, 3, 250, 0, 99]);
+  });
+
+  it("inflates a DEFLATE-method entry (ordinary zip tools)", async () => {
+    // Hand-roll a minimal single-entry zip with method 8 (deflate-raw).
+    const name = "data/System.json";
+    const body = enc.encode('{"gameTitle":"Deflate Test","note":"'.padEnd(400, "x") + '"}');
+    const comp = new Uint8Array(
+      await new Response(new Blob([body]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer(),
+    );
+    const nameBytes = enc.encode(name);
+    // Local header (30) + name + data; central dir (46) + name; EOCD (22).
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);
+    local.setUint16(8, 8, true); // method: DEFLATE
+    local.setUint32(18, comp.length, true); // compressed size
+    local.setUint32(22, body.length, true); // uncompressed size
+    local.setUint16(26, nameBytes.length, true);
+    const localOff = 0;
+    const dataOff = 30 + nameBytes.length;
+    const cenOff = dataOff + comp.length;
+    const cen = new DataView(new ArrayBuffer(46));
+    cen.setUint32(0, 0x02014b50, true);
+    cen.setUint16(10, 8, true); // method
+    cen.setUint32(20, comp.length, true);
+    cen.setUint32(24, body.length, true);
+    cen.setUint16(28, nameBytes.length, true);
+    cen.setUint32(42, localOff, true);
+    const eocdOff = cenOff + 46 + nameBytes.length;
+    const eocd = new DataView(new ArrayBuffer(22));
+    eocd.setUint32(0, 0x06054b50, true);
+    eocd.setUint16(8, 1, true); // entries on this disk
+    eocd.setUint16(10, 1, true); // total entries
+    eocd.setUint32(12, 46 + nameBytes.length, true); // central dir size
+    eocd.setUint32(16, cenOff, true); // central dir offset
+
+    const zip = new Uint8Array(eocdOff + 22);
+    zip.set(new Uint8Array(local.buffer), localOff);
+    zip.set(nameBytes, 30);
+    zip.set(comp, dataOff);
+    zip.set(new Uint8Array(cen.buffer), cenOff);
+    zip.set(nameBytes, cenOff + 46);
+    zip.set(new Uint8Array(eocd.buffer), eocdOff);
+
+    const out = await readZip(zip);
+    expect(new TextDecoder().decode(out[name])).toContain("Deflate Test");
+  });
+
+  it("feeds objectSource so a zip source imports like a folder", async () => {
+    // A real zip of the MZ fixture would strip its top folder; prove the
+    // objectSource path (no top folder) converts too.
+    const map: Record<string, string> = {};
+    for (const rel of walk(root("mz-project"), root("mz-project"))) {
+      if (/\.(json|js)$/i.test(rel) || /^Game\./i.test(rel)) map[rel] = readFileSync(join(root("mz-project"), rel), "utf8");
+    }
+    const outcome = await runRmImport(objectSource(map), freshBase());
+    expect(outcome.project.system.title).toBe("Cove Test");
+    expect(outcome.format).toBe("mz");
+  });
+});

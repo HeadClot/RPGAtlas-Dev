@@ -37,6 +37,7 @@ import { openEventSearcher } from "./tools/event-searcher";
 import { openResourceManager } from "./tools/resource-manager";
 import { openAssetBrowser } from "./tools/asset-browser";
 import { openCharGenerator } from "./tools/character-generator";
+import { openRmImportWizard, openSavedImportReport, hasImportReport } from "./importers/rm-import-wizard";
 import {
   openLanguageSettings, openPatchNotes, openKeyboardShortcuts, openHelp, openAbout,
 } from "./help";
@@ -92,6 +93,8 @@ act("new", { label: "New Project…", icon: "new", tip: "New project (resets to 
   });
 } });
 act("open", { label: "Open Project (.json)…", icon: "open", tip: "Open / import a project file", run() { $("import-file").click(); } });
+act("import-rm", { label: "Import from RPG Maker…", tip: "Bring your own RPG Maker MV or MZ game into RPGAtlas", run: openRmImportWizard });
+act("import-report", { label: "Import Report", tip: "Reopen the report from your last RPG Maker import", enabled: hasImportReport, run: openSavedImportReport });
 act("save", { label: "Save Project", icon: "save", key: "Ctrl+S",
   tip: host.isTauri ? "Save the project to its file" : "Save the project to this browser now",
   run() {
@@ -212,7 +215,7 @@ export function refreshToolbar() {
 }
 
 const MENUS = [
-  { label: "File", items: ["new", "open", "save", "export", "build", "-", "play"] },
+  { label: "File", items: ["new", "open", "import-rm", "save", "export", "build", "-", "import-report", "-", "play"] },
   { label: "Edit", items: ["undo", "redo", "-", "cut", "copy", "paste", "-", "deselect"] },
   { label: "Mode", items: ["mode-map", "mode-event", "mode-pass", "mode-height", "mode-region", "-", "mode-start"] },
   { label: "Draw", items: ["tool-pen", "tool-erase", "tool-rect", "tool-circle", "tool-fill", "tool-shadow"] },

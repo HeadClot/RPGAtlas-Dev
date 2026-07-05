@@ -199,3 +199,7 @@ export { convertTilesets, IMPORT_TILE_BASE } from "./convert-tilesets";
 export type { TilesetsConversion, TilesetUsage } from "./convert-tilesets";
 export { collectTilesetUsage, convertMap, convertMapData, convertMaps, MAX_REGION } from "./convert-maps";
 export { assembleProject } from "./assemble";
+// M1·D — the DOM-free wizard core + the zip intake helper.
+export { runRmImport, buildImportReportDoc } from "./import-run";
+export type { RmImportOutcome } from "./import-run";
+export { readZip } from "./zip-read";
