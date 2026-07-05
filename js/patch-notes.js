@@ -5,6 +5,21 @@
 export const PATCH_NOTES = [
   {
     date: "July 5, 2026",
+    title: "Change a hero's stats, jump around your events, and lock the menu — new event commands",
+    summary:
+      "A big batch of classic event commands lands: change a hero's EXP, level, stats, skills, equipment, name, class, nickname, profile, or status right from an event; make your own loops with Labels and Jump to Label; turn the menu, saving, encounters, or party-arranging on and off; recolour the windows; and read map info into a variable. Games imported from RPG Maker MV/MZ bring all of these across.",
+    items: [
+      "Change-hero commands: Change EXP, Change Level, Change Parameters (a permanent stat bonus), Change Skills (learn / forget), Change Equipment, Change Name, Change Class, Change Actor Image, Change Nickname, Change Profile, and Change State — each can target one hero or the whole party.",
+      "Labels & Jump to Label: drop a named Label in your command list and leap to it with Jump to Label — handy for building your own loops and skips.",
+      "Change Access: turn the pause Menu, Saving, random Encounters, or the Formation option on or off (greyed out in the menu while locked) — remembered in your save file.",
+      "Change Followers: show or hide the party members trailing behind the leader.",
+      "Change Window Color: recolour the message and menu windows for the rest of the game.",
+      "Get Location Info: read a map tile's region id, event id, or tile id into a variable.",
+      "Importing an RPG Maker MV/MZ game now converts all of these — re-import an older import to pick them up.",
+    ],
+  },
+  {
+    date: "July 5, 2026",
     title: "Fancier messages: text codes, number & item prompts, and a name-entry screen",
     summary:
       "Show Text learned the classic message tricks, and three new commands let the player type things back. Make text \\{bigger\\} or \\}smaller\\}, pause the typing with \\. and \\|, show the current gold with \\$, and more — plus you can now ask the player for a number, let them pick an item, or let them name a hero. Games imported from RPG Maker MV/MZ bring all of this across.",

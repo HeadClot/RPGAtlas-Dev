@@ -63,7 +63,12 @@ async function loadRegistry() {
     "switch", "var", "battle", "shop", "transfer", "commonEvent",
     "showPic", "movePic", "rotatePic", "tintPic", "erasePic", "tint",
     "timer", "scrollMap", "balloon", "scrollText",
-    "inputNumber", "selectItem", "nameInput"]) {
+    "inputNumber", "selectItem", "nameInput",
+    // M2·C: the change-actor-data family, flow labels, and system toggles.
+    "label", "jump", "changeExp", "changeLevel", "changeParam", "changeSkill",
+    "changeEquip", "changeName", "changeClass", "changeActorImage",
+    "changeNickname", "changeProfile", "changeState",
+    "access", "followers", "windowTone", "getLocationInfo"]) {
     assert.equal(
       typeof getCommand(type),
       "function",
@@ -115,6 +120,103 @@ async function loadRegistry() {
     assert.equal(msgOpts.background, 1, "text forwards the window background option");
     assert.equal(msgOpts.position, 0, "text forwards the window position option");
   }
+  // ---- Change-actor-data family + system toggles (M2·C) mutate live state ----
+  {
+    let toneApplied = "unset", follSynced = 0, charsetRefreshed = 0;
+    const astate = {
+      vars: {},
+      party: [{ actorId: 1, name: "Ann", level: 3, exp: 200, hp: 20, mp: 5, classId: 1, weaponId: 0, armorId: 0 }],
+    };
+    const asvc = {
+      param: (_a, stat) => (stat === "mhp" ? 30 : stat === "mmp" ? 10 : 5),
+      expForLevel: (lv) => (lv - 1) * 100, // toy curve: level N floor = (N-1)*100
+      gainExp: (a, amt) => { a.exp += amt; while (a.exp >= a.level * 100) a.level++; },
+      sanitizeEquipment: () => {},
+      refreshAllPages: () => {},
+      refreshPlayerCharset: () => { charsetRefreshed++; },
+      syncFollowers: () => { follSynced++; },
+      applyWindowTone: (t) => { toneApplied = t; },
+      locationInfo: (x, y, info) => (info === "region" ? 7 : 0),
+    };
+    const run = (cmd) => getCommand(cmd.t)(cmd, { interp: {}, state: astate, services: asvc });
+    const ann = astate.party[0];
+
+    await run({ t: "changeExp", actorId: 1, op: "add", value: 50 });
+    assert.equal(ann.exp, 250, "changeExp adds experience");
+    await run({ t: "changeParam", actorId: 1, param: "atk", op: "add", value: 6 });
+    assert.equal(ann.paramPlus.atk, 6, "changeParam records a permanent param bonus");
+    await run({ t: "changeName", actorId: 1, name: "Annette" });
+    assert.equal(ann.name, "Annette", "changeName renames the actor");
+    await run({ t: "changeState", actorId: 1, op: "add", stateId: 4 });
+    assert.ok(ann.states.includes(4), "changeState adds a state");
+    await run({ t: "changeState", actorId: 1, op: "remove", stateId: 4 });
+    assert.ok(!ann.states.includes(4), "changeState removes a state");
+    await run({ t: "changeSkill", actorId: 1, op: "learn", skillId: 9 });
+    assert.ok(ann.skills.includes(9), "changeSkill (learn) adds a skill");
+    await run({ t: "changeSkill", actorId: 1, op: "forget", skillId: 9 });
+    assert.ok(ann.forgot.includes(9) && !ann.skills.includes(9), "changeSkill (forget) suppresses a skill");
+    await run({ t: "changeEquip", actorId: 1, slot: "weapon", itemId: 4 });
+    assert.equal(ann.weaponId, 4, "changeEquip force-equips the slot");
+    await run({ t: "changeClass", actorId: 1, classId: 2 });
+    assert.equal(ann.classId, 2, "changeClass swaps the class");
+    await run({ t: "changeActorImage", actorId: 1, charset: "knight-1" });
+    assert.equal(ann.charset, "knight-1", "changeActorImage swaps the charset");
+    assert.ok(charsetRefreshed > 0 && follSynced > 0, "changeActorImage refreshes the on-map sprites");
+    await run({ t: "changeNickname", actorId: 1, nickname: "The Bold" });
+    assert.equal(ann.nickname, "The Bold", "changeNickname stores the nickname");
+
+    // whole-party target (actorId 0)
+    astate.party.push({ actorId: 2, name: "Bo", level: 1, exp: 0, hp: 5, mp: 1, classId: 1, weaponId: 0, armorId: 0 });
+    await run({ t: "changeState", actorId: 0, op: "add", stateId: 3 });
+    assert.ok(astate.party.every((a) => a.states && a.states.includes(3)), "actorId 0 targets the whole party");
+
+    await run({ t: "access", kind: "menu", enabled: false });
+    assert.equal(astate.menuDisabled, true, "access(menu, disable) locks the menu");
+    await run({ t: "access", kind: "save", enabled: true });
+    assert.equal(astate.saveDisabled, false, "access(save, enable) unlocks saving");
+    await run({ t: "followers", show: false });
+    assert.equal(astate.followersHidden, true, "followers(hide) sets the flag");
+    await run({ t: "windowTone", tone: [64, 96, 128] });
+    // (per-element: the tone array is built inside the vm realm, so a strict
+    // deep-equal against an outer-realm literal fails on prototype identity.)
+    assert.deepEqual(Array.from(astate.windowTone), [64, 96, 128], "windowTone stores the override");
+    assert.deepEqual(Array.from(toneApplied), [64, 96, 128], "windowTone applies the CSS tone");
+    await run({ t: "getLocationInfo", varId: 5, infoType: "region", x: 2, y: 3 });
+    assert.equal(astate.vars[5], 7, "getLocationInfo stores the read value in its variable");
+  }
+
+  // ---- Jump labels (M2·C): the runList contract seeks the target label ----
+  {
+    const jstate = { vars: {} };
+    const jsvc = { refreshAllPages() {}, evaluateQuestFailures() {}, waitFrames: async () => {}, rnd: () => 0 };
+    const interp = {
+      breakLoop: false, jumpLabel: null, jumpSpins: 0,
+      async exec(c) { const handler = getCommand(c.t); if (handler) await handler(c, { interp: this, state: jstate, services: jsvc }); },
+      async runList(list) {
+        const arr = list || [];
+        for (let i = 0; i < arr.length; i++) {
+          await this.exec(arr[i]);
+          if (this.breakLoop) return;
+          if (this.jumpLabel != null) {
+            const idx = arr.findIndex((cmd) => cmd && cmd.t === "label" && String(cmd.name) === this.jumpLabel);
+            if (idx < 0) return;
+            this.jumpLabel = null;
+            i = idx;
+          }
+        }
+      },
+    };
+    await interp.runList([
+      { t: "var", id: 1, op: "set", val: 1 },
+      { t: "jump", name: "End" },
+      { t: "var", id: 1, op: "set", val: 99 }, // skipped
+      { t: "label", name: "End" },
+      { t: "var", id: 2, op: "set", val: 2 },
+    ]);
+    assert.equal(jstate.vars[1], 1, "jump skips the commands between it and the target label");
+    assert.equal(jstate.vars[2], 2, "execution resumes just after the target label");
+  }
+
   // Unknown command types resolve to undefined — the interpreter's silent-skip
   // (the old switch `default` when no plugin handler existed).
   assert.equal(getCommand("no-such-command"), undefined,

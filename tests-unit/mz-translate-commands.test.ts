@@ -60,8 +60,8 @@ const SPEC: Row[] = [
   { code: 113, name: "Break Loop", list: [c(113)], expect: { first: "breakLoop" } },
   { code: 115, name: "Exit Event", list: [c(115)], expect: { todo: 115 } },
   { code: 117, name: "Common Event", list: [c(117, [1])], expect: { first: "commonEvent" } },
-  { code: 118, name: "Label", list: [c(118, ["x"])], expect: { todo: 118 } },
-  { code: 119, name: "Jump to Label", list: [c(119, ["x"])], expect: { todo: 119 } },
+  { code: 118, name: "Label", list: [c(118, ["x"])], expect: { first: "label" } },
+  { code: 119, name: "Jump to Label", list: [c(119, ["x"])], expect: { first: "jump" } },
   // §8.3 party / progression
   { code: 121, name: "Control Switches", list: [c(121, [3, 3, 0])], expect: { first: "switch" } },
   { code: 122, name: "Control Variables", list: [c(122, [1, 1, 0, 0, 5])], expect: { first: "var" } },
@@ -75,11 +75,11 @@ const SPEC: Row[] = [
   // §8.4 system settings → all M2·C / M4·B / report placeholders
   { code: 132, name: "Change Battle BGM", list: [c(132, [{ name: "B" }])], expect: { todo: 132 } },
   { code: 133, name: "Change Victory ME", list: [c(133, [{ name: "V" }])], expect: { todo: 133 } },
-  { code: 134, name: "Change Save Access", list: [c(134, [0])], expect: { todo: 134 } },
-  { code: 135, name: "Change Menu Access", list: [c(135, [0])], expect: { todo: 135 } },
-  { code: 136, name: "Change Encounter", list: [c(136, [0])], expect: { todo: 136 } },
-  { code: 137, name: "Change Formation Access", list: [c(137, [0])], expect: { todo: 137 } },
-  { code: 138, name: "Change Window Color", list: [c(138, [[0, 0, 0]])], expect: { todo: 138 } },
+  { code: 134, name: "Change Save Access", list: [c(134, [0])], expect: { first: "access" } },
+  { code: 135, name: "Change Menu Access", list: [c(135, [0])], expect: { first: "access" } },
+  { code: 136, name: "Change Encounter", list: [c(136, [0])], expect: { first: "access" } },
+  { code: 137, name: "Change Formation Access", list: [c(137, [0])], expect: { first: "access" } },
+  { code: 138, name: "Change Window Color", list: [c(138, [[0, 0, 0]])], expect: { first: "windowTone" } },
   { code: 139, name: "Change Defeat ME", list: [c(139, [{ name: "D" }])], expect: { todo: 139 } },
   { code: 140, name: "Change Vehicle BGM", list: [c(140, [0, { name: "V" }])], expect: { todo: 140 } },
   // §8.5 movement & map
@@ -93,13 +93,13 @@ const SPEC: Row[] = [
   { code: 212, name: "Show Animation", list: [c(212, [-1, 3, true])], expect: { first: "playAnim" } },
   { code: 213, name: "Show Balloon Icon", list: [c(213, [-1, 1, false])], expect: { first: "balloon" } },
   { code: 214, name: "Erase Event", list: [c(214)], expect: { first: "erase" } },
-  { code: 216, name: "Change Followers", list: [c(216, [0])], expect: { todo: 216 } },
+  { code: 216, name: "Change Followers", list: [c(216, [0])], expect: { first: "followers" } },
   { code: 217, name: "Gather Followers", list: [c(217)], expect: { drop: true } },
   { code: 281, name: "Change Map Name Display", list: [c(281, [0])], expect: { drop: true } },
   { code: 282, name: "Change Tileset", list: [c(282, [2])], expect: { todo: 282 } },
   { code: 283, name: "Change Battle Back", list: [c(283, ["b1", "b2"])], expect: { todo: 283 } },
   { code: 284, name: "Change Parallax", list: [c(284, ["p"])], expect: { todo: 284 } },
-  { code: 285, name: "Get Location Info", list: [c(285, [1, 0, 0, 0])], expect: { todo: 285 } },
+  { code: 285, name: "Get Location Info", list: [c(285, [1, 5, 0, 0, 0])], expect: { first: "getLocationInfo" } },
   // §8.6 screen effects
   { code: 221, name: "Fadeout Screen", list: [c(221)], expect: { first: "tint" } },
   { code: 222, name: "Fadein Screen", list: [c(222)], expect: { first: "tint" } },
@@ -137,19 +137,19 @@ const SPEC: Row[] = [
   // §8.11 actor/party data
   { code: 311, name: "Change HP (party+const)", list: [c(311, [0, 0, 0, 0, 50, false])], expect: { first: "heal" } },
   { code: 312, name: "Change MP (party+const)", list: [c(312, [0, 0, 0, 0, 20])], expect: { first: "heal" } },
-  { code: 313, name: "Change State", list: [c(313, [0, 0, 0, 1])], expect: { todo: 313 } },
+  { code: 313, name: "Change State", list: [c(313, [0, 0, 0, 1])], expect: { first: "changeState" } },
   { code: 314, name: "Recover All", list: [c(314, [0, 0])], expect: { first: "heal" } },
-  { code: 315, name: "Change EXP", list: [c(315, [0, 1, 0, 0, 100])], expect: { todo: 315 } },
-  { code: 316, name: "Change Level", list: [c(316, [0, 1, 0, 0, 1])], expect: { todo: 316 } },
-  { code: 317, name: "Change Parameters", list: [c(317, [0, 1, 0, 0, 0, 10])], expect: { todo: 317 } },
-  { code: 318, name: "Change Skills", list: [c(318, [0, 1, 0, 1])], expect: { todo: 318 } },
-  { code: 319, name: "Change Equipment", list: [c(319, [1, 0, 1])], expect: { todo: 319 } },
-  { code: 320, name: "Change Name", list: [c(320, [1, "X"])], expect: { todo: 320 } },
-  { code: 321, name: "Change Class", list: [c(321, [1, 2, false])], expect: { todo: 321 } },
-  { code: 322, name: "Change Actor Images", list: [c(322, [1, "F", 0, "C", 0])], expect: { todo: 322 } },
+  { code: 315, name: "Change EXP", list: [c(315, [0, 1, 0, 0, 100])], expect: { first: "changeExp" } },
+  { code: 316, name: "Change Level", list: [c(316, [0, 1, 0, 0, 1])], expect: { first: "changeLevel" } },
+  { code: 317, name: "Change Parameters", list: [c(317, [0, 1, 0, 0, 0, 10])], expect: { first: "changeParam" } },
+  { code: 318, name: "Change Skills", list: [c(318, [0, 1, 0, 1])], expect: { first: "changeSkill" } },
+  { code: 319, name: "Change Equipment", list: [c(319, [1, 0, 1])], expect: { first: "changeEquip" } },
+  { code: 320, name: "Change Name", list: [c(320, [1, "X"])], expect: { first: "changeName" } },
+  { code: 321, name: "Change Class", list: [c(321, [1, 2, false])], expect: { first: "changeClass" } },
+  { code: 322, name: "Change Actor Images", list: [c(322, [1, "F", 0, "C", 0])], expect: { first: "changeActorImage" } },
   { code: 323, name: "Change Vehicle Image", list: [c(323, [0, "V", 0])], expect: { todo: 323 } },
-  { code: 324, name: "Change Nickname", list: [c(324, [1, "N"])], expect: { todo: 324 } },
-  { code: 325, name: "Change Profile", list: [c(325, [1, "P"])], expect: { todo: 325 } },
+  { code: 324, name: "Change Nickname", list: [c(324, [1, "N"])], expect: { first: "changeNickname" } },
+  { code: 325, name: "Change Profile", list: [c(325, [1, "P"])], expect: { first: "changeProfile" } },
   { code: 326, name: "Change TP", list: [c(326, [0, 1, 0, 0, 10])], expect: { todo: 326 } },
   // §8.12 enemy/battle in-troop
   { code: 331, name: "Change Enemy HP", list: [c(331, [0, 0, 0, 20])], expect: { todo: 331 } },
@@ -366,6 +366,66 @@ describe("real translations carry their fields (matrix §8)", () => {
     expect(plain.background).toBeUndefined();
     expect(plain.position).toBeUndefined();
   });
+
+  // ---- M2·C actor/flow/system flips (matrix §8.2/§8.4/§8.5/§8.11, §16) ----
+  it("118/119 label + jump carry the label name", () => {
+    expect(t0([c(118, ["Loop"])])).toEqual({ t: "label", name: "Loop" });
+    expect(t0([c(119, ["Loop"])])).toEqual({ t: "jump", name: "Loop" });
+  });
+  it("134–137 access toggles map kind + polarity (RM 'Enable' = index 0)", () => {
+    expect(t0([c(134, [0])])).toEqual({ t: "access", kind: "save", enabled: true });
+    expect(t0([c(135, [1])])).toEqual({ t: "access", kind: "menu", enabled: false });
+    expect((t0([c(136, [0])]) as any).kind).toBe("encounter");
+    expect((t0([c(137, [1])]) as any)).toMatchObject({ kind: "formation", enabled: false });
+  });
+  it("138 window color keeps the [r,g,b] tone", () => {
+    expect(t0([c(138, [[64, 96, 128]])])).toEqual({ t: "windowTone", tone: [64, 96, 128] });
+  });
+  it("216 followers map show/hide (RM 'Show' = index 0)", () => {
+    expect(t0([c(216, [0])])).toEqual({ t: "followers", show: true });
+    expect((t0([c(216, [1])]) as any).show).toBe(false);
+  });
+  it("285 get location info maps info type + coordinates", () => {
+    expect(t0([c(285, [3, 5, 0, 7, 9])])).toEqual({ t: "getLocationInfo", varId: 3, infoType: "region", x: 7, y: 9 });
+    expect((t0([c(285, [1, 1, 0, 2, 2])]) as any).infoType).toBe("eventId");
+  });
+  it("313 change state maps add/remove + whole-party (actorId 0)", () => {
+    expect(t0([c(313, [0, 0, 0, 4])])).toEqual({ t: "changeState", actorId: 0, op: "add", stateId: 4 });
+    expect(t0([c(313, [0, 2, 1, 4])])).toEqual({ t: "changeState", actorId: 2, op: "remove", stateId: 4 });
+  });
+  it("315/316 exp + level map op/value; a variable amount → mzTodo", () => {
+    expect(t0([c(315, [0, 1, 0, 0, 100])])).toEqual({ t: "changeExp", actorId: 1, op: "add", value: 100 });
+    expect(t0([c(316, [0, 1, 1, 0, 2])])).toEqual({ t: "changeLevel", actorId: 1, op: "sub", value: 2 });
+    expect((t0([c(315, [0, 1, 0, 1, 3])]) as any).t).toBe("mzTodo"); // variable operand
+  });
+  it("317 change parameters maps the param key; luk is skipped", () => {
+    expect(t0([c(317, [0, 1, 2, 0, 0, 10])])).toEqual({ t: "changeParam", actorId: 1, param: "atk", op: "add", value: 10 });
+    const { cmds, report } = tr([c(317, [0, 1, 7, 0, 0, 10])]); // param 7 = luk (no Atlas home)
+    expect(cmds).toHaveLength(0);
+    expect(report.lines.some((l) => l.what === "changing luck")).toBe(true);
+  });
+  it("318 change skills maps learn/forget", () => {
+    expect(t0([c(318, [0, 1, 0, 8])])).toEqual({ t: "changeSkill", actorId: 1, op: "learn", skillId: 8 });
+    expect((t0([c(318, [0, 1, 1, 8])]) as any).op).toBe("forget");
+  });
+  it("319 change equipment maps slot 0→weapon, ≥1→armor", () => {
+    expect(t0([c(319, [1, 0, 5])])).toEqual({ t: "changeEquip", actorId: 1, slot: "weapon", itemId: 5 });
+    expect((t0([c(319, [1, 2, 6])]) as any).slot).toBe("armor");
+  });
+  it("320/324/325 name/nickname/profile carry text", () => {
+    expect(t0([c(320, [1, "Mara"])])).toEqual({ t: "changeName", actorId: 1, name: "Mara" });
+    expect(t0([c(324, [1, "The Bold"])])).toEqual({ t: "changeNickname", actorId: 1, nickname: "The Bold" });
+    expect(t0([c(325, [1, "A hero."])])).toEqual({ t: "changeProfile", actorId: 1, profile: "A hero." });
+  });
+  it("321 change class carries the class id", () => {
+    expect(t0([c(321, [1, 3, true])])).toEqual({ t: "changeClass", actorId: 1, classId: 3 });
+  });
+  it("322 change actor image folds name+index into a charset key", () => {
+    expect(t0([c(322, [1, "Face", 0, "Hero", 2])])).toEqual({ t: "changeActorImage", actorId: 1, charset: "hero-2" });
+  });
+  it("a variable-designated actor (designation 1) → mzTodo", () => {
+    expect((t0([c(315, [1, 5, 0, 0, 100])]) as any).t).toBe("mzTodo");
+  });
 });
 
 // ============================================================================
@@ -406,20 +466,21 @@ describe("message escape codes pass through verbatim (matrix §13)", () => {
 // mzTodo shape (decision D3).
 // ============================================================================
 describe("mzTodo placeholder shape (D3)", () => {
-  // Codes 313 (Change State) / 315 (Change EXP) stay mzTodo until M2·C, so they
-  // still exercise the shape (103/104/303 flipped to real commands in M2·B).
+  // Codes 331 (Change Enemy HP) / 332 (Change Enemy MP) stay mzTodo until M3·C,
+  // so they still exercise the shape (313/315–325 flipped to real commands in
+  // M2·C alongside 103/104/303 from M2·B).
   it("preserves the raw code + params and carries a friendly label", () => {
-    const cmd = t0([c(313, [0, 0, 0, 1])]) as any;
-    expect(cmd).toMatchObject({ t: "mzTodo", code: 313 });
-    expect(cmd.params).toEqual([0, 0, 0, 1]);
+    const cmd = t0([c(331, [0, 0, 0, 20])]) as any;
+    expect(cmd).toMatchObject({ t: "mzTodo", code: 331 });
+    expect(cmd.params).toEqual([0, 0, 0, 20]);
     expect(typeof cmd.label).toBe("string");
     expect(cmd.label.length).toBeGreaterThan(0);
   });
   it("aggregates repeats into one report line (D11) with the raw code", () => {
-    const { report } = tr([c(313, []), c(313, []), c(315, [])]);
-    const state = report.lines.find((l) => l.code === 313);
+    const { report } = tr([c(331, []), c(331, []), c(332, [])]);
+    const state = report.lines.find((l) => l.code === 331);
     expect(state?.count).toBe(2);
-    expect(report.lines.find((l) => l.code === 315)?.count).toBe(1);
+    expect(report.lines.find((l) => l.code === 332)?.count).toBe(1);
   });
 });
 

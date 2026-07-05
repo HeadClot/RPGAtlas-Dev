@@ -246,3 +246,118 @@ command (storing only the non-defaults) instead of emitting an M2·B `todo` repo
   - Scope note: `\px`/`\py` in-window pixel positioning is intentionally not modeled (Atlas
     messages use flow layout) — stripped, not reported, since the text still reads correctly.
     Input scenes are map-scene UI (transient, not saved), matching RM.
+
+---
+
+## M2·C — Actor/party command family + flow control + system toggles
+
+**Scope (matrix §8.2/§8.4/§8.5/§8.11 + §16 "M2·C — actor/flow/system"):** the
+change-actor-data family (RM **313**, **315–325**), jump **Labels** (118/119), the map-system
+access toggles (**134–137**), Change **Window Color** (138), Change Player **Followers** (216),
+and **Get Location Info** (285). Each new command is additive to `AnyCommand`; the actor fields
+(nickname/profile/paramPlus/skills/forgot/states) and system flags add optional data only
+(FORMAT_VERSION stays 2). The matching `translate-commands.ts` rows flip from `mzTodo` to real
+translations in the same step.
+
+### New commands (all additive to `AnyCommand` — 66 built-ins + `mzTodo`)
+
+| `t` | RM code(s) | Purpose |
+|---|---|---|
+| `label` / `jump` | 118 / 119 | A named jump target and a jump-to-label (build-your-own loops/skips) |
+| `changeExp` | 315 | Add/subtract EXP (levels rise across curve thresholds, learning class skills) |
+| `changeLevel` | 316 | Add/subtract levels (EXP snaps to the level floor) |
+| `changeParam` | 317 | A permanent additive bonus to one base param (`luk` is a locked skip) |
+| `changeSkill` | 318 | Learn/forget a skill (extra-learned or suppressed on top of class learnings) |
+| `changeEquip` | 319 | Force-equip a weapon/armor slot (slot 0 = weapon, ≥1 = armor) |
+| `changeName` | 320 | Rename an actor |
+| `changeClass` | 321 | Change class (Atlas keeps the level) |
+| `changeActorImage` | 322 | Swap the map/face charset (Atlas faces derive from the charset) |
+| `changeNickname` / `changeProfile` | 324 / 325 | Set nickname / profile text (new party-member fields) |
+| `changeState` | 313 | Add/remove a state outside battle |
+| `access` | 134/135/136/137 | Toggle menu / save / encounter / formation access (one command, `kind`) |
+| `followers` | 216 | Show/hide the follower trail |
+| `windowTone` | 138 | Live window-colour override (`[r,g,b]`) |
+| `getLocationInfo` | 285 | Read region / event id / tile id at a tile into a variable |
+
+### Engine architecture
+
+- **`commands/actors.ts`** (new) owns the change-actor handlers. A shared `forEachActor(state,
+  actorId, fn)` applies to one member or the whole party (`actorId` 0). EXP/level/param math runs
+  through the game-state helpers exposed on the service surface (`gainExp`, `expForLevel`,
+  `param`, `sanitizeEquipment`), so the curve + skill-learning logic stays in one place; current
+  HP/MP are re-clamped after any stat change. `game-state.ts` `param()` now adds an optional
+  `a.paramPlus[stat]`, and `learnedSkills()` folds in `a.skills` (learned) minus `a.forgot`
+  (forgotten) — both absent on untouched actors, so pre-M2·C output is identical.
+- **`commands/system.ts`** (new) owns the access toggles + window tone + get-location-info. The
+  access flags live on `G` (round-tripped in saves); render-glue gates followers on
+  `!G.followersHidden`, `map.ts` gates the encounter roll on `!G.encounterDisabled`, and
+  `menus.ts` gates the pause menu (open) + greys out its Save/Formation entries. `windowTone`
+  writes the four `--win-*-rgb` CSS vars via new `state/window-tone.ts` (mirrors boot's
+  `applyScreenSettings`); `getLocationInfo` delegates to `map-runtime.locationInfo()`.
+- **Flow labels:** `interp.ts` `runList` is now index-based — a `jump` sets `interp.jumpLabel`,
+  runList seeks the matching `label` in the current list (resume after it) or unwinds to an
+  enclosing list; the `loop` handler stops on a pending jump, and `callCommonEvent` clears an
+  unresolved jump so it never leaks across the common-event boundary. A spin valve on `jump`
+  (like `loop`) keeps a wait-less backward jump from freezing the tab.
+- **Save/load:** the six system flags round-trip through a `sysFlags` block in the save (old
+  saves → all enabled, no override; the saved window colour re-applies on load). Actor field
+  additions round-trip automatically (the whole `G.party` is serialized). `newGame` resets the
+  flags and clears the window override.
+
+### Flip (translate-commands.ts)
+
+118/119 → `label`/`jump`; 134–137 → `access` (RM "Enable" = index 0); 138 → `windowTone`;
+216 → `followers`; 285 → `getLocationInfo` (region/event/tile; terrain reads 0); 313 →
+`changeState`; 315/316 → `changeExp`/`changeLevel`; 317 → `changeParam` (`luk` param 7 → report
++ drop); 318 → `changeSkill`; 319 → `changeEquip`; 320/324/325 → name/nickname/profile; 321 →
+`changeClass`; 322 → `changeActorImage` (charName+index → charset key). A variable-designated
+actor or a variable value operand (315/316/317) → `mzTodo` + report (only constant operands map,
+matching Control Variables/gold). Those codes are removed from the `TODO` table. Codes 331/332
+(enemy commands, M3·C) now exercise the D3 `mzTodo`-shape tests.
+
+### Tests
+
+- **vitest** `mz-translate-commands.test.ts`: the SPEC rows for 118/119/134–138/216/285/313/
+  315–325 flip from `{ todo }` to `{ first: <t> }`; the D3 mzTodo-shape tests re-point at 331/332;
+  a new M2·C field-fidelity block (kind/polarity, op/value, param key + `luk` skip, slot mapping,
+  charset fold, variable-designation → mzTodo). **169 tests.**
+- **node --test** `interpreter.test.js`: the new handlers register; a driver mutates a live party
+  (exp/param/name/state/skill/equip/class/image/nickname + whole-party target), sets the access/
+  followers/window-tone/get-location-info state, and a mini-interp mirrors the `runList` contract
+  to prove a jump skips to its label.
+
+### Deferred within M2·C (consciously report-backed, graded at M6·C)
+
+- **122 game-data operands** (item counts, actor params, map x/y into a variable) stay `mzTodo` +
+  report — needs a variable-source model beyond const/rnd/var; a later refinement.
+- **311/312 targeted HP/MP** (single actor / variable amount) stay `mzTodo` + report; the
+  party-wide constant heal maps (M1·C).
+- **Condition refinements** (var-vs-var branch operand, actor class/skill/state checks) stay
+  report-backed — Atlas's `Condition` has no two-variable or actor-class/state check yet.
+- **Change Actor Images face** — Atlas uses one charset for map sprite + face, so the RM face
+  picture is approximated by the charset (one honest "add the art" report line).
+- **Move-route step 41 (Change Image)** — folded into the existing route "simplified" report.
+
+### Stage log
+
+- **2026-07-05 — M2·C complete (branch `mig-2c`).** Shipped the actor-data command family, flow
+  labels, and system toggles:
+  - Schema: 20 additive `Cmd*` interfaces (`label`/`jump`, `changeExp`/`changeLevel`/`changeParam`/
+    `changeSkill`/`changeEquip`/`changeName`/`changeClass`/`changeActorImage`/`changeNickname`/
+    `changeProfile`/`changeState`, `access`/`followers`/`windowTone`/`getLocationInfo`) → 66
+    built-ins + `mzTodo`; no required fields, FORMAT_VERSION stays 2.
+  - Engine: new `commands/actors.ts` + `commands/system.ts` + `state/window-tone.ts`;
+    `game-state.param()`/`learnedSkills()` fold in optional per-actor `paramPlus`/`skills`/`forgot`;
+    `interp.runList` index-based with `jumpLabel` seek + common-event-boundary clear; render-glue
+    (followers), `map.ts` (encounter), `menus.ts` (menu open + Save/Formation greyed) gate on the
+    new `G` flags; `map-runtime.locationInfo()`; save/`newGame` round-trip + reset the `sysFlags`.
+  - Editor: 20 `CMD_DEFS` forms + `cmdSummary` cases (an actor dropdown with "Entire Party", a
+    param list, a window-colour picker, access/followers/get-location-info forms).
+  - Flip: `translate-commands.ts` codes 118/119/134–138/216/285/313/315–325 → real commands, with
+    honest reports for variable-designated actors/values, `luk`, and the actor-image art; removed
+    from the `TODO` table. Codes 323/326/331+ stay `mzTodo`.
+  - Tests: `mz-translate-commands.test.ts` (169) + `interpreter.test.js` extended. **All green:**
+    typecheck, eslint, 18 node tests, 684 vitest, 69 Playwright (map 1 untouched, 0 regressions).
+  - Patch notes added; `patch-notes.js?v=47→48` bumped in `help.ts` + `shims.d.ts`. Wiki
+    `Events.md` command reference gains the actor / flow-label / system rows.
+  - **Phase M2 exit — tag `mig-2`.**

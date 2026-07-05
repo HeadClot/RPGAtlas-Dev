@@ -22,6 +22,7 @@
 
 import type { AnyCommand, Condition } from "../../../shared/schema";
 import { assetKeyOf, slugName } from "../../../shared/asset-library";
+import { slugKey, paramKey } from "./slug";
 import type { CommandTranslator } from "./convert-events";
 import type { ImportReport, ReportKind } from "./report";
 import type { RmCommand, RmMoveRoute } from "./raw-types";
@@ -35,21 +36,13 @@ import type { RmCommand, RmMoveRoute } from "./raw-types";
 // ---------------------------------------------------------------------------
 interface TodoInfo { what: string; detail: string; }
 const TODO: Record<number, TodoInfo> = {
-  118: { what: "a jump label", detail: "labels and jumps arrive in a later update (M2·C)" },
-  119: { what: "jumping to a label", detail: "labels and jumps arrive in a later update (M2·C)" },
   132: { what: "changing the battle music", detail: "swapping the battle music from an event arrives in a later update" },
   133: { what: "changing the victory music", detail: "swapping the victory jingle arrives in a later update (M4·B)" },
-  134: { what: "turning saving on or off", detail: "locking the save menu arrives in a later update (M2·C)" },
-  135: { what: "turning the menu on or off", detail: "locking the menu arrives in a later update (M2·C)" },
-  136: { what: "turning random battles on or off", detail: "toggling encounters arrives in a later update (M2·C)" },
-  137: { what: "turning party-arranging on or off", detail: "locking the formation menu arrives in a later update (M2·C)" },
-  138: { what: "changing the window color", detail: "recoloring the message window arrives in a later update (M2·C)" },
   139: { what: "changing the defeat music", detail: "swapping the defeat jingle arrives in a later update (M4·B)" },
   140: { what: "changing a vehicle's music", detail: "swapping a vehicle's music arrives in a later update" },
   202: { what: "moving a vehicle", detail: "placing a boat/ship/airship from an event arrives in a later update (M4·A)" },
   203: { what: "moving another event", detail: "teleporting an event to a spot arrives in a later update" },
   206: { what: "getting on or off a vehicle", detail: "the board/exit-vehicle command arrives in a later update (M4·A)" },
-  216: { what: "showing or hiding followers", detail: "toggling the follower trail arrives in a later update (M2·C)" },
   243: { what: "remembering the music", detail: "save/resume-music arrives in a later update (M4·B)" },
   244: { what: "bringing the music back", detail: "save/resume-music arrives in a later update (M4·B)" },
   245: { what: "playing a background sound", detail: "looping background sounds arrive in a later update (M4·B)" },
@@ -59,21 +52,7 @@ const TODO: Record<number, TodoInfo> = {
   282: { what: "changing the tileset", detail: "swapping a map's tileset arrives in a later update (M4·A)" },
   283: { what: "changing the battle background", detail: "custom battle backgrounds arrive in a later update (M4·A)" },
   284: { what: "changing the parallax", detail: "scrolling background pictures arrive in a later update (M4·A)" },
-  285: { what: "reading tile info", detail: "the get-location-info command arrives in a later update (M2·C)" },
-  303: { what: "letting the player type a name", detail: "the name-entry screen arrives in a later update (M2·B)" },
-  313: { what: "adding or removing a status", detail: "changing a hero's status outside battle arrives in a later update (M2·C)" },
-  315: { what: "changing EXP", detail: "changing a hero's EXP arrives in a later update (M2·C)" },
-  316: { what: "changing level", detail: "changing a hero's level arrives in a later update (M2·C)" },
-  317: { what: "changing stats", detail: "changing a hero's stats arrives in a later update (M2·C)" },
-  318: { what: "changing skills", detail: "teaching or removing skills arrives in a later update (M2·C)" },
-  319: { what: "changing equipment", detail: "changing a hero's gear from an event arrives in a later update (M2·C)" },
-  320: { what: "changing a hero's name", detail: "renaming a hero arrives in a later update (M2·C)" },
-  321: { what: "changing class", detail: "changing a hero's class arrives in a later update (M2·C)" },
-  322: { what: "changing a hero's picture", detail: "swapping a hero's sprite/face arrives in a later update (M2·C)" },
   323: { what: "changing a vehicle's picture", detail: "swapping a vehicle's sprite arrives in a later update (M4·A)" },
-  324: { what: "changing a nickname", detail: "changing a hero's nickname arrives in a later update (M2·C)" },
-  325: { what: "changing a profile", detail: "changing a hero's profile arrives in a later update (M2·C)" },
-  // 303 (Name Input) flips to a real command in M2·B — see dispatch below.
   326: { what: "changing TP", detail: "the TP system arrives in a later update (M3·B)" },
   331: { what: "changing an enemy's HP", detail: "in-battle enemy commands arrive in a later update (M3·C)" },
   332: { what: "changing an enemy's MP", detail: "in-battle enemy commands arrive in a later update (M3·C)" },
@@ -187,6 +166,8 @@ class Translator {
       case 115: this.bump("cmd-exit", "partial", "stopping the event early", "Atlas keeps running the rest of the event after this point", 115);
                 out.push({ t: "mzTodo", code: 115, params: p, label: "Stop this event here — Atlas keeps going" }); return;
       case 117: out.push({ t: "commonEvent", commonEventId: num(p[0]) }); return;
+      case 118: out.push({ t: "label", name: String(p[0] ?? "") }); return;
+      case 119: out.push({ t: "jump", name: String(p[0] ?? "") }); return;
       // ---- §8.3 party / progression ----
       case 121: this.controlSwitches(p, out); return;
       case 122: this.controlVariables(c, out); return;
@@ -197,6 +178,13 @@ class Translator {
       case 127: this.changeItem(c, "weapon", out); return;
       case 128: this.changeItem(c, "armor", out); return;
       case 129: out.push({ t: "party", op: p[1] === 0 ? "add" : "remove", actorId: num(p[0]) }); return;
+      // ---- §8.4 system settings (access toggles + window color) ----
+      // RM's access dialogs list "Enable" first (index 0); param 0 = enabled.
+      case 134: out.push({ t: "access", kind: "save", enabled: num(p[0]) === 0 }); return;
+      case 135: out.push({ t: "access", kind: "menu", enabled: num(p[0]) === 0 }); return;
+      case 136: out.push({ t: "access", kind: "encounter", enabled: num(p[0]) === 0 }); return;
+      case 137: out.push({ t: "access", kind: "formation", enabled: num(p[0]) === 0 }); return;
+      case 138: out.push({ t: "windowTone", tone: [num((p[0] || [])[0]), num((p[0] || [])[1]), num((p[0] || [])[2])] }); return;
       // ---- §8.5 movement & map ----
       case 201: this.transfer(c, out); return;
       case 204: out.push({ t: "scrollMap", dir: SCROLL_DIR[num(p[0])] || "right", distance: num(p[1]), speed: num(p[2]) || 4, wait: true }); return;
@@ -205,6 +193,8 @@ class Translator {
       case 212: out.push({ t: "playAnim", animationId: num(p[1]), target: p[0] === -1 ? "player" : "this", wait: true }); return;
       case 213: out.push({ t: "balloon", target: num(p[0]) === -1 ? "player" : num(p[0]) === 0 ? "this" : num(p[0]), balloonId: num(p[1]) || 1, wait: !!p[2] }); return;
       case 214: out.push({ t: "erase" }); return;
+      case 216: out.push({ t: "followers", show: num(p[0]) === 0 }); return; // RM "Show" is index 0
+      case 285: this.getLocationInfo(c, out); return;
       // ---- §8.6 screen effects ----
       case 221: out.push({ t: "tint", tone: [-255, -255, -255, 0], frames: 24, wait: true }); return; // Fadeout → fade to black
       case 222: out.push({ t: "tint", tone: [0, 0, 0, 0], frames: 24, wait: true }); return;             // Fadein → back to normal
@@ -231,10 +221,21 @@ class Translator {
       case 352: out.push({ t: "save" }); return;
       case 353: out.push({ t: "gameover" }); return;
       case 354: out.push({ t: "totitle" }); return;
-      // ---- §8.11 actor/party data ----
+      // ---- §8.11 actor/party data (the "change" family) ----
       case 311: this.changeHpMp(c, "hp", out); return;
       case 312: this.changeHpMp(c, "mp", out); return;
+      case 313: this.changeState(c, out); return;
       case 314: this.recoverAll(c, out); return;
+      case 315: this.changeExpLevel(c, out, "exp"); return;
+      case 316: this.changeExpLevel(c, out, "level"); return;
+      case 317: this.changeParam(c, out); return;
+      case 318: this.changeSkill(c, out); return;
+      case 319: out.push({ t: "changeEquip", actorId: num(p[0]), slot: num(p[1]) === 0 ? "weapon" : "armor", itemId: num(p[2]) }); return;
+      case 320: out.push({ t: "changeName", actorId: num(p[0]), name: String(p[1] ?? "") }); return;
+      case 321: this.changeClass(c, out); return;
+      case 322: this.changeActorImage(c, out); return;
+      case 324: out.push({ t: "changeNickname", actorId: num(p[0]), nickname: String(p[1] ?? "") }); return;
+      case 325: out.push({ t: "changeProfile", actorId: num(p[0]), profile: String(p[1] ?? "") }); return;
       // ---- §8.10 battle-result branch openers (siblings after 301) ----
       case 601: case 602: case 603:
         out.push(this.todoCmd(c)); this.branchThen(indent); return; // consume+discard the branch body (M3·C)
@@ -439,6 +440,94 @@ class Translator {
     const p = (c.parameters as any[]) || [];
     if (num(p[1]) !== 0) this.bump("cmd-recover-one", "partial", "a full heal", "Atlas fully heals the whole party together");
     out.push({ t: "heal", full: true });
+  }
+
+  // -- §8.11 change-actor family (313, 315–325) ----------------------------
+  /** Resolve the change-family actor id. RM designation index 1 means the hero
+   *  is chosen by a variable — not resolvable at import, so it becomes an
+   *  mzTodo (kept for a re-import) + report. Otherwise returns the actor id
+   *  (0 = whole party). */
+  private changeActorTarget(c: RmCommand, out: AnyCommand[], desigIdx: number, actorIdx: number): number | null {
+    const p = (c.parameters as any[]) || [];
+    if (num(p[desigIdx]) === 1) {
+      this.bump("cmd-actor-var-" + c.code, "todo", "changing a hero chosen by a variable", "changing the hero a variable points at arrives in a later update", c.code);
+      out.push({ t: "mzTodo", code: c.code, params: p, label: "Change a hero chosen by a variable — coming in a later update" });
+      return null;
+    }
+    return num(p[actorIdx]);
+  }
+  /** Emit an mzTodo for a change-family command whose value comes from a
+   *  variable (only constant operands map, like Control Variables / gold). */
+  private changeActorVarValue(c: RmCommand, out: AnyCommand[]): void {
+    const p = (c.parameters as any[]) || [];
+    this.bump("cmd-actor-var-val-" + c.code, "todo", "changing a hero by a variable amount", "changing a hero's stats by a variable amount arrives in a later update", c.code);
+    out.push({ t: "mzTodo", code: c.code, params: p, label: "Change a hero by a variable amount — coming in a later update" });
+  }
+  private changeState(c: RmCommand, out: AnyCommand[]): void {
+    const p = (c.parameters as any[]) || [];
+    const aid = this.changeActorTarget(c, out, 0, 1);
+    if (aid === null) return;
+    out.push({ t: "changeState", actorId: aid, op: num(p[2]) === 1 ? "remove" : "add", stateId: num(p[3]) });
+  }
+  /** 315 Change EXP / 316 Change Level share a layout: [desig, actor, op,
+   *  operandType, value]. op 0 = add, 1 = subtract; only a constant operand
+   *  (operandType 0) maps — a variable amount → mzTodo. */
+  private changeExpLevel(c: RmCommand, out: AnyCommand[], kind: "exp" | "level"): void {
+    const p = (c.parameters as any[]) || [];
+    const aid = this.changeActorTarget(c, out, 0, 1);
+    if (aid === null) return;
+    if (num(p[3]) !== 0) { this.changeActorVarValue(c, out); return; }
+    const op = num(p[2]) === 1 ? "sub" : "add";
+    out.push(kind === "exp"
+      ? { t: "changeExp", actorId: aid, op, value: num(p[4]) }
+      : { t: "changeLevel", actorId: aid, op, value: num(p[4]) });
+  }
+  /** 317 Change Parameters: [desig, actor, paramId, op, operandType, value].
+   *  `luk` (index 7) has no Atlas home (locked skip) → report + drop. */
+  private changeParam(c: RmCommand, out: AnyCommand[]): void {
+    const p = (c.parameters as any[]) || [];
+    const aid = this.changeActorTarget(c, out, 0, 1);
+    if (aid === null) return;
+    const key = paramKey(num(p[2]));
+    if (!key) { this.bump("cmd-param-luk", "skipped", "changing luck", "Atlas has no luck stat, so this change is skipped (the rest of the event runs)", c.code); return; }
+    if (num(p[4]) !== 0) { this.changeActorVarValue(c, out); return; }
+    out.push({ t: "changeParam", actorId: aid, param: key, op: num(p[3]) === 1 ? "sub" : "add", value: num(p[5]) });
+  }
+  /** 318 Change Skills: [desig, actor, op(0 learn/1 forget), skillId]. */
+  private changeSkill(c: RmCommand, out: AnyCommand[]): void {
+    const p = (c.parameters as any[]) || [];
+    const aid = this.changeActorTarget(c, out, 0, 1);
+    if (aid === null) return;
+    out.push({ t: "changeSkill", actorId: aid, op: num(p[2]) === 1 ? "forget" : "learn", skillId: num(p[3]) });
+  }
+  /** 321 Change Class: [actor, classId, keepExp]. Atlas keeps the hero's level
+   *  either way; report when RM would have reset it. */
+  private changeClass(c: RmCommand, out: AnyCommand[]): void {
+    const p = (c.parameters as any[]) || [];
+    if (p[2] === false || num(p[2]) === 0) this.bump("cmd-class-keeplevel", "partial", "a class change", "Atlas keeps the hero's level when their class changes");
+    out.push({ t: "changeClass", actorId: num(p[0]), classId: num(p[1]) });
+  }
+  /** 322 Change Actor Images: [actor, faceName, faceIndex, charName, charIndex].
+   *  Atlas faces derive from the map charset, so the charset carries both. */
+  private changeActorImage(c: RmCommand, out: AnyCommand[]): void {
+    const p = (c.parameters as any[]) || [];
+    const name = String(p[3] || "");
+    const charset = name ? slugKey(name) + (num(p[4]) ? "-" + num(p[4]) : "") : "";
+    this.bump("cmd-actor-image", "partial", "a hero's picture change", "Atlas uses one image for a hero's map sprite and face; add the matching art to your Assets library and it appears");
+    out.push({ t: "changeActorImage", actorId: num(p[0]), charset });
+  }
+
+  // -- §8.5 Get Location Info (285) ----------------------------------------
+  /** [varId, infoType, designation(0 direct/1 variable), x, y]. Atlas has no
+   *  terrain-tag concept, so infoType 0 reads 0; region / event id / tile id
+   *  map cleanly. A variable-designated tile reports + falls back to the
+   *  direct coordinates. */
+  private getLocationInfo(c: RmCommand, out: AnyCommand[]): void {
+    const p = (c.parameters as any[]) || [];
+    const INFO: Record<number, "terrain" | "eventId" | "tileId" | "region"> = { 0: "terrain", 1: "eventId", 2: "tileId", 3: "tileId", 4: "tileId", 5: "region" };
+    const varDesig = num(p[2]) === 1;
+    if (varDesig) this.bump("cmd-locinfo-var", "partial", "reading a tile chosen by a variable", "reading a tile whose position comes from a variable uses a fixed spot for now");
+    out.push({ t: "getLocationInfo", varId: num(p[0]), infoType: INFO[num(p[1])] || "terrain", x: varDesig ? 0 : num(p[3]), y: varDesig ? 0 : num(p[4]) });
   }
 
   // -- §8.13 script (355 + 655 lines) --------------------------------------

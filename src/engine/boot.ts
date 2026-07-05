@@ -28,7 +28,11 @@ import {
   addInv,
   makeActor,
   param,
+  gainExp,
+  expForLevel,
+  sanitizeEquipment,
 } from "./state/game-state.js";
+import { applyWindowTone } from "./state/window-tone.js";
 import {
   applyMotionClass,
   applyTextScale,
@@ -39,7 +43,13 @@ import {
 import { saveLoadMenu } from "./state/save.js";
 import { initMessageSystem } from "./message.js";
 import { initInputSystem } from "./input.js";
-import { refreshAllPages, setRoute } from "./scenes/map-runtime.js";
+import {
+  refreshAllPages,
+  setRoute,
+  refreshPlayerCharset,
+  syncFollowers,
+  locationInfo,
+} from "./scenes/map-runtime.js";
 import {
   transferPlayer,
   waitFrames,
@@ -101,6 +111,10 @@ const EngineServices: any = {
   // state ops
   refreshAllPages, evaluateQuestFailures,
   addInv, makeActor, param,
+  // actor-data command family (M2·C): exp/level/param math + sprite refresh
+  gainExp, expForLevel, sanitizeEquipment, refreshPlayerCharset, syncFollowers,
+  // system commands (M2·C): window recolour + get-location-info
+  applyWindowTone, locationInfo,
   getProj: () => ctx.proj,
   // quests
   Quests,

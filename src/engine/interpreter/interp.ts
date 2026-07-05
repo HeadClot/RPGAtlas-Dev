@@ -31,6 +31,13 @@ export class Interp {
    *  true and the innermost loop handler consumes it. Never set unless a
    *  loop/breakLoop command exists, so pre-Phase-4 behavior is untouched. */
   breakLoop = false;
+  /** Set by the `jump` command (Project Compass M2·C); runList seeks the
+   *  matching `label` in the current list, unwinding to an enclosing list when
+   *  it isn't found. Null unless a jump ran, so pre-M2·C behavior is untouched. */
+  jumpLabel: string | null = null;
+  /** Yield counter guarding a wait-less backward jump loop (see the `jump`
+   *  command); mirrors the `loop` handler's spin valve. */
+  jumpSpins = 0;
 
   constructor(evRT: any, commonStack?: any[]) {
     this.evRT = evRT;
@@ -41,9 +48,20 @@ export class Interp {
   }
 
   async runList(list: any): Promise<void> {
-    for (const cmd of list || []) {
-      await this.exec(cmd);
+    const arr = list || [];
+    for (let i = 0; i < arr.length; i++) {
+      await this.exec(arr[i]);
       if (this.breakLoop) return; // unwind to the innermost loop handler
+      if (this.jumpLabel != null) {
+        // Seek the target label in THIS list; found → resume after it, else
+        // unwind so an enclosing list (or the common-event boundary) resolves it.
+        const idx = arr.findIndex(
+          (cmd: any) => cmd && cmd.t === "label" && String(cmd.name) === this.jumpLabel,
+        );
+        if (idx < 0) return;
+        this.jumpLabel = null;
+        i = idx; // for-loop ++ resumes at the command after the label
+      }
     }
   }
   async exec(c: any): Promise<void> {
@@ -70,6 +88,9 @@ export class Interp {
       await this.runList(commonEvent.commands);
     } finally {
       this.commonStack.pop();
+      // A jump is scoped to its own command list: an unresolved one never
+      // leaks across the common-event boundary into the caller's list.
+      this.jumpLabel = null;
     }
     return true;
   }

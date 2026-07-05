@@ -147,6 +147,8 @@ the button to edit or delete it.
 | **Conditional Branch** | Run commands only **if** a condition is true (switch, self-switch, variable, quest, item, gold, actor, [player region](Maps-and-Tiles#regions--numbered-zone-tags), time-of-day clock window…), with an optional **else**. |
 | **Loop** | Repeat its body until a **Break Loop** command runs inside it. |
 | **Break Loop** | Exit the innermost enclosing Loop and continue after it. |
+| **Label** | Mark a named spot in this command list. |
+| **Jump to Label** | Leap to the matching **Label** in this list (great for building your own loops and skips). |
 | **Wait** | Pause for a number of frames. |
 | **Script** | Run raw JavaScript for anything the commands don't cover (advanced — see [Plugins](Plugins)). |
 
@@ -165,6 +167,20 @@ the button to edit or delete it.
 | **Change Party** | Add or remove an actor from the party. |
 | **Heal / Recover** | Restore HP/MP by an amount, or fully recover the party. |
 
+### Actors & progression
+Each of these targets one hero or the **Entire Party**.
+| Command | What it does |
+|---|---|
+| **Change EXP** | Add or subtract experience (levels rise as EXP crosses each threshold). |
+| **Change Level** | Add or subtract levels directly. |
+| **Change Parameters** | Add a permanent bonus to a base stat (Max HP/MP, Attack, Defense, M.Attack, M.Defense, Agility). |
+| **Change Skills** | Teach (learn) or remove (forget) a skill. |
+| **Change Equipment** | Force-equip a weapon or armor slot (or clear it). |
+| **Change Name / Nickname / Profile** | Rename a hero or set their nickname / profile text. |
+| **Change Class** | Switch a hero's class (they keep their level). |
+| **Change Actor Image** | Swap a hero's map sprite + menu face (one charset covers both). |
+| **Change State** | Add or remove a status effect outside battle. |
+
 ### Movement & the world
 | Command | What it does |
 |---|---|
@@ -172,6 +188,8 @@ the button to edit or delete it.
 | **Set Move Route** | Make the player *or* this event walk a scripted path (steps include `jump` — a 2-tile arc hop). |
 | **Camera Zoom** | Zoom the map camera out or in over a chosen number of frames. `1.0` is normal, lower values zoom out, and higher values zoom in. |
 | **Change Transparency** | Hide or show the player sprite (the player still moves and triggers events). |
+| **Change Followers** | Show or hide the party members trailing behind the leader. |
+| **Get Location Info** | Read a map tile's region id, event id, or tile id into a variable. |
 | **Erase Event** | Remove this event for the rest of the play session. |
 
 ### Battle, shops & audio
@@ -189,6 +207,13 @@ the button to edit or delete it.
 | **Save Screen** | Open the save menu. |
 | **Game Over** | Send the player to the game-over screen. |
 | **Return to Title** | Go back to the title screen. |
+
+### System
+These are remembered in the save file.
+| Command | What it does |
+|---|---|
+| **Change Access** | Turn the pause **Menu**, **Saving**, random **Encounters**, or the **Formation** option on or off (locked entries are greyed out in the menu). |
+| **Change Window Color** | Recolour the message and menu windows for the rest of the game. |
 
 ---
 
