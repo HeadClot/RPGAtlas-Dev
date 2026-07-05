@@ -29,6 +29,7 @@ import { convertSystem } from "./convert-system";
 import { convertActors, convertClasses, convertEnemies, convertStates } from "./convert-battlers";
 import { convertArmors, convertItems, convertSkills, convertWeapons } from "./convert-items";
 import { convertCommonEvents, convertTroops, type CommandTranslator } from "./convert-events";
+import { makeTranslator } from "./translate-commands";
 import { collectTilesetUsage, convertMaps } from "./convert-maps";
 import { convertTilesets } from "./convert-tilesets";
 import type { MzFormat, MzRawData, RmMap } from "./raw-types";
@@ -59,13 +60,16 @@ export interface DatabaseConversion {
   skillTypeKeyByIndex: string[];
 }
 
-/** Convert parsed RM data into Atlas DB records. `translate` (M1·C) fills
- *  command bodies; absent = structural shells with empty command lists. */
+/** Convert parsed RM data into Atlas DB records. `translate` fills command
+ *  bodies; when omitted the real M1·C translator (`translate-commands.ts`, the
+ *  spine) is built against `report` and used — pass a custom one only to
+ *  override (tests). */
 export function convertDatabase(
   raw: MzRawData,
   report: ImportReport = new ImportReport(),
   translate?: CommandTranslator,
 ): DatabaseConversion {
+  const doTranslate = translate ?? makeTranslator(report);
   const sys = convertSystem(raw.system, report);
   const classes = convertClasses(raw.classes, report, sys.elementKeyByIndex);
   // Actors must convert AFTER classes — actor traits merge onto the class (D6).
@@ -76,8 +80,8 @@ export function convertDatabase(
   const armors = convertArmors(raw.armors, report);
   const enemies = convertEnemies(raw.enemies, report);
   const states = convertStates(raw.states, report);
-  const commonEvents = convertCommonEvents(raw.commonEvents, report, translate);
-  const troops = convertTroops(raw.troops, report, translate);
+  const commonEvents = convertCommonEvents(raw.commonEvents, report, doTranslate);
+  const troops = convertTroops(raw.troops, report, doTranslate);
 
   return {
     format: raw.format,
@@ -123,12 +127,15 @@ export function convertProject(
   report: ImportReport = new ImportReport(),
   translate?: CommandTranslator,
 ): MzProjectConversion {
-  const dbConv = convertDatabase(raw, report, translate);
+  // One translator instance for DB command bodies AND map event pages, so all
+  // command report lines aggregate through the same `report`.
+  const doTranslate = translate ?? makeTranslator(report);
+  const dbConv = convertDatabase(raw, report, doTranslate);
   const rawMaps = raw.maps || [];
   const usage = collectTilesetUsage(rawMaps);
   const ts = convertTilesets(raw.tilesets || [], usage, report);
   const rawById = new Map<number, RmMap>(rawMaps.map((m) => [m.id ?? 0, m]));
-  const { maps, folders } = convertMaps(raw.mapInfos || [], rawById, ts, report);
+  const { maps, folders } = convertMaps(raw.mapInfos || [], rawById, ts, report, doTranslate);
   return {
     ...dbConv,
     report,
@@ -177,6 +184,8 @@ export {
 } from "./intake";
 export type { MzFileSource, FsReadFns } from "./intake";
 export type { CommandTranslator } from "./convert-events";
+export { translateCommands, makeTranslator } from "./translate-commands";
+export { convertMapEvents } from "./convert-map-events";
 export type { MzFormat, MzRawData } from "./raw-types";
 export {
   decodeRmTileId,

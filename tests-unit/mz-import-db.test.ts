@@ -219,7 +219,7 @@ describe("States (§2)", () => {
   });
 });
 
-describe("Troops + CommonEvents (§2) — shells, bodies deferred to M1·C", () => {
+describe("Troops + CommonEvents (§2) — record shells + M1·C-translated bodies", () => {
   it("converts troop enemies, page spans and conditions", () => {
     const troop = byId(mv.db.troops, 1);
     expect(troop.enemies).toEqual([1, 1, 2]);
@@ -228,16 +228,16 @@ describe("Troops + CommonEvents (§2) — shells, bodies deferred to M1·C", () 
     expect(troop.pages![0].cond).toEqual({ turn: { a: 2, b: 0 } });
     expect(troop.pages![1].span).toBe("battle");
     expect(troop.pages![1].cond).toEqual({ enemyHpBelow: { index: 0, pct: 50 } });
-    // Command bodies are empty until M1·C injects the translator.
-    expect(troop.pages![0].commands).toEqual([]);
+    // Command bodies are now filled by the M1·C translator (default seam).
+    expect(troop.pages![0].commands.map((x) => x.t)).toEqual(["text"]);
     expect(mv.report.lines.some((l) => /appear mid-battle/i.test(l.what))).toBe(true);
   });
-  it("converts common-event triggers + switch", () => {
+  it("converts common-event triggers + switch + M1·C command bodies", () => {
     const heal = byId(mv.db.commonEvents, 1);
     expect(heal.trigger).toBe("none");
     expect(heal.switchId).toBe(1);
     expect(byId(mv.db.commonEvents, 2).trigger).toBe("parallel");
-    expect(heal.commands).toEqual([]); // M1·C
+    expect(heal.commands.map((x) => x.t)).toEqual(["flash", "wait"]); // M1·C
   });
 });
 

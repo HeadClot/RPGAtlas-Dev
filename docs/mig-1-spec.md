@@ -1,6 +1,6 @@
 # Phase M1 Spec — Importer core: an MZ/MV project becomes an Atlas project
 
-**Status:** 🚧 IN PROGRESS — M1·A + M1·B landed; M1·C–M1·D pending.
+**Status:** 🚧 IN PROGRESS — M1·A + M1·B + M1·C landed; M1·D pending.
 **Authored:** 2026-07-04 by Claude Opus 4.8 (Extra High), from the M1 section of
 `docs/MZ_MV_MIGRATION_ROADMAP.md`, the signed parity matrix
 `docs/mz-mv-parity-matrix.md`, and the decision log in `docs/mig-0-spec.md`.
@@ -201,6 +201,68 @@ reads `Tilesets.json`, `MapInfos.json`, and every `Map###.json` (id from the fil
 
 ---
 
+## Module map — M1·C additions (`src/editor/importers/mz/`)
+
+| File | Role |
+|---|---|
+| `translate-commands.ts` | **THE TRANSLATION TABLE — the spine.** A cursor-based recursive parser that rebuilds Atlas's nested command tree (branches/loops/choices/battle-result blocks) from RM's flat `indent` + continuation codes (401/402/411/412/413/601–604/605/655), and a per-code dispatch for matrix §8 (101–657): each code → real `AnyCommand`(s), an `mzTodo` placeholder, or a `−` drop. Move routes (§9) via `routeSteps`. `makeTranslator(report)` builds the `CommandTranslator` seam M1·A/M1·B left injected; `translateCommands(list, report)` is the direct entry. Pure. |
+| `convert-map-events.ts` | RM map `events[]` → Atlas `MapEvent[]` (matrix §2 pages): conditions (switch/var/self-switch; item/actor → report), image → `charset`+`dir`, moveType/trigger/priority/through, and the page command list through `translate`. |
+
+`schema.ts` gains one additive optional command — `CmdMzTodo { t:"mzTodo", code, params, label }` (D3) — in the `AnyCommand` union. `command-defs.ts` renders it (📌 summary + a hidden, non-crashing read-only edit form, excluded from the Add-Command picker). `convert-maps.ts` (`convertMap`/`convertMaps`) + `index.ts` (`convertDatabase`/`convertProject`) thread the translator: it now builds the real spine by default (pass a custom `translate` only to override, e.g. tests).
+
+## M1·C design decisions (extending the signed contract)
+
+- **C1 · The engine no-op is free.** `mzTodo` needs **zero engine change**: the interpreter
+  registry already silent-skips unmapped command types (`interp.ts` `if (handler)…`, no
+  `console.warn`), so an `mzTodo` node is a no-op with no console noise — the import-boot
+  e2e's "no console errors" bar holds. The union doc-comment in `schema.ts` records that
+  `mzTodo` is the one command deliberately without a handler.
+- **C2 · Preserve-vs-drop rule.** `+ Mn` codes → `mzTodo` (raw code+params kept, one
+  aggregated report line, upgraded on re-import when the phase ships). The `−` skip set
+  (Play Movie 261, map-name-display 281, Open Menu 351, Gather Followers 217) → dropped with
+  a friendly line, never a placeholder (they will never "come back"). Comments (108/408) →
+  dropped silently (matrix: not report-worthy).
+- **C3 · Move routes convert steps, not inline commands.** A route → a `CmdMove` whose
+  `steps[]` are the Atlas-representable movement/turn/jump/wait tokens (§9 `=` + decomposed
+  diagonals). Non-movement/dynamic steps (speed/freq/anim/dirfix/through/opacity/blend/random/
+  toward-away/backward/switch/SE/script) are omitted and **aggregated into one report line**
+  per route — `CmdMove.steps` is a `string[]` and cannot hold inline commands, so the matrix's
+  "emit CmdSe/CmdSwitch inline" ideal is refined to omit-and-report (a valid `≈`). Page-level
+  autonomous custom routes (moveType 3) have no Atlas home at all → report + the event stays
+  put.
+- **C4 · Battle-result branches are placeholders (M3·C).** `301` → `CmdBattle` (troop +
+  `escape` from canEscape + `lose` from canLose). The `601/602/603` result-branch openers
+  each become an `mzTodo` and their bodies are consumed-and-dropped (Atlas has no
+  win/escape/lose branch until M3·C); `604` is structural. Honest + safe: the battle runs,
+  the branches no-op, one report line each.
+- **C5 · Only the safe, exact cases of the lossy `≈` commands map now.** Control Variables
+  (122) maps const set/add/sub + random-set; game-data/var operands + ×/÷/% → `mzTodo`.
+  Change Gold/Items (125–128) map the constant-operand case; variable operand → `mzTodo`.
+  Transfer (201) and Battle (301) map the direct case; variable/random designation →
+  `mzTodo`. Change HP/MP (311/312) map **only** the whole-party + constant + increase case to
+  `CmdHeal` (guarded on the exact param shape); anything targeted/decreasing → `mzTodo`.
+  Conditional Branch (111) maps switch/var(const)/self-switch/actor(inParty/weapon/armor)/
+  gold/item/weapon/armor; timer/enemy/character/button/script/vehicle → `mzTodo` (branch
+  bodies dropped). This keeps every emitted Atlas command *correct*, never a plausible-looking
+  wrong one.
+- **C6 · Escape codes pass through verbatim (§13).** M1·C stores message text unchanged;
+  unknown MZ escapes render literally until M2·B flips them. No mangling, no report spam.
+- **C7 · Command ids are 1:1.** Atlas keeps RM numeric ids for switches/variables/items/
+  weapons/armors/troops/maps/common-events/actors (verified against the M1·A/M1·B
+  converters), so command operands need no remapping — only the *shape* changes.
+
+## Fixture correction (faithful RM data)
+
+`scripts/build-migration-fixtures.mjs` — the harbor Chest's **Change Gold (125)** command was
+written with a 4-param `[0,0,0,100]` layout (126's shape); real RM `command125` is
+`[operation, operandType, value]` (3 params — `Game_Interpreter.prototype.command125` calls
+`operateValue(params[0..2])`). Corrected to `[0,0,100]` so the fixture is faithful RM data and
+imports as **+100 gold**; regenerated (deterministic — only the two `Map001.json` bytes change,
+one line each; every other fixture file is byte-identical). No M1·A/M1·B test asserted event
+content, so baselines are otherwise untouched.
+
+---
+
 ## Stage log
 
 ### M1·A — Project reader & database conversion — ✅ 2026-07-04 (branch `mig-1a`)
@@ -287,3 +349,47 @@ goldens). No `js/patch-notes.js` / `help.ts` / `shims.d.ts` bump — the importe
 user-facing surface until the M1·D wizard (working agreement step 2).
 
 **Next:** M1·C — events & the command translation table (`translate-commands.ts`).
+
+### M1·C — Events & the translation table — ✅ 2026-07-05 (branch `mig-1c`)
+
+**Delivered — the spine.** `src/editor/importers/mz/translate-commands.ts` owns the
+MZ/MV-command-code → Atlas-`AnyCommand` mapping for **every** matrix §8 code (101–657), §9
+move routes, and §13 escape passthrough; plus `convert-map-events.ts` (RM map `events[]` →
+`MapEvent[]` with page conditions/graphic/trigger/priority/through/moveType). The translator
+is now wired as the **default** through the M1·A/M1·B injected seam: `convertDatabase` /
+`convertProject` build it from `report` and thread it into common events, troop pages, and
+map event pages — so a fixture now imports with **fully translated events**, not shells.
+Design decisions C1–C7 + the module map above. Per-code table follows the matrix exactly
+(the `+ Mn` rows import as `mzTodo` and the named phase flips them; the `−` rows drop with a
+report line).
+
+**Schema:** one additive optional command — `CmdMzTodo { t:"mzTodo", code, params, label }`
+(D3) — in the `AnyCommand` union. No engine handler by design (C1); FORMAT_VERSION stays 2;
+old projects unaffected. Editor renders it (📌 summary + hidden, non-crashing read-only form).
+
+**Vitest — the table IS the spec (`tests-unit/mz-translate-commands.test.ts`, +142):** a `SPEC`
+table with **one row per §8 code** asserting real-command-type / `mzTodo`-preserving-code /
+intentional-drop; field-fidelity tests for the `=` rows (text 401-fold + MZ speaker name,
+choices branches, if-then-else nesting + unmappable-condition placeholder, loop body, switch
+range expand, variable/gold/item operand guards, transfer facing, flash/shake/weather/SE/BGM
+values, battle + 601/602/603 placeholders, shop 605-fold, party-heal guard, script 655-fold);
+move-route §9 (direct vocab, diagonal decompose, dropped-step report, other-event → `mzTodo`);
+escape-code passthrough (§13); `mzTodo` shape + D11 aggregation; event-page conversion
+(trigger/priority/through/charset/dir, conditions, two-switch + item/actor reports); and the
+full **MZ + MV fixture round-trip** through `convertProject` (Finn dialog, Chest two-page
+self-switch, ToCave transfer, Sign pictures→`mzTodo`, Cave Ambush battle+branches+script, the
+356↔357 plugin delta) + an `assembleProject` → `validateProject`-clean bootable project with
+populated events.
+
+**Baselines:** vitest 506 → **648** (+142); typecheck green; `eslint .` clean; legacy
+`node --test` 16/16; **Playwright 60/60** (the import-boot e2e now boots a project with fully
+translated events + `mzTodo` no-ops — still **0 console errors**, goldens untouched). Updated
+two M1·A/M1·B specs that asserted the now-obsolete "empty command bodies / empty map events"
+deferral (`mz-import-db` troop+common-event bodies now translate; `mz-import-maps` compares map
+geometry with events excluded, since the §0 speaker-name + plugin-code deltas now live in the
+translated event lists). **No `js/patch-notes.js` / `help.ts` / `shims.d.ts` bump** — the
+importer still has no user-reachable surface until the M1·D wizard (`mzTodo` is hidden from the
+command picker and only an import can create one), consistent with M1·A/M1·B (working
+agreement step 2).
+
+**Next:** M1·D — import wizard UX + plain-language report + end-to-end proof (tag `mig-1`).

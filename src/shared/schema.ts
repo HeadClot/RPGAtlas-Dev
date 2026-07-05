@@ -14,7 +14,10 @@
      free-form asset blobs, plugin params).
    - The AnyCommand union enumerates every event command: the 33 CMD_DEFS in
      src/editor/event-editor/command-defs.ts, which are exactly the 33 types
-     registered in src/engine/interpreter/commands/*.ts.
+     registered in src/engine/interpreter/commands/*.ts — plus `mzTodo`, the
+     MZ/MV-importer placeholder (Project Compass M1·C): editor-rendered,
+     preserved for re-import, and deliberately WITHOUT an interpreter handler
+     so the engine silently skips it.
    - Guards WARN + pass through on unknown shapes; they never reject a project
      today's code accepts (behavior-frozen). See isProjectLike / assertProject.
 
@@ -697,6 +700,19 @@ export interface CmdPlayAnim {
   target: "player" | "this" | "screen";
   wait?: boolean;
 }
+/** An RPG Maker MZ/MV command the importer couldn't translate yet (Project
+ *  Compass, M1·C). `code`+`params` preserve the raw MZ command verbatim so a
+ *  re-import after a later phase ships upgrades it in place; `label` is the
+ *  kid-friendly summary the event editor shows ("Show a picture — coming in a
+ *  later update"). Additive + optional (FORMAT_VERSION stays 2). It has NO
+ *  registered interpreter handler, so the engine silently skips it (the
+ *  registry's unknown-type default) — it never changes play behavior. */
+export interface CmdMzTodo {
+  t: "mzTodo";
+  code: number;
+  params: unknown[];
+  label: string;
+}
 
 /** Every built-in event command, discriminated on `t`. Plugin commands add
  *  further `t` values at runtime via the interpreter registry; those aren't in
@@ -738,7 +754,8 @@ export type AnyCommand =
   | CmdScript
   | CmdLoop
   | CmdBreakLoop
-  | CmdPlayAnim;
+  | CmdPlayAnim
+  | CmdMzTodo;
 
 /** The `t` discriminant of any built-in command. */
 export type CommandType = AnyCommand["t"];

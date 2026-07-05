@@ -434,7 +434,7 @@ function harborEvents(mz) {
       page({
         image: img({ characterName: "!Chest", characterIndex: 0, direction: 2, pattern: 1 }), trigger: 0, priorityType: 0,
         list: [
-          { code: 125, indent: 0, parameters: [0, 0, 0, 100] }, // Change Gold +100
+          { code: 125, indent: 0, parameters: [0, 0, 100] }, // Change Gold +100 (RM 125 = [op, operandType, value])
           { code: 250, indent: 0, parameters: [se("Chest")] }, // Play SE
           { code: 123, indent: 0, parameters: ["A", 0] }, // Self Switch A ON
           { code: 0, indent: 0, parameters: [] },
