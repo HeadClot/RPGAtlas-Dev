@@ -27,6 +27,11 @@ free [Node.js](https://nodejs.org/); downloaded copies ship the editor pre-built
 [Migration Guide](wiki/Migration-Guide.md). Boot the bundled sample, *Atlas Quest*, and walk out to
 **Driftwood Shore** for the HD-2D showcase.
 
+🎮 **Coming from RPG Maker MV / MZ?** **File ▸ Import from RPG Maker…** brings your own MV or MZ
+project in — maps, database, events, switches/variables, and common events — with a plain-language
+report of what came along and what to touch up. See
+[Coming from RPG Maker](wiki/Coming-from-RPG-Maker.md).
+
 ## Quick start
 
 **Windows — just double-click `RPGAtlas.exe`.** On a downloaded copy (which ships the pre-built

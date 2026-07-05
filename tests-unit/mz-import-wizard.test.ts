@@ -119,6 +119,17 @@ describe("runRmImport → a ready-to-load project + saved report", () => {
     }
   });
 
+  it("drives onProgress through every stage in order (M6·A)", async () => {
+    const seen: { stage: string; step: number; total: number }[] = [];
+    const out = await runRmImport(fsSource(root("mz-project"), nodeFns), freshBase(), (p) => {
+      seen.push({ stage: p.stage, step: p.step, total: p.total });
+    });
+    expect(out.project.system.title).toBe("Cove Test"); // still imports fine
+    expect(seen.map((s) => s.stage)).toEqual(["reading", "assembling", "report", "done"]);
+    expect(seen.map((s) => s.step)).toEqual([1, 2, 3, 4]);
+    expect(new Set(seen.map((s) => s.total))).toEqual(new Set([4]));
+  });
+
   it("MV and MZ import to the same map/database shape (format delta aside)", () => {
     expect(mv.project.maps.length).toBe(mz.project.maps.length);
     expect(mv.project.actors.length).toBe(mz.project.actors.length);

@@ -218,8 +218,11 @@ export { collectTilesetUsage, convertMap, convertMapData, convertMaps, MAX_REGIO
 export { assembleProject } from "./assemble";
 // M1·D — the DOM-free wizard core + the zip intake helper.
 export { runRmImport, buildImportReportDoc } from "./import-run";
-export type { RmImportOutcome } from "./import-run";
+export type { RmImportOutcome, ImportProgress, ImportProgressFn } from "./import-run";
 export { readZip } from "./zip-read";
+// M6·A — pure report-format helpers (text export + re-import delta).
+export { reportDocToText, reimportDelta, PLUGIN_VERDICT_WORD } from "./report-format";
+export type { ReimportDelta } from "./report-format";
 // M5·A — the plugin manifest guidance table.
 export { guidePlugin, buildPluginReport, normalizePluginName, GUIDANCE } from "./plugin-guidance";
 export type { PluginVerdict, PluginGuide } from "./plugin-guidance";

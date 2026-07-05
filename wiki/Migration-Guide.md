@@ -4,6 +4,10 @@ RPGAtlas opens **every project it has ever been able to save** — a project fil
 unversioned builds (even pre-rebrand "Driftwood" files) loads in 1.0 and upgrades itself in place.
 This page explains how that works and what changes between format versions.
 
+> **Moving a game over from RPG Maker MV / MZ?** That's a different kind of migration — see
+> **[Coming from RPG Maker](Coming-from-RPG-Maker)**. This page is about upgrading RPGAtlas's *own*
+> project files between format versions.
+
 ---
 
 ## How project versioning works
