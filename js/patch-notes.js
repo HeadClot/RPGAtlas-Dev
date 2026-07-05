@@ -5,6 +5,19 @@
 export const PATCH_NOTES = [
   {
     date: "July 5, 2026",
+    title: "Import report now explains your RPG Maker add-ons (plugins)",
+    summary:
+      "RPG Maker games often use add-ons (plugins) — little programs Atlas can't run. When you import a game, the report now has an “Add-ons” section that names every plugin from your project, remembers whether it was on or off and how many settings it had, and tells you in plain words whether Atlas already does that thing, does something close, or doesn't do it — with a pointer to where to look. Popular add-ons like quest journals, message boxes, and battle systems are recognized by name; anything we don't know is kept safely with an honest note. No plugin code is ever run — Atlas only reads the list.",
+    items: [
+      "The import report gained an “🔌 Add-ons (plugins)” section listing each plugin from js/plugins.js.",
+      "Each add-on gets an honest verdict: “Atlas already does this” (quest journals → the Quests panel), “Atlas has something close” (message and battle add-ons), “Atlas doesn't do this — your game still plays” (pixel movement, lighting, HUDs), or “kept your settings, but it won't run” for add-ons we don't recognize.",
+      "The report remembers whether each add-on was switched on or off and how many settings it carried.",
+      "Recognition covers the most common community add-on families (quest, message, battle, item/equip, movement, HUD, lighting, encounters, and more) across YEP_, VisuMZ_, MOG_, and Orange naming styles.",
+      "Your safety comes first: plugin code is never executed — Atlas only reads the add-on list as text.",
+    ],
+  },
+  {
+    date: "July 5, 2026",
     title: "Imported animations & the full soundtrack: jingles, background sounds, pitch & pan",
     summary:
       "Imported RPG Maker games look and sound like themselves now. MV's sheet-based battle animations convert into real Atlas animations (add the sheet image and they play frame by frame), and MZ's Effekseer effects honestly borrow the closest Atlas animation while keeping your own flashes, sounds, and screen shakes. The soundtrack grew a whole channel rack: victory/defeat/game-over jingles, looping background sounds like rain, remember-and-replay music, and volume/pitch/pan on music and sounds. Atlas-made games play exactly as before — every new behavior stays off until something asks for it.",

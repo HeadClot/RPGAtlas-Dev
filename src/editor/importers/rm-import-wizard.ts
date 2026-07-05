@@ -16,7 +16,7 @@ import { h } from "../dom";
 import { modal } from "../modals";
 import { Assets, DataDefaults, RA, editorState as S, editorHooks } from "../editor-state";
 import { touch } from "../persistence";
-import { validateProject, type ImportReportDoc, type ImportReportLine } from "../../shared/schema";
+import { validateProject, type ImportReportDoc, type ImportReportLine, type ImportReportPlugin } from "../../shared/schema";
 import { consumeEmbeddedAssets, libraryImageEntries } from "../../shared/asset-library";
 import {
   fileListSource,
@@ -129,6 +129,47 @@ function chip(label: string, n: number): HTMLElement {
   }, `${n} ${label}`);
 }
 
+/** Verdict → badge (icon + tint + short verdict word). Honest, not scary: even
+ *  "Atlas doesn't do this" reassures that the game still plays (M5·A, D11). */
+const PLUGIN_BADGE: Record<ImportReportPlugin["verdict"], { icon: string; word: string; tint: string }> = {
+  builtin: { icon: "✅", word: "Atlas already does this", tint: "120,216,144" },
+  partial: { icon: "🔷", word: "Atlas has something close", tint: "120,180,240" },
+  none: { icon: "▫️", word: "Atlas doesn't do this — your game still plays", tint: "200,200,210" },
+  unknown: { icon: "❔", word: "Settings kept, but it won't run", tint: "230,196,120" },
+};
+
+/** Render the "Add-ons (plugins)" section: one card per plugin from
+ *  js/plugins.js with its guidance badge, ON/OFF + settings note, and the
+ *  kid-friendly advice. Nothing renders when the game had no plugins. */
+function renderPluginsSection(box: HTMLElement, plugins: ImportReportPlugin[] | undefined): void {
+  if (!plugins || !plugins.length) return;
+  box.appendChild(h("h4", null, "🔌 Add-ons (plugins)"));
+  box.appendChild(h("p", { class: "dim" },
+    "Your game used " + plugins.length + " add-on" + (plugins.length === 1 ? "" : "s") +
+    ". RPG Maker add-ons are little programs Atlas can't run, so here's what each one did and " +
+    "what Atlas gives you instead — your settings were saved either way."));
+  const list = h("div", { style: "margin:4px 0" });
+  for (const pl of plugins) {
+    const b = PLUGIN_BADGE[pl.verdict] || PLUGIN_BADGE.unknown;
+    const meta: string[] = [];
+    if (!pl.on) meta.push("was turned off");
+    if (pl.paramCount > 0) meta.push("kept its " + pl.paramCount + " setting" + (pl.paramCount === 1 ? "" : "s"));
+    const card = h("div", {
+      style:
+        "margin:6px 0;padding:7px 10px;border-radius:8px;border:1px solid rgba(" + b.tint + ",.45);" +
+        "background:rgba(" + b.tint + ",.10)",
+    },
+      h("div", null,
+        h("b", null, b.icon + " " + pl.name),
+        h("span", { class: "dim", style: "font-size:12px" }, "  " + b.word),
+        meta.length ? h("span", { class: "dim", style: "font-size:12px" }, " · " + meta.join(", ")) : null),
+      h("div", { style: "font-size:13px;margin-top:2px" },
+        pl.advice + (pl.pointer ? " Look in " + pl.pointer + "." : "")));
+    list.appendChild(card);
+  }
+  box.appendChild(list);
+}
+
 /** Render the saved import report as kid-friendly HTML (locked decision 6):
  *  good news first, then honest notes on what changed / is coming / was left
  *  out, then next steps. Reused by the post-import modal and File ▸ Import
@@ -173,6 +214,8 @@ export function renderReportDoc(doc: ImportReportDoc): HTMLElement {
   section("⏳ Saved for a later update", todo);
   section("📦 Left out on purpose", skipped);
   section("ℹ️ Notes", notes);
+
+  renderPluginsSection(box, doc.plugins);
 
   box.appendChild(h("h4", null, "What next?"));
   box.appendChild(h("ul", null,
