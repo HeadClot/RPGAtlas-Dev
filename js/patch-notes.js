@@ -5,6 +5,21 @@
 export const PATCH_NOTES = [
   {
     date: "July 5, 2026",
+    title: "Real damage formulas — skills can now do the math themselves",
+    summary:
+      "Skills (and healing items) can carry a damage formula like a.atk * 4 - b.def * 2, and battles run it with the classic RPG Maker rules: variance wiggle, critical hits, guarding cutting damage in half, HP/MP draining attacks, and heals that restore a % of max HP. Games imported from RPG Maker MV/MZ get their custom formulas working automatically — and safely: formulas are read by Atlas's own checker, never run as raw code.",
+    items: [
+      "Skills have a new Advanced damage box (Effects & preview tab): an optional formula that replaces Power, plus Variance % and a Can critical toggle. a = the user, b = the target, v[n] = game variables, and Math helpers like Math.randomInt are allowed.",
+      "Formula battles follow the RPG Maker order exactly: element rate, then critical (×3), then variance, then guard (half damage) — so imported games feel the way they did.",
+      "Draining skills (HP Drain / MP Drain) give what they deal back to the attacker, and MP-damage skills hit the target's MP pool.",
+      "Heals can restore a % of max HP on top of a flat amount — and items can too, including % of max MP.",
+      "Accuracy and evasion from imported games now work: heroes with a Hit or Evade bonus can miss or dodge, with a MISS/EVADED pop-up. Atlas-made games are untouched — no bonuses, no misses, exactly as before.",
+      "A formula Atlas can't run safely is kept, reported in plain language, and the skill falls back to its simple Power damage — nothing breaks, nothing is lost.",
+      "Re-import an RPG Maker MV/MZ game to switch its formulas on.",
+    ],
+  },
+  {
+    date: "July 5, 2026",
     title: "Change a hero's stats, jump around your events, and lock the menu — new event commands",
     summary:
       "A big batch of classic event commands lands: change a hero's EXP, level, stats, skills, equipment, name, class, nickname, profile, or status right from an event; make your own loops with Labels and Jump to Label; turn the menu, saving, encounters, or party-arranging on and off; recolour the windows; and read map info into a variable. Games imported from RPG Maker MV/MZ bring all of these across.",

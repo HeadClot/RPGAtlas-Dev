@@ -19,6 +19,7 @@ import { ctx, fns } from "../state/engine-context.js";
 import {
   G,
   actorClass,
+  actorFormulaFacade,
   param,
   learnedSkills,
   skillMpCost,
@@ -30,6 +31,7 @@ import {
   onEnemyKilled,
   noteBattleFailure,
 } from "../state/game-state.js";
+import { getFormula, mzDamageValue, mzHitRoll } from "../../shared/formula.js";
 import { useItemOn, iconEntryHtml, bar } from "./menus.js";
 import { gaugeColors } from "../state/player-options.js";
 import { createBattleFx } from "./battle-fx.js";
@@ -238,6 +240,60 @@ export const Battle: any = {
     const livingP = () => G.party.filter((a: any) => a.hp > 0);
     function variance(v: any) {
       return Math.max(1, Math.floor(v * (0.85 + rndf() * 0.3)));
+    }
+
+    // ---- M3·A: the MZ damage-formula path (Project Compass, decision D1) ----
+    // A skill with a compilable `formula` runs the sandboxed evaluator + the
+    // MZ pipeline instead of the structured power curve; everything here is
+    // absent on Atlas-native skills, whose paths (and RNG streams) stay
+    // byte-identical. All randomness flows through the seedable rnd/rndf.
+    function enemyMp(en: any): number {
+      // Lazily seeded OUTSIDE the extracted troop-setup statement that
+      // tests/battle-index.test.js pins by source text.
+      if (en.mp == null) en.mp = Number(en.d.stats.mmp) || 0;
+      return en.mp;
+    }
+    function battlerFacade(b: any): any {
+      if (!b || !b.d) return actorFormulaFacade(b);
+      const s = b.d.stats;
+      return {
+        atk: s.atk || 0, def: s.def || 0, mat: s.mat || 0, mdf: s.mdf || 0,
+        agi: s.agi || 0, mhp: s.mhp || 0, mmp: s.mmp || 0,
+        hp: b.hp, mp: enemyMp(b), level: 0,
+      };
+    }
+    /** The skill's formula evaluated for attacker/target, or null → the
+     *  structured path (no formula, or one that doesn't compile). */
+    function formulaBase(skill: any, attacker: any, target: any): number | null {
+      const f = skill && skill.formula ? getFormula(skill.formula) : null;
+      if (!f) return null;
+      return f.eval({
+        a: battlerFacade(attacker),
+        b: battlerFacade(target),
+        v: (n: any) => Number(G.vars[n]) || 0,
+        randomInt: rnd,
+      });
+    }
+    /** MZ crit roll for a formula hit: gated on the skill's `critical` flag
+     *  and the attacker's critChance trait sum (enemies have no trait carrier
+     *  until M3·B → never crit → no draw). */
+    function formulaCrit(skill: any, attacker: any): boolean {
+      if (!skill || !skill.critical || (attacker && attacker.d)) return false;
+      return rnd(100) < RA.traitSum(actorClass(attacker), "special", "critChance", 0);
+    }
+    /** To-hit for physical actions: MZ-additive hitChance (attacker) and
+     *  evadeChance (defender) trait sums. Rolls consume draws ONLY when the
+     *  traits exist, so Atlas-native battles never miss and their seeded RNG
+     *  streams don't shift by a single draw. */
+    function physToHit(attacker: any, target: any): "hit" | "miss" | "evade" {
+      const aCls = attacker && attacker.d ? null : actorClass(attacker);
+      const tCls = target && target.d ? null : actorClass(target);
+      const hasHit = aCls && RA.traitsOf(aCls, "special", "hitChance").length;
+      return mzHitRoll({
+        hitPct: hasHit ? RA.traitSum(aCls, "special", "hitChance", 0) : null,
+        evadePct: tCls ? RA.traitSum(tCls, "special", "evadeChance", 0) : 0,
+        rndf,
+      });
     }
 
     async function pickTarget() {
@@ -625,13 +681,14 @@ export const Battle: any = {
               if (invCount("item", c.item.id) <= 0) return;
               actorStep(a);
               const revived = c.item.revive && c.target.hp <= 0;
-              if (!useItemOn(c.item, c.target)) return;
+              const used = useItemOn(c.item, c.target);
+              if (!used) return;
               burst(actorElement(c.target), revived ? "heal" : "item", {
                 count: revived ? 18 : 13,
               });
               floatText(
                 actorElement(c.target),
-                c.item.hp ? "+" + c.item.hp : "+" + c.item.mp + " MP",
+                used.hp ? "+" + used.hp : "+" + used.mp + " MP",
                 "heal",
               );
               refreshParty();
@@ -673,36 +730,109 @@ export const Battle: any = {
                 );
               const hits = Math.max(1, Math.floor(Number(skill && skill.hits) || 1));
               for (const t of targets) {
+                let landed = false;
                 for (let hit = 0; hit < hits; hit++) {
                   if (!t.alive) break;
-                  let dmg;
-                  const critical =
+                  // M3·A: physical actions can miss/evade when hit/evade
+                  // traits exist (Atlas-native: no traits → no roll → always
+                  // hits, exactly as before).
+                  if (
                     (!skill || skill.type === "phys") &&
-                    rnd(100) <
-                      RA.traitSum(actorClass(a), "special", "critChance", 0);
-                  if (!skill) {
-                    dmg = variance(param(a, "atk") * 2 - t.d.stats.def * 1.2);
-                    if (!anim) Sfx.play(critical ? "crit" : "hit");
-                  } else if (skill.type === "phys") {
-                    dmg = variance(
-                      (skill.power +
-                        param(a, "atk") * 2 -
-                        t.d.stats.def * 1.2) *
-                        skillPowerRate(a, skill),
+                    physToHit(a, t) !== "hit"
+                  ) {
+                    floatText(sprs[t.i], "MISS", "state");
+                    await say(
+                      a.name +
+                        (skill ? "'s " + skill.name : "'s attack") +
+                        " misses " +
+                        t.d.name +
+                        "!",
+                      550,
                     );
-                    if (!anim) Sfx.play("crit");
-                  } else {
-                    dmg = variance(
-                      (skill.power +
-                        param(a, "mat") * 2 -
-                        t.d.stats.mdf * 1.5) *
-                        skillPowerRate(a, skill),
-                    );
-                    if (!anim) Sfx.play("magic");
+                    continue;
                   }
-                  if (critical) dmg = Math.max(1, Math.floor(dmg * 1.5));
-                  if (!skill || skill.type === "phys")
-                    dmg = applyRowScale(dmg, rowDealtScale(rowOf(a)));
+                  landed = true;
+                  let dmg;
+                  let critical;
+                  const fBase = skill ? formulaBase(skill, a, t) : null;
+                  if (fBase != null) {
+                    // MZ pipeline (element rate vs enemies is neutral until
+                    // enemies get a trait carrier in M3·B).
+                    critical = formulaCrit(skill, a);
+                    dmg = mzDamageValue({
+                      base: fBase,
+                      elementRate: 1,
+                      critical,
+                      variance: Number(skill.variance) || 0,
+                      guarding: false,
+                      randomInt: rnd,
+                    });
+                    if (skill.type === "phys")
+                      dmg = applyRowScale(dmg, rowDealtScale(rowOf(a)));
+                    if (!anim)
+                      Sfx.play(
+                        critical ? "crit" : skill.type === "phys" ? "hit" : "magic",
+                      );
+                  } else {
+                    critical =
+                      (!skill || skill.type === "phys") &&
+                      rnd(100) <
+                        RA.traitSum(actorClass(a), "special", "critChance", 0);
+                    if (!skill) {
+                      dmg = variance(param(a, "atk") * 2 - t.d.stats.def * 1.2);
+                      if (!anim) Sfx.play(critical ? "crit" : "hit");
+                    } else if (skill.type === "phys") {
+                      dmg = variance(
+                        ((Number(skill.power) || 0) +
+                          param(a, "atk") * 2 -
+                          t.d.stats.def * 1.2) *
+                          skillPowerRate(a, skill),
+                      );
+                      if (!anim) Sfx.play("crit");
+                    } else {
+                      dmg = variance(
+                        ((Number(skill.power) || 0) +
+                          param(a, "mat") * 2 -
+                          t.d.stats.mdf * 1.5) *
+                          skillPowerRate(a, skill),
+                      );
+                      if (!anim) Sfx.play("magic");
+                    }
+                    if (critical) dmg = Math.max(1, Math.floor(dmg * 1.5));
+                    if (!skill || skill.type === "phys")
+                      dmg = applyRowScale(dmg, rowDealtScale(rowOf(a)));
+                  }
+                  const dtype = skill && skill.dmgType;
+                  if (dtype === "mp" || dtype === "mpDrain") {
+                    // MP damage/drain (MZ types 2/6): lands on the enemy's MP
+                    // pool, never KOs; a drain gives the dealt amount back.
+                    const dealt = Math.min(enemyMp(t), dmg);
+                    t.mp = enemyMp(t) - dealt;
+                    flash(t.i);
+                    burst(sprs[t.i], skillKind(skill));
+                    floatText(sprs[t.i], "-" + dealt + " MP", "damage");
+                    if (dtype === "mpDrain") {
+                      a.mp = clamp(a.mp + dealt, 0, param(a, "mmp"));
+                      floatText(actorElement(a), "+" + dealt + " MP", "heal");
+                      refreshParty();
+                    }
+                    await say(
+                      a.name +
+                        " casts " +
+                        skill.name +
+                        " — " +
+                        t.d.name +
+                        " loses " +
+                        dealt +
+                        " MP!",
+                      550,
+                    );
+                    continue;
+                  }
+                  // HP drain (MZ type 5): the attacker absorbs what was dealt
+                  // (clamped to the HP the target actually had — MZ rule).
+                  const drained =
+                    dtype === "hpDrain" ? Math.min(t.hp, dmg) : 0;
                   if (!anim) await travel(actorElement(a), sprs[t.i], skill);
                   await dealToEnemy(
                     t,
@@ -720,9 +850,15 @@ export const Battle: any = {
                       "!",
                     550,
                   );
+                  if (drained > 0 && a.hp > 0) {
+                    a.hp = clamp(a.hp + drained, 0, param(a, "mhp"));
+                    floatText(actorElement(a), "+" + drained, "heal");
+                    refreshParty();
+                    await say(a.name + " absorbs " + drained + " HP!", 450);
+                  }
                   if (!t.alive) await say(t.d.name + " is defeated!", 450);
                 }
-                await applySkillState(skill, t);
+                if (landed) await applySkillState(skill, t);
               }
               if (skill && skill.commonEventId) {
                 await new Interp(null).callCommonEvent(Number(skill.commonEventId));
@@ -760,10 +896,54 @@ export const Battle: any = {
                 // ally that slipped into the list (target-picking already
                 // excludes them — only a revive skill reaches the fallen).
                 if (wasFallen && !c.skill.revive) continue;
-                const amount = variance(
-                  (c.skill.power + param(a, "mat") * 1.2) *
-                    skillPowerRate(a, c.skill),
-                );
+                // M3·A: a formula heal runs the MZ pipeline (variance; crit
+                // ×3 when flagged) and adds the flat power on top — MZ
+                // recover effects stack with the formula.
+                const fBase = formulaBase(c.skill, a, t);
+                let amount;
+                if (fBase != null) {
+                  amount =
+                    mzDamageValue({
+                      base: fBase,
+                      elementRate: 1,
+                      critical: formulaCrit(c.skill, a),
+                      variance: Number(c.skill.variance) || 0,
+                      guarding: false,
+                      randomInt: rnd,
+                    }) + (Number(c.skill.power) || 0);
+                } else {
+                  amount = variance(
+                    ((Number(c.skill.power) || 0) + param(a, "mat") * 1.2) *
+                      skillPowerRate(a, c.skill),
+                  );
+                }
+                if (c.skill.dmgType === "mp" && !wasFallen) {
+                  // MP recover (MZ type 4): restores MP instead of HP.
+                  t.mp = clamp(t.mp + amount, 0, param(t, "mmp"));
+                  burst(actorElement(t), "heal", {
+                    color: c.skill.color,
+                    count: 14,
+                  });
+                  floatText(actorElement(t), "+" + amount + " MP", "heal");
+                  await say(
+                    a.name +
+                      " casts " +
+                      c.skill.name +
+                      " — " +
+                      t.name +
+                      " recovers " +
+                      amount +
+                      " MP!",
+                    550,
+                  );
+                  await applySkillState(c.skill, t);
+                  continue;
+                }
+                // %-of-max recovery (MZ Recover-HP effect value1, M3·A).
+                if (c.skill.powerPct)
+                  amount += Math.floor(
+                    (param(t, "mhp") * c.skill.powerPct) / 100,
+                  );
                 t.hp = clamp(t.hp + amount, 0, param(t, "mhp"));
                 burst(actorElement(t), "heal", {
                   color: c.skill.color,
@@ -810,7 +990,26 @@ export const Battle: any = {
               }
               const healAnim = animById(c.skill.animationId);
               enemyStep(en);
-              const amount = variance(c.skill.power + en.d.stats.mat * 1.2);
+              // M3·A: enemy formula heals run the MZ pipeline too (flat power
+              // and %-of-max stack on top, as on the party side).
+              const fBase = formulaBase(c.skill, en, ally);
+              let amount =
+                fBase != null
+                  ? mzDamageValue({
+                      base: fBase,
+                      elementRate: 1,
+                      critical: formulaCrit(c.skill, en),
+                      variance: Number(c.skill.variance) || 0,
+                      guarding: false,
+                      randomInt: rnd,
+                    }) + (Number(c.skill.power) || 0)
+                  : variance(
+                      (Number(c.skill.power) || 0) + en.d.stats.mat * 1.2,
+                    );
+              if (c.skill.powerPct)
+                amount += Math.floor(
+                  ((ally.d.stats.mhp || 0) * c.skill.powerPct) / 100,
+                );
               ally.hp = Math.min(ally.d.stats.mhp, ally.hp + amount);
               if (healAnim) {
                 await playBattleAnim(healAnim, sprs[en.i], [sprs[ally.i]]);
@@ -839,24 +1038,63 @@ export const Battle: any = {
             const t = pool[weightedTargetIndex(pool, rndf())];
             const enemyAnim = c.skill ? animById(c.skill.animationId) : null;
             enemyStep(en);
-            let dmg;
-            if (c.skill && c.skill.type !== "heal") {
-              const atkStat =
-                c.skill.type === "phys" ? en.d.stats.atk : en.d.stats.mat;
-              const defStat =
-                c.skill.type === "phys" ? actorDef(t) : param(t, "mdf") * 1.5;
-              dmg = variance(c.skill.power + atkStat * 2 - defStat);
-              dmg = Math.max(
-                1,
-                Math.floor(
-                  dmg *
-                    actorIncomingRate(
-                      t,
-                      skillElement(c.skill),
-                      guards.has(t),
-                    ),
-                ),
+            // M3·A: the defender can evade physical actions when evadeChance
+            // traits exist (Atlas-native: no traits → no roll → never evades).
+            if (
+              (!c.skill || c.skill.type === "phys") &&
+              physToHit(en, t) !== "hit"
+            ) {
+              floatText(actorElement(t), "EVADED", "state");
+              await say(
+                en.d.name +
+                  (c.skill ? " uses " + c.skill.name : " attacks") +
+                  " — " +
+                  t.name +
+                  " evades!",
+                550,
               );
+              return;
+            }
+            let dmg;
+            let drainedE = 0;
+            if (c.skill && c.skill.type !== "heal") {
+              const fBase = formulaBase(c.skill, en, t);
+              if (fBase != null) {
+                // M3·A MZ pipeline: element rate from the actor's class
+                // traits; guard is MZ's ÷2 (grd stays 1 until M3·B).
+                dmg = mzDamageValue({
+                  base: fBase,
+                  elementRate: RA.traitRate(
+                    actorClass(t),
+                    "element",
+                    skillElement(c.skill),
+                    1,
+                  ),
+                  critical: formulaCrit(c.skill, en),
+                  variance: Number(c.skill.variance) || 0,
+                  guarding: guards.has(t),
+                  randomInt: rnd,
+                });
+              } else {
+                const atkStat =
+                  c.skill.type === "phys" ? en.d.stats.atk : en.d.stats.mat;
+                const defStat =
+                  c.skill.type === "phys" ? actorDef(t) : param(t, "mdf") * 1.5;
+                dmg = variance(
+                  (Number(c.skill.power) || 0) + atkStat * 2 - defStat,
+                );
+                dmg = Math.max(
+                  1,
+                  Math.floor(
+                    dmg *
+                      actorIncomingRate(
+                        t,
+                        skillElement(c.skill),
+                        guards.has(t),
+                      ),
+                  ),
+                );
+              }
               if (c.skill.type === "phys")
                 dmg = applyRowScale(dmg, rowTakenScale(rowOf(t)));
               if (!enemyAnim) Sfx.play(c.skill.type === "phys" ? "hit" : "magic");
@@ -866,6 +1104,35 @@ export const Battle: any = {
                 castFx(sprs[en.i], c.skill, 1);
                 await travel(sprs[en.i], actorElement(t), c.skill);
               }
+              // MP damage/drain (MZ types 2/6) lands on MP and never KOs.
+              const dtypeE = c.skill.dmgType;
+              if (dtypeE === "mp" || dtypeE === "mpDrain") {
+                const dealt = Math.min(t.mp, dmg);
+                t.mp -= dealt;
+                actorFlash(t);
+                if (!enemyAnim)
+                  burst(actorElement(t), skillKind(c.skill), {
+                    color: c.skill.color,
+                  });
+                floatText(actorElement(t), "-" + dealt + " MP", "damage");
+                if (dtypeE === "mpDrain")
+                  en.mp = Math.min(en.d.stats.mmp || 0, enemyMp(en) + dealt);
+                refreshParty();
+                await say(
+                  en.d.name +
+                    " uses " +
+                    c.skill.name +
+                    " — " +
+                    t.name +
+                    " loses " +
+                    dealt +
+                    " MP!",
+                  550,
+                );
+                await applySkillState(c.skill, t);
+                return;
+              }
+              if (dtypeE === "hpDrain") drainedE = Math.min(t.hp, dmg);
               await say(
                 en.d.name +
                   " uses " +
@@ -912,6 +1179,12 @@ export const Battle: any = {
             win.classList.add("shake");
             refreshParty();
             if (t.hp <= 0) await say(t.name + " falls!", 500);
+            if (drainedE > 0 && en.alive) {
+              // HP drain (MZ type 5): the enemy absorbs what it dealt.
+              en.hp = Math.min(en.d.stats.mhp, en.hp + drainedE);
+              floatText(sprs[en.i], "+" + drainedE, "heal");
+              await say(en.d.name + " absorbs " + drainedE + " HP!", 450);
+            }
             if (c.skill) await applySkillState(c.skill, t);
           }
     }

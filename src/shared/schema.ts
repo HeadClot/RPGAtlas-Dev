@@ -224,11 +224,24 @@ export interface Skill {
    *  brings them back to life (HP restored by the usual heal formula). Absent
    *  = false — ordinary heals never touch the fallen. */
   revive?: boolean;
-  /** Verbatim RPG Maker MZ/MV damage formula string (Project Compass M1·A,
-   *  decision D1). Stored on import; the sandboxed evaluator that consumes it
-   *  lands in M3·A. Absent on Atlas-native skills — nothing reads this today, so
-   *  it is inert (structured `power` remains the damage source until M3·A). */
+  /** RPG Maker MZ/MV damage formula string (Project Compass, decision D1).
+   *  Stored verbatim at import since M1·A; since M3·A the sandboxed evaluator
+   *  (src/shared/formula.ts) runs it in battle — a compilable formula replaces
+   *  the structured `power` curve; a rejected one falls back to it. Absent on
+   *  Atlas-native skills unless authored in the editor's Advanced damage box. */
   formula?: string;
+  /** MZ damage variance % (0–100), applied by the M3·A formula pipeline.
+   *  Absent = 0 (the formula hits for exactly its value). */
+  variance?: number;
+  /** MZ "can critical" flag — a formula hit may crit (×3, MZ order) against
+   *  the attacker's critChance trait sum. Absent = formula hits never crit. */
+  critical?: boolean;
+  /** MZ damage-type variants (M3·A): "mp" damages/heals MP instead of HP,
+   *  "hpDrain"/"mpDrain" give the dealt amount to the attacker. Absent = HP. */
+  dmgType?: "mp" | "hpDrain" | "mpDrain";
+  /** Heals also restore this % of the target's max HP (MZ Recover-HP effect
+   *  value1, M3·A). Absent = 0. */
+  powerPct?: number;
 }
 
 export interface StateDef {
@@ -255,9 +268,16 @@ export interface Item {
    *  them back to life with `hp` HP restored. Absent = false — ordinary
    *  restoratives never revive. */
   revive?: boolean;
-  /** Verbatim RPG Maker MZ/MV damage formula string (Project Compass M1·A,
-   *  decision D1) — see `Skill.formula`. Inert until the M3·A evaluator. */
+  /** RPG Maker MZ/MV damage formula string (decision D1) — see
+   *  `Skill.formula`. Since M3·A a compilable heal-type formula adds to the
+   *  item's recovery (evaluated with a = b = target). */
   formula?: string;
+  /** MZ damage variance % applied to the item's formula part (M3·A). */
+  variance?: number;
+  /** Also restores this % of the target's max HP / max MP (MZ Recover effect
+   *  value1, M3·A). Absent = 0. */
+  hpPct?: number;
+  mpPct?: number;
 }
 
 export interface Weapon {

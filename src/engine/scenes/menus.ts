@@ -14,12 +14,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { Assets, RA, RPGAtlasJournalView } from "../../shared/deps.js";
-import { el, esc, clamp, sysSe } from "../util.js";
+import { el, esc, clamp, rnd, sysSe } from "../util.js";
+import { getFormula, mzApplyVariance } from "../../shared/formula.js";
 import { showList, pushUI, removeUI } from "../ui-stack.js";
 import { ctx, fns } from "../state/engine-context.js";
 import {
   G,
   actorClass,
+  actorFormulaFacade,
   param,
   learnedSkills,
   skillMpCost,
@@ -529,27 +531,47 @@ async function menuItems(): Promise<void> {
 /** Apply an item to a target. Returns false (with a buzzer) when the item
  *  can't act on that target — a revive item on a living ally, or an ordinary
  *  restorative on a fallen one — so callers can skip the "used it" flourish. */
-export function useItemOn(it: any, target: any): boolean {
+export function useItemOn(it: any, target: any): false | { hp: number; mp: number } {
   const fallen = target.hp <= 0;
+  // M3·A: %-of-max recovery (hpPct/mpPct) and an imported recovery formula
+  // join the flat amounts. The formula evaluates with a = b = target (item
+  // use has no "user" battler in Atlas — documented approximation) and takes
+  // the item's variance, per MZ; all randomness stays on the seedable stream.
+  let hp = Number(it.hp) || 0;
+  let mp = Number(it.mp) || 0;
+  if (it.hpPct) hp += Math.floor((param(target, "mhp") * it.hpPct) / 100);
+  if (it.mpPct) mp += Math.floor((param(target, "mmp") * it.mpPct) / 100);
+  const f = it.formula ? getFormula(it.formula) : null;
+  if (f) {
+    const me = actorFormulaFacade(target);
+    const base = f.eval({
+      a: me,
+      b: me,
+      v: (n: any) => Number(G.vars[n]) || 0,
+      randomInt: rnd,
+    });
+    hp += Math.max(0, Math.round(mzApplyVariance(base, Number(it.variance) || 0, rnd)));
+  }
   if (it.revive) {
     if (!fallen) {
       sysSe("buzzer");
       return false;
     }
-    // Bring the fallen ally back with `hp` HP (at least 1); MP tops up too.
-    target.hp = clamp(Math.max(1, it.hp || 1), 1, param(target, "mhp"));
-    if (it.mp) target.mp = clamp(target.mp + it.mp, 0, param(target, "mmp"));
+    // Bring the fallen ally back with the healed HP (at least 1); MP tops up.
+    hp = Math.max(1, hp);
+    target.hp = clamp(hp, 1, param(target, "mhp"));
+    if (mp) target.mp = clamp(target.mp + mp, 0, param(target, "mmp"));
   } else {
     if (fallen) {
       sysSe("buzzer");
       return false;
     }
-    if (it.hp) target.hp = clamp(target.hp + it.hp, 0, param(target, "mhp"));
-    if (it.mp) target.mp = clamp(target.mp + it.mp, 0, param(target, "mmp"));
+    if (hp) target.hp = clamp(target.hp + hp, 0, param(target, "mhp"));
+    if (mp) target.mp = clamp(target.mp + mp, 0, param(target, "mmp"));
   }
   sysSe("heal");
   addInv("item", it.id, -1);
-  return true;
+  return { hp, mp };
 }
 
 async function menuSkills(): Promise<void> {
