@@ -574,6 +574,11 @@ async function menuSkills(): Promise<void> {
     const s = skills[i];
     const target = await pickPartyMember("Heal whom?");
     if (!target) continue;
+    // Mirror useItemOn / the battle heal: only a revive skill may raise a fallen
+    // ally, and an ordinary heal refuses one — so reviving stays meaningful in
+    // the field menu too (a plain heal can't quietly bring an ally back).
+    const fallen = target.hp <= 0;
+    if (s.revive ? !fallen : fallen) { sysSe("buzzer"); continue; }
     a.mp -= skillMpCost(a, s);
     const amount = Math.max(
       1,
