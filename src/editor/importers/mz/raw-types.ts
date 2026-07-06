@@ -521,6 +521,9 @@ export interface MzRawData {
   animations?: RmList<RmAnimation>;
   /** Present for reporting/plugins in later steps; unused by M1·A conversion. */
   plugins?: RmPlugin[];
+  /** `js/plugins/<name>.js` source text per manifest plugin, read as TEXT for
+   *  the plugin converter (metadata + credits parsing — never executed). */
+  pluginSources?: Record<string, string>;
   /** Relative asset paths discovered under img/ + audio/ (for M1·B/M4·B). */
   assetPaths?: string[];
 }

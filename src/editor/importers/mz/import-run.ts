@@ -72,8 +72,9 @@ function summarize(project: Project): ImportReportSummary {
  *  happened" voice; the summary leads with the good news. */
 export function buildImportReportDoc(conv: MzProjectResult, project: Project): ImportReportDoc {
   // M5·A: the add-ons section — parse js/plugins.js into honest guidance (never
-  // executed; the manifest was read as text in intake). Omitted when empty.
-  const plugins = buildPluginReport(conv.raw?.plugins);
+  // executed; the manifest was read as text in intake). The plugin converter's
+  // output adds author credits + the converted flag. Omitted when empty.
+  const plugins = buildPluginReport(conv.raw?.plugins, conv.convertedPlugins);
   return {
     source: conv.format,
     when: Date.now(),

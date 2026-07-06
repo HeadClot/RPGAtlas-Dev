@@ -178,16 +178,21 @@ const PLUGIN_BADGE: Record<ImportReportPlugin["verdict"], { icon: string; word: 
 function renderPluginsSection(box: HTMLElement, plugins: ImportReportPlugin[] | undefined): void {
   if (!plugins || !plugins.length) return;
   box.appendChild(h("h4", null, "🔌 Add-ons (plugins)"));
+  const anyConverted = plugins.some((p) => p.converted);
   box.appendChild(h("p", { class: "dim" },
     "Your game used " + plugins.length + " add-on" + (plugins.length === 1 ? "" : "s") +
-    ". RPG Maker add-ons are little programs Atlas can't run, so here's what each one did and " +
-    "what Atlas gives you instead — your settings were saved either way."));
+    ". RPG Maker add-on code talks to RPG Maker's insides, so it can't run here — but " +
+    (anyConverted
+      ? "Atlas converted each one into an Atlas add-on in Tools ▸ Plugin Manager, keeping its name, " +
+        "its author's credit, and every setting. Here's what each one did and what Atlas gives you instead."
+      : "here's what each one did and what Atlas gives you instead — your settings were saved either way.")));
   const list = h("div", { style: "margin:4px 0" });
   for (const pl of plugins) {
     const b = PLUGIN_BADGE[pl.verdict] || PLUGIN_BADGE.unknown;
     const meta: string[] = [];
     if (!pl.on) meta.push("was turned off");
     if (pl.paramCount > 0) meta.push("kept its " + pl.paramCount + " setting" + (pl.paramCount === 1 ? "" : "s"));
+    if (pl.converted) meta.push("now in your Plugin Manager");
     const card = h("div", {
       style:
         "margin:6px 0;padding:7px 10px;border-radius:8px;border:1px solid rgba(" + b.tint + ",.45);" +
@@ -195,6 +200,7 @@ function renderPluginsSection(box: HTMLElement, plugins: ImportReportPlugin[] | 
     },
       h("div", null,
         h("b", null, b.icon + " " + pl.name),
+        pl.author ? h("span", { class: "dim", style: "font-size:12px" }, " by " + pl.author) : null,
         h("span", { class: "dim", style: "font-size:12px" }, "  " + b.word),
         meta.length ? h("span", { class: "dim", style: "font-size:12px" }, " · " + meta.join(", ")) : null),
       h("div", { style: "font-size:13px;margin-top:2px" },

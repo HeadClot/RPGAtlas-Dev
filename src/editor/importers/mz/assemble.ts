@@ -7,8 +7,9 @@
 
    The converted System patch (A6) overlays the base's engine defaults (input
    bindings, screenScale, sound/music channels) so nothing plumbing-critical is
-   lost; converted collections replace the sample content; the plugin list and
-   stamps stay as the engine defaults (imported plugins are M5·A). Battle
+   lost; converted collections replace the sample content; the engine's default
+   plugin list stays first, with the plugin converter's RM add-on shells
+   (credits + settings kept, original code inert) appended after it. Battle
    animations replace the defaults when the source had any (M4·B) — MZ
    Effekseer entries resolve their visual fallback HERE, against the base's
    animations, before the swap (D4). `project.assets.tiles` gains
@@ -79,6 +80,15 @@ export function assembleProject(base: Project, conv: MzProjectConversion): Proje
 
   // An imported project starts with no Atlas sample quests.
   p.quests = [];
+
+  // The plugin converter's shells join the Plugin Manager AFTER the engine's
+  // bundled plugins (built-ins keep running first). Fresh ids continue from
+  // whatever the base already holds; RM load order is preserved.
+  if (conv.convertedPlugins && conv.convertedPlugins.length) {
+    p.plugins = p.plugins || [];
+    let nextId = p.plugins.reduce((m, pl) => Math.max(m, Number(pl.id) || 0), 0) + 1;
+    for (const cp of conv.convertedPlugins) p.plugins.push({ ...cp.entry, id: nextId++ });
+  }
 
   return p;
 }

@@ -229,8 +229,37 @@ export async function readRawProject(
   raw.maps = await readMapFiles(source, paths, report);
 
   raw.plugins = parsePluginsJs(await source.readText("js/plugins.js"));
+  raw.pluginSources = await readPluginSources(source, paths, raw.plugins);
   raw.assetPaths = paths.filter((p) => /^(img|audio)\//i.test(p));
   return raw;
+}
+
+/** Read `js/plugins/<name>.js` for each manifest plugin (case-insensitive
+ *  lookup, like the data files). The text feeds the plugin converter's
+ *  metadata/credits parsing — it is NEVER executed (locked decision 5). Only
+ *  manifest-listed plugins are read, so a fat plugins folder full of unused
+ *  files costs nothing. */
+async function readPluginSources(
+  source: MzFileSource,
+  paths: string[],
+  plugins: RmPlugin[],
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (!plugins.length) return out;
+  const byLower = new Map<string, string>();
+  for (const p of paths) {
+    const n = norm(p);
+    if (/^js\/plugins\/[^/]+\.js$/i.test(n)) byLower.set(n.toLowerCase(), n);
+  }
+  for (const pl of plugins) {
+    const name = String(pl.name || "").trim();
+    if (!name) continue;
+    const hit = byLower.get(("js/plugins/" + name + ".js").toLowerCase());
+    if (!hit) continue;
+    const text = await source.readText(hit);
+    if (text != null) out[name] = text;
+  }
+  return out;
 }
 
 /** Discover + parse every `data/Map###.json`, injecting the filename id. Padded

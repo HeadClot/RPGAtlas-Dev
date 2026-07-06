@@ -35,6 +35,9 @@
 <h2 id="how-plugins-run">How plugins run</h2>
 <p>Plugins run <strong>in order at game boot</strong>. Each plugin receives the <code>atlas</code> engine bridge (and a <code>game</code> script API). You register <strong>hooks</strong> — functions the engine calls at the right moments — rather than taking over the loop yourself.</p>
 <hr>
+<h2 id="plugins-converted-from-rpg-maker">Plugins converted from RPG Maker</h2>
+<p>Importing an RPG Maker game converts each of its add-ons into an Atlas plugin with a <strong>from RPG Maker</strong> badge. These are honest <em>shells</em>: they keep the add-on's name, the <strong>original author's credit</strong>, every setting from the RPG Maker project, and (size permitting) the original source as inert reference text. When they run, they only publish that bundle at <code>atlas.rm.plugins["AddOnName"]</code> — RPG Maker code itself never executes. If you want the add-on's behavior back, everything needed to rebuild it with the Atlas API is inside the shell; please keep the original author's credit when you do.</p>
+<hr>
 <h2 id="the-atlas-bridge-api-surface">The <code>atlas</code> bridge (API surface)</h2>
 <p>The bridge gives you the engine's state and the hooks to react to it:</p>
 <p><strong>State & systems</strong></p>

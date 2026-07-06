@@ -16,6 +16,7 @@
 
 import type { ImportReportPlugin } from "../../../shared/schema";
 import type { RmPlugin } from "./raw-types";
+import type { ConvertedRmPlugin } from "./plugin-converter";
 
 /** How well Atlas covers what a plugin did. `builtin` = Atlas already has this ·
  *  `partial` = Atlas has something close · `none` = Atlas doesn't do this (the
@@ -201,19 +202,30 @@ export function guidePlugin(name: string): { verdict: PluginVerdict; advice: str
 }
 
 /** Turn a parsed `js/plugins.js` list into the report's plugin section. Empty in,
- *  empty out (a project with no plugins shows no add-ons section). */
-export function buildPluginReport(plugins: RmPlugin[] | undefined): ImportReportPlugin[] {
+ *  empty out (a project with no plugins shows no add-ons section). `converted`
+ *  (the plugin converter's output, when it ran) adds each add-on's author
+ *  credit + the "now in your Plugin Manager" flag to its card. */
+export function buildPluginReport(
+  plugins: RmPlugin[] | undefined,
+  converted?: ConvertedRmPlugin[],
+): ImportReportPlugin[] {
   if (!plugins || !plugins.length) return [];
+  const convByName = new Map<string, ConvertedRmPlugin>();
+  for (const c of converted || []) convByName.set(String(c.entry.name || ""), c);
   return plugins.map((pl) => {
     const g = guidePlugin(pl.name);
     const paramCount = pl.parameters ? Object.keys(pl.parameters).length : 0;
+    const name = String(pl.name || "").trim() || "(unnamed add-on)";
+    const conv = convByName.get(name);
     return {
-      name: String(pl.name || "").trim() || "(unnamed add-on)",
+      name,
       on: !!pl.status,
       paramCount,
       verdict: g.verdict,
       advice: g.advice,
       ...(g.pointer ? { pointer: g.pointer } : {}),
+      ...(conv ? { converted: true } : {}),
+      ...(conv && conv.author ? { author: conv.author } : {}),
     };
   });
 }

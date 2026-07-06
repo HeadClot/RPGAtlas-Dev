@@ -61,6 +61,8 @@ export function openPluginManager() {
         ...(pl.on ? { checked: "" } : {}) });
       const kids = [cb, h("span", { class: "plug-name" }, pl.name || "(unnamed)")];
       if (pl.builtin) kids.push(h("span", { class: "plug-badge" }, "built-in"));
+      // Shells the RM import's plugin converter made — credits + settings kept.
+      if (pl.rmImport) kids.push(h("span", { class: "plug-badge", title: "Converted from an RPG Maker add-on — the original author's credit and settings are kept inside" }, "from RPG Maker"));
       kids.push(h("span", { class: "plug-status " + st.cls }, st.label));
       list.appendChild(h("li", {
         class: (pl === cur ? "sel" : "") + (pl.on ? "" : " off"),

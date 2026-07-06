@@ -640,6 +640,53 @@ function pluginsJs() {
   return "//=============================================================================\n// Cove Test — plugin list (self-made fixture, no third-party code)\n//=============================================================================\n\nvar $plugins =\n" + JSON.stringify(list, null, 0) + ";\n";
 }
 
+function coveTextPluginJs(mz) {
+  // js/plugins/CoveText.js — a SELF-MADE demo plugin source (no third-party
+  // code) so the plugin converter has an annotation block to parse: author
+  // credit, params, an MZ command, and a body touching RM internals. The
+  // importer reads it as text only; nothing here ever executes.
+  return [
+    "//=============================================================================",
+    "// CoveText.js — self-made fixture plugin (RPGAtlas test suite)",
+    "//=============================================================================",
+    "/*:",
+    " * @target " + (mz ? "MZ" : "MV"),
+    " * @plugindesc v1.2 Demo: draws banner text over the map.",
+    " * @author Cove Harbor",
+    " * @url https://example.invalid/covetext",
+    " *",
+    " * @param BannerColor",
+    " * @text Banner Color",
+    " * @desc Which system color the banner uses.",
+    " * @type number",
+    " * @default 3",
+    " *",
+    " * @param Speed",
+    " * @desc How fast the banner slides in.",
+    " * @default 4",
+    " *",
+    " * @command showBanner",
+    " * @text Show Banner",
+    " * @desc Slides a text banner over the map.",
+    " *",
+    " * @arg text",
+    " * @arg duration",
+    " *",
+    " * @help CoveText v1.2 — write a banner with the showBanner command.",
+    " * Made only for the RPGAtlas test fixtures.",
+    " */",
+    "(() => {",
+    "  const params = PluginManager.parameters('CoveText');",
+    "  const _update = Scene_Map.prototype.update;",
+    "  Scene_Map.prototype.update = function () {",
+    "    _update.call(this);",
+    "    if ($gameSwitches.value(1)) this._coveBanner = params['BannerColor'];",
+    "  };",
+    "})();",
+    "",
+  ].join("\n");
+}
+
 function System(mz, keyHex) {
   const veh = (name, x, y) => ({ characterName: "Vehicle", characterIndex: 0, bgm: audio(name), startMapId: 1, startX: x, startY: y });
   const sys = {
@@ -738,8 +785,11 @@ function build(target) {
   // Show Picture command (231). Decryptable with System.encryptionKey.
   writeBin(`img/pictures/Sign.${encExt}`, encrypt(PNG_1x1, keyHex));
 
-  // js/plugins.js
+  // js/plugins.js + the one demo plugin source the converter parses (the other
+  // three manifest entries stay source-less on purpose — the manifest-only
+  // conversion path needs fixture coverage too).
   writeText("js/plugins.js", pluginsJs());
+  writeText("js/plugins/CoveText.js", coveTextPluginJs(mz));
 
   return projDir;
 }

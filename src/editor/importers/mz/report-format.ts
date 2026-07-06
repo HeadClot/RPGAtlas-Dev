@@ -100,7 +100,9 @@ export function reportDocToText(doc: ImportReportDoc): string {
       const meta: string[] = [];
       if (!pl.on) meta.push("was turned off");
       if (pl.paramCount > 0) meta.push("kept its " + pl.paramCount + " setting" + (pl.paramCount === 1 ? "" : "s"));
-      out.push(`  ${v.icon} ${pl.name} — ${v.word}${meta.length ? " · " + meta.join(", ") : ""}`);
+      if (pl.converted) meta.push("converted into your Plugin Manager");
+      const credit = pl.author ? " (by " + pl.author + ")" : "";
+      out.push(`  ${v.icon} ${pl.name}${credit} — ${v.word}${meta.length ? " · " + meta.join(", ") : ""}`);
       out.push(`      ${pl.advice}${pl.pointer ? " Look in " + pl.pointer + "." : ""}`);
     }
   }

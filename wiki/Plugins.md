@@ -35,6 +35,18 @@ taking over the loop yourself.
 
 ---
 
+## Plugins converted from RPG Maker
+
+Importing an RPG Maker game converts each of its add-ons into an Atlas plugin with a
+**from RPG Maker** badge. These are honest *shells*: they keep the add-on's name, the **original
+author's credit**, every setting from the RPG Maker project, and (size permitting) the original
+source as inert reference text. When they run, they only publish that bundle at
+`atlas.rm.plugins["AddOnName"]` — RPG Maker code itself never executes. If you want the add-on's
+behavior back, everything needed to rebuild it with the Atlas API is inside the shell; please keep
+the original author's credit when you do.
+
+---
+
 ## The `atlas` bridge (API surface)
 
 The bridge gives you the engine's state and the hooks to react to it:

@@ -1709,6 +1709,11 @@ export interface PluginEntry {
   name?: string;
   builtin?: boolean;
   enabled?: boolean;
+  /** Checked in the Plugin Manager — the runtime runs `on` plugins at boot. */
+  on?: boolean;
+  /** True for shells the RPG Maker import's plugin converter created: original
+   *  credits + settings kept, generated code publishes them at atlas.rm. */
+  rmImport?: boolean;
   code?: string;
   pluginId?: string;
   version?: string;
@@ -1789,9 +1794,12 @@ export interface ImportReportSummary {
 }
 
 /** One add-on (RPG Maker plugin) from `js/plugins.js`, with honest guidance
- *  (Project Compass, M5·A). RPG Maker JS plugins can't auto-convert, so the
- *  report names each one, keeps its settings, and says whether Atlas already
- *  does that. The plugin `.js` is never executed — only the manifest is read. */
+ *  (Project Compass, M5·A). RPG Maker plugin BEHAVIOR can't auto-convert (it
+ *  talks to RPG Maker's insides), so the report names each one, keeps its
+ *  settings, and says whether Atlas already does that. Since the plugin
+ *  converter, each add-on also becomes an Atlas plugin shell (`converted`)
+ *  carrying its author credit — but the original `.js` is still never
+ *  executed. */
 export interface ImportReportPlugin {
   /** The add-on's name as listed in plugins.js. */
   name: string;
@@ -1807,6 +1815,12 @@ export interface ImportReportPlugin {
   advice: string;
   /** Where to look in Atlas ("Quests panel"), if any. */
   pointer?: string;
+  /** The original author, as the plugin's own @author tag declared (plugin
+   *  converter — credits always come along). Absent when it never said. */
+  author?: string;
+  /** True when the plugin converter carried this add-on into the Plugin
+   *  Manager as an Atlas shell (settings + credits + inert source). */
+  converted?: boolean;
 }
 
 /** The saved import report (Project Compass, M1·D). Stored on the project so

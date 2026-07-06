@@ -5,6 +5,20 @@
 export const PATCH_NOTES = [
   {
     date: "July 5, 2026",
+    title: "RPG Maker add-ons now convert into Atlas plugins — credits included",
+    summary:
+      "Importing an RPG Maker game now runs a plugin converter: every add-on listed in your project becomes a real entry in Tools ▸ Plugin Manager, keeping its name, its original author's credit, its description, and every setting you had chosen. When the add-on's .js file is in your project folder, Atlas also reads its info card (the author, settings, and commands it declared) and carries the original code along as reference — clearly marked, never run. Honesty note: RPG Maker add-on code talks to RPG Maker's own insides, which Atlas doesn't have, so the converted plugin is a faithful shell — the import report still tells you which Atlas feature covers what each add-on did.",
+    items: [
+      "New: the RPG Maker import automatically converts each add-on from js/plugins.js into an Atlas plugin — no extra step, it happens during File ▸ Import from RPG Maker.",
+      "Credits are sacred: the original author's name (from the add-on's own @author tag) shows in the Plugin Manager, in the generated plugin's header, and in the import report — converting never takes a name off someone's work.",
+      "Every setting you picked in RPG Maker rides along, readable in the plugin and at atlas.rm.plugins for plugin writers.",
+      "The original add-on code comes too (when it isn't huge) as clearly-marked reference text — Atlas never runs RPG Maker code, so nothing can break or misbehave.",
+      "Converted add-ons keep their ON/OFF switch from RPG Maker and show a “from RPG Maker” badge in Tools ▸ Plugin Manager.",
+      "The import report's add-ons section now names each author and says “now in your Plugin Manager.”",
+    ],
+  },
+  {
+    date: "July 5, 2026",
     title: "Five more things now come across: Luck, dual wield, autosave, and custom menus",
     summary:
       "The RPG Maker import report's “left out on purpose” list just got a lot shorter. Atlas grew a real Luck stat (the eighth battle number — it nudges how often ailments and stat drops land), two-weapon fighting (dual-wield heroes get a second weapon slot in the Equip menu), autosave (the game quietly saves after map moves and won battles), custom pause-menu commands (hide Items, Skills, Save, or any command you don't want), and item-menu categories with a proper Key Items tab — story items can't be used up by accident anymore. Every one of these imports automatically from MZ/MV projects and can be switched on for your own games in Database ▸ System. Projects that don't use them play byte-for-byte the same as before.",

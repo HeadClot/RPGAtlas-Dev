@@ -34,6 +34,7 @@ import { convertAnimations, type AnimationFallback } from "./convert-animations"
 import { makeTranslator } from "./translate-commands";
 import { collectTilesetUsage, convertMaps } from "./convert-maps";
 import { convertTilesets } from "./convert-tilesets";
+import { convertRmPlugins, type ConvertedRmPlugin } from "./plugin-converter";
 import type { MzFormat, MzRawData, RmMap } from "./raw-types";
 
 /** The converted Atlas database (M1·A slice). `system` is a `Partial` patch to
@@ -133,6 +134,9 @@ export interface MzProjectConversion extends DatabaseConversion {
   mapFolders: MapFolder[];
   /** `project.assets.tiles` seed — stable `asset:tilesets/…` key → Atlas id. */
   assetTiles: Record<string, number>;
+  /** RM add-ons converted into Atlas plugin shells (credits + settings kept,
+   *  original code inert) — `assembleProject` appends them to the project. */
+  convertedPlugins: ConvertedRmPlugin[];
 }
 
 /** Convert database + tilesets + maps in one pass over the parsed raw data.
@@ -159,6 +163,9 @@ export function convertProject(
     tilesets: ts.tilesets,
     mapFolders: folders,
     assetTiles: ts.assetTiles,
+    // The plugin converter: every js/plugins.js add-on becomes an Atlas plugin
+    // shell — credits + settings carried, original source inert reference.
+    convertedPlugins: convertRmPlugins(raw.plugins, raw.pluginSources),
   };
 }
 
@@ -226,3 +233,12 @@ export type { ReimportDelta } from "./report-format";
 // M5·A — the plugin manifest guidance table.
 export { guidePlugin, buildPluginReport, normalizePluginName, GUIDANCE } from "./plugin-guidance";
 export type { PluginVerdict, PluginGuide } from "./plugin-guidance";
+// The RM → Atlas plugin converter (credits + settings kept, code inert).
+export {
+  convertRmPlugin,
+  convertRmPlugins,
+  parseRmPluginMeta,
+  analyzeRmPluginSource,
+  MAX_EMBED_SOURCE,
+} from "./plugin-converter";
+export type { ConvertedRmPlugin, RmPluginMeta, RmPluginParamMeta, RmPluginCommandMeta } from "./plugin-converter";

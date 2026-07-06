@@ -81,17 +81,29 @@ A **terminology cheat-sheet**, if the words are new:
 
 ## Add-ons (plugins)
 
-RPG Maker plugins are little JavaScript programs. RPGAtlas **can't run them** — but it doesn't just
-drop them, either. The report lists every add-on from your `js/plugins.js`, remembers whether it was
-on or off and how many settings it had, and tells you, in plain words, one of four things:
+RPG Maker plugins are little JavaScript programs written for RPG Maker's own insides — RPGAtlas
+**can't run their code**, but the import now **converts every one into an Atlas plugin**. Each
+add-on from your `js/plugins.js` becomes an entry in **Tools ▸ Plugin Manager** (with a
+*from RPG Maker* badge) that keeps:
+
+- the add-on's **name and its original author's credit** (read from the plugin's own `@author`
+  tag — converting never takes a name off someone's work),
+- **every setting** you had chosen, readable in the plugin and at `atlas.rm.plugins` for plugin
+  writers,
+- the **original code as clearly-marked reference text** (when the `.js` file was in your project
+  folder and isn't huge) — carried along so it's never lost, but **never executed**.
+
+The report still gives honest guidance about the add-on's *behavior*, one of four things:
 
 - **✅ Atlas already does this** — e.g. a quest journal → the built-in **Quests** panel.
 - **🔷 Atlas has something close** — e.g. a message or battle add-on.
 - **▫️ Atlas doesn't do this — your game still plays** — e.g. pixel movement, lighting, custom HUDs.
 - **❔ Settings kept, but it won't run** — an add-on RPGAtlas doesn't recognize.
 
-RPGAtlas **never runs plugin code** — it only reads the list as text. If a plugin was doing
-something important to your game, the report points you at the closest built-in feature.
+RPGAtlas **never runs RPG Maker plugin code** — it reads it as text only. The converted Atlas
+plugin is a faithful shell of credits + settings; if the add-on was doing something important to
+your game, the report points you at the closest built-in feature (or a plugin writer can rebuild
+its behavior with the Atlas plugin API, with everything they need already inside the shell).
 
 ---
 
