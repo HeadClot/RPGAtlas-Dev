@@ -84,6 +84,9 @@ async function commit(outcome: RmImportOutcome): Promise<void> {
 }
 
 function showError(e: any): void {
+  // The modal stays kid-friendly (D11); the console gets the real stack so a
+  // bug report from the field is diagnosable.
+  console.error("RPG Maker import failed:", e);
   const msg = e && e.message ? String(e.message) : String(e);
   modal({
     title: "Import didn't work",

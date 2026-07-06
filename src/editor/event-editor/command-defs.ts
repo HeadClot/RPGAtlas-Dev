@@ -1151,6 +1151,23 @@ import { openLocationPicker } from "./location-picker";
         box.appendChild(field("JS — api: game.setSwitch(id,v) getSwitch setVar getVar addGold(n) callCommonEvent(id) party() quest(id) questStatus startQuest advanceQuestObjective setQuestObjective completeQuest failQuest abandonQuest state()", ta));
         return () => { c.code = ta.value; };
       } },
+    // Read-only MZ/MV Script command (Project Compass M5·B). Not offered in the
+    // Add Command picker (`hidden`) — Atlas authors use the regular Script
+    // command — but selectable-without-crashing when an imported event contains
+    // one. The code stays read-only: the import gate vouched for exactly this
+    // snippet, and an edited one would run unchecked.
+    { t: "mzScript", label: "Script (from RPG Maker)", hidden: true,
+      make: () => ({ t: "mzScript", code: "" }),
+      form(c: any, box: any) {
+        box.appendChild(h("div", { class: "dim" },
+          "A little piece of RPG Maker script that Atlas checked and runs read-only — it can look at " +
+          "switches, variables, and the party, but it can't change anything."));
+        box.appendChild(field("Script (read-only)",
+          h("textarea", { rows: 4, spellcheck: "false", readonly: "" }, c.code || "")));
+        box.appendChild(h("div", { class: "dim" },
+          "Want it to do something different? Replace it with regular Atlas commands (or a Script command)."));
+        return () => {};
+      } },
     // MZ/MV import placeholder (Project Compass M1·C). Not offered in the Add
     // Command picker (`hidden`), but editable-without-crashing when an imported
     // event contains one; a no-op in the engine. See docs/mig-1-spec.md.
@@ -1169,11 +1186,23 @@ import { openLocationPicker } from "./location-picker";
   // Build a command's parameter form into any container and return its apply() commit
   // closure. Shared by the modal editor (editCommand) and the inline inspector, so each
   // per-type form builder is reused verbatim regardless of where it's hosted.
+  /** A command type with no CMD_DEFS entry (a plugin-registered command, or a
+   *  project from a newer Atlas) must never crash the inspector or the edit
+   *  dialog — show what we know and apply nothing. */
+  const UNKNOWN_DEF = {
+    label: "Unknown command",
+    form(c: any, box: any) {
+      box.appendChild(h("div", { class: "dim" },
+        'Atlas doesn\'t know how to edit a "' + (c && c.t) + '" command — it was kept as-is.'));
+      return () => {};
+    },
+  };
   export function mountForm(c: any, container: any) {
-    return cmdDef(c.t).form(c, container) || (() => {});
+    const def = cmdDef(c.t) || UNKNOWN_DEF;
+    return def.form(c, container) || (() => {});
   }
   export function editCommand(c: any, onDone: any, skipSnapshot?: any, snapFn?: any, onCancel?: any) {
-    const def = cmdDef(c.t);
+    const def = cmdDef(c.t) || UNKNOWN_DEF;
     const box = h("div");
     const apply = mountForm(c, box);
     modal({

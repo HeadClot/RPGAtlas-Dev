@@ -87,6 +87,13 @@ export function analyzeMzScript(code: string): MzScriptVerdict {
   const raw = String(code == null ? "" : code).trim();
   if (!raw) return { ok: false, reason: "the script is empty" };
   if (raw.length > MAX_LEN) return { ok: false, reason: "the script is too long to read safely" };
+  // Template literals are rejected on sight: stripLiterals would blank their
+  // contents for the token scan below, but a `${…}` interpolation still
+  // EXECUTES at runtime — code we never vouched for. The supported subset is
+  // tiny read expressions; backticks have no legitimate place in it.
+  if (raw.includes("`")) {
+    return { ok: false, reason: "it uses text in backticks, which Atlas can't check safely" };
+  }
 
   const src = stripLiterals(raw);
 

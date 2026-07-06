@@ -11,8 +11,6 @@
    (one property read) otherwise — map-runtime routes every tile read through
    them. GPL-3.0-or-later (see LICENSE). */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { Assets, RA } from "../../shared/deps.js";
 import { ctx } from "../state/engine-context.js";
 import {

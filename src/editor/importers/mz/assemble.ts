@@ -58,8 +58,17 @@ export function assembleProject(base: Project, conv: MzProjectConversion): Proje
     p.animations = conv.db.animations;
   }
 
-  // Maps, tilesets, autotiles, folders (M1·B).
-  p.maps = conv.maps;
+  // Maps, tilesets, autotiles, folders (M1·B). A source with no readable map
+  // files keeps the base's starter map — an empty `maps[]` can't boot, and the
+  // wizard commits `maps[0]` as the current map.
+  if (conv.maps.length) {
+    p.maps = conv.maps;
+  } else {
+    conv.report.bump("no-maps", () => ({
+      area: "Maps", kind: "partial", what: "your game's maps",
+      detail: "no map files were found in the project's data folder, so Atlas gave you a starter map — check that the folder you picked has Map001.json and friends inside data",
+    }));
+  }
   if (conv.tilesets.length) p.tilesets = conv.tilesets;
   if (conv.autotiles.length) p.autotiles = conv.autotiles;
   if (conv.mapFolders.length) p.mapFolders = conv.mapFolders;
