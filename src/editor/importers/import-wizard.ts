@@ -26,7 +26,7 @@ import {
   type ImportItem,
 } from "../../shared/asset-library";
 import type { AssetMeta } from "../../shared/services";
-import { gridCells, cellName, isCharsetSheet, parseAseprite, packFrames, type AsepriteSheet } from "./sheet-math";
+import { defaultSliceCell, gridCells, cellName, isCharsetSheet, parseAseprite, packFrames, type AsepriteSheet } from "./sheet-math";
 
 const TILE = 48;
 
@@ -61,7 +61,7 @@ function sliceCell(img: HTMLImageElement, sx: number, sy: number, cell: number):
 
 function tileSlicerModal(file: File, img: HTMLImageElement): Promise<ImportItem[]> {
   return new Promise((resolve) => {
-    let cell = [16, 24, 32, 48].find((s) => img.width % s === 0 && img.height % s === 0) || 48;
+    let cell = defaultSliceCell(img.width, img.height);
     let offX = 0, offY = 0, gap = 0;
     let pass: "" | ".pass" | ".terrain" = ".pass";
     const deselected = new Set<string>(); // "row,col" — default = all selected
@@ -143,6 +143,15 @@ function tileSlicerModal(file: File, img: HTMLImageElement): Promise<ImportItem[
           const { cells } = grid();
           const chosen = cells.filter((c) => !deselected.has(c.row + "," + c.col));
           if (!chosen.length) { alert("No cells selected."); return; }
+          // A whole-sheet import at a too-small cell size floods the library
+          // with thousands of tiles the palette then has to carry forever —
+          // make sure a big number is a choice, not an accident.
+          if (chosen.length > 1024 && !confirm(
+            "This would import " + chosen.length + " separate tiles from one picture!\n\n" +
+            "That is usually a sign the source cell size is too small — RPG Maker MV/MZ " +
+            "sheets use 48 px cells. Import all " + chosen.length + " tiles anyway?")) {
+            return;
+          }
           const items: ImportItem[] = [];
           for (const c of chosen) {
             items.push({

@@ -297,16 +297,27 @@ const Assets = (() => {
     return groups.flat().sort((a, b) => (a.type + "/" + a.name).localeCompare(b.type + "/" + b.name)).concat(libraryEntries());
   }
   async function prepareExternalAssets(catalog) {
-    const ready = [];
-    for (const item of catalog || []) {
-      // Audio entries (Phase 6) ride the same embedded catalog in exports but
-      // never bind here — the streamed deck resolves them by key.
-      if (item.type === "audio") continue;
-      try {
-        ready.push({ ...item, image: await loadImage(item.src) });
-      } catch (e) { console.warn(e.message); }
-    }
-    return ready;
+    // Audio entries (Phase 6) ride the same embedded catalog in exports but
+    // never bind here — the streamed deck resolves them by key.
+    const items = (catalog || []).filter((item) => item.type !== "audio");
+    // A device library can hold thousands of images (a sliced tileset sheet is
+    // hundreds of tiles), so decode through a small pool instead of one await
+    // per image — sequential decodes left the editor bootless for minutes.
+    const POOL = 16;
+    const ready = new Array(items.length);
+    let next = 0;
+    const worker = async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= items.length) return;
+        const item = items[i];
+        try {
+          ready[i] = { ...item, image: await loadImage(item.src) };
+        } catch (e) { console.warn(e.message); }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(POOL, items.length) }, worker));
+    return ready.filter(Boolean);
   }
 
   // speckle texture over the whole tile
@@ -795,12 +806,20 @@ const Assets = (() => {
     if (id <= 0 || id >= tiles.length || !tiles[id]) return;
     ctx.drawImage(tileCanvas(id), dx, dy);
   }
+  // Browsers cap a canvas edge around 32,767px; past ~600 rows of 48px tiles
+  // the palette canvas silently fails to draw. Big imported libraries widen
+  // the grid instead — click/highlight math shares this via paletteCols().
+  const MAX_PALETTE_ROWS = 600;
+  function paletteCols() {
+    return Math.max(PALETTE_COLS, Math.ceil(tiles.length / MAX_PALETTE_ROWS));
+  }
   function tilesetCanvas() {
-    const rows = Math.ceil(tiles.length / PALETTE_COLS);
-    const c = mkCanvas(PALETTE_COLS * TILE, rows * TILE), g = c.getContext("2d");
+    const cols = paletteCols();
+    const rows = Math.ceil(tiles.length / cols);
+    const c = mkCanvas(cols * TILE, rows * TILE), g = c.getContext("2d");
     g.fillStyle = "#222"; g.fillRect(0, 0, c.width, c.height);
     for (let i = 0; i < tiles.length; i++) {
-      drawTile(g, i, (i % PALETTE_COLS) * TILE, Math.floor(i / PALETTE_COLS) * TILE);
+      drawTile(g, i, (i % cols) * TILE, Math.floor(i / cols) * TILE);
     }
     return c;
   }
@@ -1343,8 +1362,12 @@ const Assets = (() => {
     for (const item of preparedExternal || []) {
       const key = assetKey(item.type, item.name);
       item.key = key;
+      // externalByKey mirrors external[type] membership (every push below is
+      // paired with this set), so it doubles as the O(1) duplicate check — a
+      // per-item array scan went quadratic on thousand-tile libraries.
+      const known = externalByKey.has(key);
       externalByKey.set(key, item);
-      if (!external[item.type].some((a) => a.key === key)) external[item.type].push(item);
+      if (!known) external[item.type].push(item);
 
       if (item.type === "characters") {
         // Flipbook sheets (Phase 6 importers) live under "characters" but are
@@ -1366,7 +1389,9 @@ const Assets = (() => {
         if (!ENEMY_TYPES.includes(key)) ENEMY_TYPES.push(key);
       } else if (item.type === "tilesets") {
         let id = project.assets.tiles[key];
-        const existingId = tiles.findIndex((t) => t && t.key === key);
+        // T is the live key → id map (seeded for built-ins, extended below for
+        // every bound import) — the old tiles.findIndex scan was O(n²).
+        const existingId = T[key] != null ? T[key] : -1;
         if (id == null) {
           id = existingId >= 0 ? existingId : nextTileId++;
           project.assets.tiles[key] = id;
@@ -1395,8 +1420,23 @@ const Assets = (() => {
     charCache = {};
     return project;
   }
+  // One in-flight discover+prepare, shared by boot and any mid-boot register
+  // call (boot no longer blocks the UI on this, so callers can overlap now).
+  let preparingExternal = null;
+  async function ensurePreparedExternal() {
+    if (!preparedExternal) {
+      if (!preparingExternal) {
+        preparingExternal = (async () => prepareExternalAssets(await discoverExternalAssets()))();
+      }
+      const prepared = await preparingExternal;
+      // registerExternalAssets may have appended while we awaited — never
+      // clobber a cache that materialized in the meantime.
+      if (!preparedExternal) preparedExternal = prepared;
+    }
+    return preparedExternal;
+  }
   async function loadExternalAssets(project) {
-    if (!preparedExternal) preparedExternal = await prepareExternalAssets(await discoverExternalAssets());
+    await ensurePreparedExternal();
     return bindExternalAssets(project);
   }
   // Live registration for assets imported mid-session (Phase 6): prepare the
@@ -1407,10 +1447,11 @@ const Assets = (() => {
   async function registerExternalAssets(items, project) {
     // Discovery must run before the cache is appended to, or a pre-boot call
     // would mark it warm and the shipped img/ catalog would never load.
-    if (!preparedExternal) preparedExternal = await prepareExternalAssets(await discoverExternalAssets());
+    await ensurePreparedExternal();
+    const prepared = new Set((preparedExternal || []).map((p) => p.type + "\0" + p.name + "\0" + p.src));
     const fresh = (items || []).filter((item) =>
       item && external[item.type] !== undefined && item.src &&
-      !(preparedExternal || []).some((p) => p.type === item.type && p.name === item.name && p.src === item.src));
+      !prepared.has(item.type + "\0" + item.name + "\0" + item.src));
     if (fresh.length) preparedExternal = (preparedExternal || []).concat(await prepareExternalAssets(fresh));
     return bindExternalAssets(project);
   }
@@ -1493,7 +1534,7 @@ const Assets = (() => {
   }
 
   return {
-    TILE, PALETTE_COLS, tiles, T, drawTile, tileCanvas, tilesetCanvas,
+    TILE, PALETTE_COLS, paletteCols, tiles, T, drawTile, tileCanvas, tilesetCanvas,
     charsets, charsetIndex, drawChar, charFrameCanvas, faceCanvas, charSheetCanvas,
     HAIR_STYLES, registerHuman, removeCharset, registerCustomChars,
     ENEMY_TYPES, enemyCanvas, assetLabel, loadExternalAssets, bindExternalAssets, registerExternalAssets, exportUsedExternalAssets,

@@ -24,6 +24,7 @@ import {
   libraryImageEntries,
   libraryMetas,
   removeAsset,
+  removeAssets,
   renameAsset,
   updateAssetMeta,
   usedAssetKeys,
@@ -394,20 +395,20 @@ export function openAssetBrowser() {
     }
   }
 
-  function thumbFor(meta: AssetMeta): any {
+  function thumbFor(meta: AssetMeta, srcByKey: Map<string, string>): any {
     if (meta.type === "audio") {
       return h("div", { class: "ab-thumb ab-audio" },
         h("span", { class: "ab-note" }, "♪"),
         h("span", { class: "ab-kind" }, (meta.kind || "se").toUpperCase()),
         fmtDur(meta.dur) ? h("span", { class: "dim" }, fmtDur(meta.dur)) : null);
     }
-    const src = libraryImageEntries().find((e: any) => e.key === meta.key)?.src;
+    const src = srcByKey.get(meta.key);
     const box = h("div", { class: "ab-thumb" });
     if (src) box.appendChild(h("img", { src, alt: meta.name }));
     return box;
   }
 
-  function card(meta: AssetMeta, used: Set<string>): any {
+  function card(meta: AssetMeta, used: Set<string>, srcByKey: Map<string, string>): any {
     const inUse = used.has(meta.key);
     const actions = h("div", { class: "ab-actions" });
     if (meta.type === "audio") {
@@ -462,7 +463,7 @@ export function openAssetBrowser() {
     } }, "Delete"));
 
     return h("div", { class: "ab-card", title: meta.key },
-      thumbFor(meta),
+      thumbFor(meta, srcByKey),
       h("div", { class: "ab-name" }, meta.name),
       h("div", { class: "ab-meta dim" },
         (meta.meta && meta.meta.charset === false ? "Sheet" : TYPE_LABELS[meta.type]) + " · " + fmtBytes(meta.bytes) +
@@ -496,7 +497,24 @@ export function openAssetBrowser() {
               ? "No imported assets yet — copy PNG/OGG files into the import folder above (Open Folder), drop them here, or use Import Files…. Imported art appears in the same pickers as the built-in sets."
               : "No imported assets yet — drop PNG/OGG files here or use Import Files…. Imported art appears in the same pickers as the built-in sets.")));
     } else {
-      for (const meta of list) grid.appendChild(card(meta, used));
+      // One key → object-URL map per refresh; a per-card catalog scan was
+      // quadratic once a sliced-sheet import put thousands of tiles in here.
+      const srcByKey = new Map<string, string>(
+        libraryImageEntries().map((e: any) => [e.key, e.src]));
+      for (const meta of list) grid.appendChild(card(meta, used, srcByKey));
+      // Recovering from an oversliced import means deleting thousands of
+      // tiles — give the Unused-only view a one-click cleanup.
+      if (unusedOnly && list.length > 1) {
+        grid.appendChild(h("div", { style: "padding:8px" }, h("button", { class: "mini danger", onclick() {
+          confirmBox(
+            "Delete all " + list.length + " unused assets shown here? Your current project doesn't use any of them. This can't be undone.",
+            async () => {
+              stopPreview();
+              await removeAssets(list.map((m) => m.key));
+              refresh();
+            });
+        } }, "Delete All " + list.length + " Unused…")));
+      }
     }
     const metasAll = libraryMetas();
     const usedAll = metasAll.filter((m) => used.has(m.key)).length;

@@ -27,6 +27,8 @@ import {
 import { nameDialog } from "./adv-dialogs";
 
 const SWATCH = 40;
+/** Most swatches one palette rebuild will put in the DOM (see paletteTab). */
+const MAX_SWATCHES = 1200;
 
 // ---- tile palette ----
 function tileSwatch(id: number): HTMLElement {
@@ -109,7 +111,15 @@ function paletteTab(): HTMLElement {
   if (!shown.length) {
     grid.appendChild(h("div", { class: "dim adv-rail-empty" }, t("No tiles match your search.")));
   } else {
-    for (const id of shown) grid.appendChild(tileSwatch(id));
+    // Cap the rendered grid — an oversliced import can leave thousands of
+    // tiles in the palette, and a swatch canvas per tile makes every rail
+    // rebuild take seconds. Search and categories still reach everything.
+    for (const id of shown.slice(0, MAX_SWATCHES)) grid.appendChild(tileSwatch(id));
+    if (shown.length > MAX_SWATCHES) {
+      grid.appendChild(h("div", { class: "dim adv-rail-empty" },
+        t("Showing {shown} of {total} tiles — search or pick a category to find the rest.",
+          { shown: MAX_SWATCHES, total: shown.length })));
+    }
   }
   wrap.appendChild(grid);
   return wrap as HTMLElement;

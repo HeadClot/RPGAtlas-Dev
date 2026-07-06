@@ -65,6 +65,11 @@ export interface AssetMeta {
 export interface AssetStore {
   list(): Promise<AssetMeta[]>;
   get(key: string): Promise<Blob | null>;
+  /** Every stored blob by key, in one pass. Optional bulk fast-path for the
+   *  library boot: firing get() per key floods a big library (thousands of
+   *  sliced tiles) with one transaction each — enough to take a renderer
+   *  down. Absent → the caller falls back to pooled get() calls. */
+  getAllBlobs?(): Promise<Map<string, Blob>>;
   put(meta: AssetMeta, blob: Blob): Promise<void>;
   remove(key: string): Promise<void>;
   /** Update metadata (tags/kind/meta) without touching the blob. */

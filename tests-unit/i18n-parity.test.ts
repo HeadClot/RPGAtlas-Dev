@@ -55,6 +55,7 @@ const CURATED_KEYS = [
   "Stamps", "Stamp",
   "Search tiles…", "All Tiles", "Water", "Floor", "Walls",
   "Nature", "Objects", "Other", "No tiles match your search.",
+  "Showing {shown} of {total} tiles — search or pick a category to find the rest.",
   "Capture Selection", "Place Stamp", "Scatter %",
   "No stamps yet — select an area in the Map editor, then Capture Selection.",
   "Brush transform (X flip / Y flip / R rotate)",

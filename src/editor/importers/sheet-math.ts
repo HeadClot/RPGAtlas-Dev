@@ -44,6 +44,15 @@ export function gridCells(imgW: number, imgH: number, opts: GridOpts): { cols: n
   return { cols, rows, cells };
 }
 
+/** The slicer's starting cell-size guess: the LARGEST common size that
+ *  divides the sheet in both directions. Largest-first matters — RPG Maker
+ *  MV/MZ art is 48px, and 16 divides those sheets too; a smallest-first guess
+ *  sliced one 768px sheet into 2,304 micro-tiles (9× too many), which is how
+ *  a field project ended up with a 7.7k-tile library that wedged the editor. */
+export function defaultSliceCell(imgW: number, imgH: number): number {
+  return [48, 32, 24, 16].find((s) => imgW % s === 0 && imgH % s === 0) || 48;
+}
+
 /** Library name for one sliced cell: "<base>-r<row>c<col>" + the tile
  *  passability suffix convention. */
 export function cellName(base: string, row: number, col: number, suffix: "" | ".pass" | ".terrain" = ""): string {

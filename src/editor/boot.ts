@@ -142,7 +142,17 @@ async function boot() {
   await initAssetLibrary(await createDefaultAssetStore());
   await consumeEmbeddedAssets(S.proj);
   Assets.registerCustomChars(S.proj.customChars);
-  await Promise.all([Assets.loadIconSet(), Assets.loadExternalAssets(S.proj)]);
+  await Assets.loadIconSet();
+  // External images (shipped img/ + the device library) bind in the background
+  // and repaint when ready — the library can hold thousands of sliced tiles,
+  // and awaiting every decode here left the whole window dead until it
+  // finished (field report: a 7.7k-tile library never got past a blank shell).
+  // Until the bind lands, imported tiles render empty, exactly like autotile
+  // sheets that are still decoding.
+  const externalAssetsReady = Assets.loadExternalAssets(S.proj)
+    .then(() => { rebuildAll(); saveNow(); })
+    .catch((e: any) => console.warn("External assets failed to bind:", e));
+  void externalAssetsReady;
   S.mapCanvas = $("mapcanvas");
   S.mapCtx = S.mapCanvas.getContext("2d");
   S.palCanvas = $("palette");
@@ -161,13 +171,13 @@ async function boot() {
   S.palCanvas.addEventListener("mousedown", (e: any) => {
     const r = S.palCanvas.getBoundingClientRect();
     const x = Math.floor((e.clientX - r.left) / TILE), y = Math.floor((e.clientY - r.top) / TILE);
-    const id = y * Assets.PALETTE_COLS + x;
+    const id = y * Assets.paletteCols() + x;
     if (id >= 0 && Assets.tiles[id]) { S.selectedTile = id; renderPalette(); renderAutotileBar(); setStatus(); }
   });
   S.palCanvas.addEventListener("mousemove", (e: any) => {
     const r = S.palCanvas.getBoundingClientRect();
     const x = Math.floor((e.clientX - r.left) / TILE), y = Math.floor((e.clientY - r.top) / TILE);
-    const id = y * Assets.PALETTE_COLS + x;
+    const id = y * Assets.paletteCols() + x;
     S.palCanvas.title = Assets.tiles[id] ? Assets.tiles[id].name : "";
   });
 

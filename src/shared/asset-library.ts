@@ -367,18 +367,35 @@ export async function initAssetLibrary(assetStore: AssetStore | null): Promise<v
   if (store) {
     try {
       metas = await store.list();
-      await Promise.all(
-        metas
-          .filter((m) => m.type !== "audio")
-          .map(async (m) => {
+      const images = metas.filter((m) => m.type !== "audio");
+      if (store.getAllBlobs) {
+        // Bulk fast-path: one pass over the blob store. Firing get() per key
+        // put thousands of concurrent transactions in flight on a big
+        // (oversliced) library — enough to crash the renderer at boot.
+        const blobs = await store.getAllBlobs();
+        for (const m of images) {
+          const blob = blobs.get(m.key);
+          if (blob) makeUrl(m.key, blob);
+          else console.warn("[library] blob unavailable for " + m.key);
+        }
+      } else {
+        // Per-key store (Tauri FS): read through a small pool, never all at once.
+        const POOL = 16;
+        let next = 0;
+        const worker = async () => {
+          for (;;) {
+            const m = images[next++];
+            if (!m) return;
             try {
               const blob = await store!.get(m.key);
               if (blob) makeUrl(m.key, blob);
             } catch (e) {
               console.warn("[library] blob unavailable for " + m.key, e);
             }
-          }),
-      );
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(POOL, images.length) }, worker));
+      }
     } catch (e) {
       console.warn("[library] unavailable — shipped assets only", e);
       store = null;
@@ -462,11 +479,23 @@ export async function importAssets(items: ImportItem[], opts: ImportOptions = {}
   if (!store) throw new Error("Asset library is unavailable in this session.");
   const probe = opts.probe || domProbe;
   const results: AssetMeta[] = [];
+  // Index the catalog once — a sliced tileset sheet imports hundreds of tiles
+  // in one call, and the per-item find/filter scans made big batches quadratic.
+  const byTypeHash = new Map(metas.map((m) => [m.type + "\0" + m.hash, m]));
+  const takenByType = new Map<string, Set<string>>();
+  const takenFor = (type: string): Set<string> => {
+    let taken = takenByType.get(type);
+    if (!taken) {
+      taken = new Set(metas.filter((m) => m.type === type).map((m) => m.name));
+      takenByType.set(type, taken);
+    }
+    return taken;
+  };
   for (const item of items) {
     const type = detectType(item);
     const hash = await sha256Hex(item.blob);
 
-    const existing = metas.find((m) => m.type === type && m.hash === hash);
+    const existing = byTypeHash.get(type + "\0" + hash);
     if (existing) {
       const mergedTags = Array.from(new Set([...(existing.tags || []), ...(item.tags || [])]));
       if (mergedTags.length !== (existing.tags || []).length) {
@@ -477,7 +506,7 @@ export async function importAssets(items: ImportItem[], opts: ImportOptions = {}
       continue;
     }
 
-    const taken = new Set(metas.filter((m) => m.type === type).map((m) => m.name));
+    const taken = takenFor(type);
     const name = collisionName(item.exactName || slugName(item.name), taken);
     const meta: AssetMeta = {
       key: assetKeyOf(type, name),
@@ -494,6 +523,8 @@ export async function importAssets(items: ImportItem[], opts: ImportOptions = {}
     await probe(item.blob, meta);
     await store.put(meta, item.blob);
     metas.push(meta);
+    byTypeHash.set(type + "\0" + hash, meta);
+    taken.add(name);
     if (type !== "audio") makeUrl(meta.key, item.blob);
     results.push(meta);
   }
@@ -511,6 +542,24 @@ export async function removeAsset(key: string): Promise<void> {
     URL.revokeObjectURL(url);
     urls.delete(key);
   }
+  publish();
+}
+
+/** Delete many assets in one pass (one catalog publish at the end) — the
+ *  Asset Browser's bulk cleanup; per-key removeAsset republishes every time,
+ *  which is quadratic over a thousand-tile mistake. */
+export async function removeAssets(keys: string[]): Promise<void> {
+  if (!store || !keys.length) return;
+  const doomed = new Set(keys);
+  for (const key of doomed) {
+    await store.remove(key);
+    const url = urls.get(key);
+    if (url) {
+      URL.revokeObjectURL(url);
+      urls.delete(key);
+    }
+  }
+  metas = metas.filter((m) => !doomed.has(m.key));
   publish();
 }
 

@@ -504,8 +504,8 @@ import { drawEntryTiles } from "../../shared/layer-composite";
     // An autotile group is selected outside the tile grid (its swatch lives in
     // the autotile strip), so the grid highlight is suppressed for it.
     if (isAutotileId(S.selectedTile)) return;
-    const sx = (S.selectedTile % Assets.PALETTE_COLS) * TILE;
-    const sy = Math.floor(S.selectedTile / Assets.PALETTE_COLS) * TILE;
+    const sx = (S.selectedTile % Assets.paletteCols()) * TILE;
+    const sy = Math.floor(S.selectedTile / Assets.paletteCols()) * TILE;
     g.strokeStyle = "#ffd86a"; g.lineWidth = 3;
     g.strokeRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
   }

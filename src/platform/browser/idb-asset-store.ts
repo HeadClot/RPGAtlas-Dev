@@ -72,6 +72,22 @@ export class IdbAssetStore implements AssetStore {
     return blob || null;
   }
 
+  async getAllBlobs(): Promise<Map<string, Blob>> {
+    // One readonly transaction for the whole store — the library boot used to
+    // fire get() per key, and thousands of parallel transactions could kill
+    // the renderer outright on a big (oversliced) library.
+    const db = await this.open();
+    const tx = db.transaction(BLOBS, "readonly");
+    const store = tx.objectStore(BLOBS);
+    const [keys, blobs] = await Promise.all([
+      requestPromise(store.getAllKeys() as IDBRequest<IDBValidKey[]>),
+      requestPromise(store.getAll() as IDBRequest<Blob[]>),
+    ]);
+    const out = new Map<string, Blob>();
+    for (let i = 0; i < keys.length; i++) out.set(String(keys[i]), blobs[i]);
+    return out;
+  }
+
   async put(meta: AssetMeta, blob: Blob): Promise<void> {
     const db = await this.open();
     const tx = db.transaction([META, BLOBS], "readwrite");

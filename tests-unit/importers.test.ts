@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cellName,
+  defaultSliceCell,
   gridCells,
   isCharsetSheet,
   packFrames,
@@ -41,6 +42,23 @@ describe("gridCells", () => {
   });
   it("returns nothing when the cell exceeds the image", () => {
     expect(gridCells(30, 30, { cell: 48 }).cells).toHaveLength(0);
+  });
+});
+
+describe("defaultSliceCell", () => {
+  it("prefers the LARGEST size that divides the sheet — an RM MZ/MV sheet guesses 48", () => {
+    // 16 divides 768×768 too; guessing it sliced one sheet into 2,304 tiles
+    // (the field lockup). 48 is the RM native cell and must win the tie.
+    expect(defaultSliceCell(768, 768)).toBe(48);
+    expect(defaultSliceCell(768, 384)).toBe(48);
+  });
+  it("steps down when 48 doesn't divide", () => {
+    expect(defaultSliceCell(96, 64)).toBe(32);
+    expect(defaultSliceCell(96, 72)).toBe(24);
+    expect(defaultSliceCell(80, 32)).toBe(16);
+  });
+  it("falls back to 48 for grids nothing divides", () => {
+    expect(defaultSliceCell(100, 70)).toBe(48);
   });
 });
 
