@@ -53,9 +53,11 @@ export function collectTilesetUsage(rawMaps: Iterable<RmMap>): Map<number, Tiles
 
 interface MapData {
   layers: MapLayers;
-  shadows?: number[];
-  regions?: number[];
-  passOv?: number[];
+  // Always present — the editor/engine read these planes unguarded on every
+  // map (the data.js newMap invariant; see convertMapData's return).
+  shadows: number[];
+  regions: number[];
+  passOv: number[];
 }
 
 /** Rebucket one RM `data[]` (w·h·6) into Atlas role layers + shadow/region/passOv. */
@@ -72,7 +74,6 @@ export function convertMapData(m: RmMap, ts: TilesetsConversion, report: ImportR
   const shadows = new Array(plane).fill(0);
   const regions = new Array(plane).fill(0);
   const passOv = new Array(plane).fill(0);
-  let hasShadow = false, hasRegion = false, hasPassOv = false;
 
   for (let i = 0; i < plane; i++) {
     const rawG = z(i, 0), rawD = z(i, 1), rawD2 = z(i, 2), rawO = z(i, 3);
@@ -92,10 +93,10 @@ export function convertMapData(m: RmMap, ts: TilesetsConversion, report: ImportR
 
     // Ground-tile passage → passOv block (whole-tile; matrix §11).
     const po = ts.passOvOf(tsId, rawG);
-    if (po) { passOv[i] = po; hasPassOv = true; }
+    if (po) passOv[i] = po;
 
     const sh = z(i, 4) & 0x0f; // RM shadow = 4-bit quadrant mask
-    if (sh) { shadows[i] = sh; hasShadow = true; }
+    if (sh) shadows[i] = sh;
 
     const rg = Math.floor(z(i, 5));
     if (rg > 0) {
@@ -108,15 +109,15 @@ export function convertMapData(m: RmMap, ts: TilesetsConversion, report: ImportR
       } else {
         regions[i] = rg;
       }
-      hasRegion = true;
     }
   }
 
-  const out: MapData = { layers: { ground, decor, decor2, over } };
-  if (hasShadow) out.shadows = shadows;
-  if (hasRegion) out.regions = regions;
-  if (hasPassOv) out.passOv = passOv;
-  return out;
+  // Every Atlas map carries shadows/regions/passOv even when empty: data.js
+  // newMap() creates them and the format migrations backfill old projects, but
+  // an imported project is already v2 so nothing backfills after us. The
+  // editor and engine read them unguarded (map-render drawShadows crashes on
+  // the first cell of a map without `shadows`).
+  return { layers: { ground, decor, decor2, over }, shadows, regions, passOv };
 }
 
 /** encounterList + encounterStep → Atlas `MapEncounters` (matrix §Map###).
@@ -182,9 +183,9 @@ export function convertMap(
     layers: md.layers,
     events: convertMapEvents(m.events, translate, report),
   };
-  if (md.shadows) map.shadows = md.shadows;
-  if (md.regions) map.regions = md.regions;
-  if (md.passOv) map.passOv = md.passOv;
+  map.shadows = md.shadows;
+  map.regions = md.regions;
+  map.passOv = md.passOv;
 
   if (m.autoplayBgm && m.bgm && m.bgm.name) map.music = "asset:audio/" + m.bgm.name;
   // M4·B: the BGS autoplay layer keeps its RM volume (default 80 ⇒ 0.8) —

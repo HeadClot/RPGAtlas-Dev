@@ -217,6 +217,29 @@ describe("readZip → the wizard's .zip intake", () => {
     expect(new TextDecoder().decode(out[name])).toContain("Deflate Test");
   });
 
+  it("every imported map carries shadows/regions/passOv planes (engine+editor invariant)", async () => {
+    // data.js newMap() always creates these; the migrations backfill old
+    // projects but never run on the importer's v2 output — so the importer
+    // must emit them even for a map with nothing painted (a blank map used to
+    // crash map-render drawShadows right after import committed).
+    const map: Record<string, string> = {};
+    for (const rel of walk(root("mz-project"), root("mz-project"))) {
+      if (/\.(json|js)$/i.test(rel) || /^Game\./i.test(rel)) map[rel] = readFileSync(join(root("mz-project"), rel), "utf8");
+    }
+    const m1 = JSON.parse(map["data/Map001.json"]);
+    m1.data = new Array(m1.width * m1.height * 6).fill(0); // nothing painted at all
+    map["data/Map001.json"] = JSON.stringify(m1);
+    const outcome = await runRmImport(objectSource(map), freshBase());
+    for (const gm of outcome.project.maps) {
+      const n = gm.width * gm.height;
+      for (const plane of ["shadows", "regions", "passOv"] as const) {
+        const arr = (gm as Record<string, unknown>)[plane];
+        expect(Array.isArray(arr), `${gm.name}.${plane}`).toBe(true);
+        expect((arr as number[]).length, `${gm.name}.${plane} length`).toBe(n);
+      }
+    }
+  });
+
   it("keeps the base starter map when the source has no readable Map files", async () => {
     // A data-only zip (System/MapInfos but no Map###.json) must not produce an
     // empty maps[] — the wizard commits maps[0] and the engine boots maps[0].
